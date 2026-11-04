@@ -260,6 +260,7 @@ void MoonlightInputManager::dropInput() {
     lastDesktopScrollEvent = {};
 
     bool res = true;
+    std::unique_lock<std::mutex> controllersLock(controllersMutex);
     // Drop gamepad state
     GamepadState gamepadState;
     auto controllersCount = brls::Application::getPlatform()
@@ -277,7 +278,9 @@ void MoonlightInputManager::dropInput() {
                    gamepadState.leftTrigger, gamepadState.rightTrigger,
                    gamepadState.leftStickX, gamepadState.leftStickY,
                    gamepadState.rightStickX, gamepadState.rightStickY) == 0;
+        lastGamepadStates[i] = gamepadState;
     }
+    controllersLock.unlock();
 
     // Drop touchscreen mouse state
     LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE,BUTTON_MOUSE_LEFT);
@@ -404,7 +407,38 @@ GamepadState MoonlightInputManager::getControllerState(int controllerNum,
     return gamepadState;
 }
 
-void MoonlightInputManager::handleControllers(bool specialKey) {
+void MoonlightInputManager::startControllerPolling() {
+    if (pollRunning.exchange(true))
+        return;
+    pollThread = std::thread(&MoonlightInputManager::controllerPollLoop, this);
+}
+
+void MoonlightInputManager::stopControllerPolling() {
+    pollActive = false;
+    if (!pollRunning.exchange(false))
+        return;
+    if (pollThread.joinable())
+        pollThread.join();
+}
+
+void MoonlightInputManager::controllerPollLoop() {
+    // HID refreshes controller state every ~5 ms; 4 ms keeps us just ahead.
+    constexpr auto pollInterval = std::chrono::milliseconds(4);
+    while (pollRunning) {
+        if (pollActive && inputEnabled)
+            handleControllers(pollSpecialKey, true);
+        std::this_thread::sleep_for(pollInterval);
+    }
+}
+
+void MoonlightInputManager::handleControllers(bool specialKey,
+                                              bool fromPollThread) {
+    std::lock_guard<std::mutex> controllersLock(controllersMutex);
+    // Re-check under the lock: dropInput() may have just zeroed the host
+    // state, and a late poll must not resend stale buttons after it.
+    if (fromPollThread && (!pollActive || !inputEnabled))
+        return;
+
     static int lastControllerCount = 0;
 
     auto controllersCount = brls::Application::getPlatform()
@@ -462,7 +496,10 @@ void MoonlightInputManager::handleInput(bool ignoreTouch) {
     //Do not use gamepad for mouse controll assist if touchscreen mode enabled
     bool specialKey = !ignoreTouch && !Settings::instance().touchscreen_mouse_mode() && states.size() == 1;
 
-    handleControllers(specialKey);
+    if (pollRunning)
+        pollSpecialKey = specialKey;
+    else
+        handleControllers(specialKey);
 
     float stickScrolling = 0;
     if (specialKey) {

@@ -1,6 +1,7 @@
 [submodule "extern/borealis"]
 	path = extern/borealis
-	url = https://github.com/XITRIX/borealis.git
+	url = https://github.com/luizfbalves/borealis.git
+	branch = moonlight-low-latency
 [submodule "extern/moonlight-common-c"]
 	path = extern/moonlight-common-c
 	url = https://github.com/XITRIX/moonlight-common-c.git

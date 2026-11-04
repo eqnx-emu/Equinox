@@ -10,8 +10,11 @@
 #include "Singleton.hpp"
 #include "keyboard_view.hpp"
 #include <borealis.hpp>
+#include <atomic>
 #include <chrono>
+#include <mutex>
 #include <optional>
+#include <thread>
 
 // Moonlight ready gamepad
 struct GamepadState {
@@ -58,6 +61,12 @@ class MoonlightInputManager : public Singleton<MoonlightInputManager> {
     void updateTouchScreenPanDelta(brls::PanGestureStatus panStatus);
     void reloadButtonMappingLayout();
     void setInputEnabled(bool enabled) { inputEnabled = enabled; }
+
+    // Gamepads are polled on a dedicated thread while streaming so a button
+    // press is sent within a few ms instead of waiting for the next UI frame.
+    void startControllerPolling();
+    void stopControllerPolling();
+    void setControllerPollingActive(bool active) { pollActive = active; }
     static void leftMouseClick();
     static void rightMouseClick();
 
@@ -80,7 +89,13 @@ class MoonlightInputManager : public Singleton<MoonlightInputManager> {
     DesktopScrollAxis desktopScrollAxis = DesktopScrollAxis::None;
     std::chrono::steady_clock::time_point lastDesktopScrollEvent;
     bool inputDropped = false;
-    bool inputEnabled = true;
+    std::atomic<bool> inputEnabled = true;
+
+    std::thread pollThread;
+    std::atomic<bool> pollRunning = false;
+    std::atomic<bool> pollActive = false;
+    std::atomic<bool> pollSpecialKey = false;
+    std::mutex controllersMutex;
 
     brls::ControllerState mapController(brls::ControllerState controller);
     static short glfwKeyToVKKey(brls::BrlsKeyboardScancode key);
@@ -89,7 +104,8 @@ class MoonlightInputManager : public Singleton<MoonlightInputManager> {
     void sendDesktopMouseScroll(brls::Point scroll);
 
     GamepadState getControllerState(int controllerNum, bool specialKey);
-    void handleControllers(bool specialKey);
+    void handleControllers(bool specialKey, bool fromPollThread = false);
+    void controllerPollLoop();
 
     static short controllersToMap();
 };

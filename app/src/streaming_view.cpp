@@ -20,6 +20,7 @@
 #include <Limelight.h>
 #include <algorithm>
 #include <chrono>
+#include <thread>
 #include <nanovg.h>
 
 #if defined(__SDL3__)
@@ -71,6 +72,7 @@ void overrideButtonsIfNeeded(bool value) {
 
 StreamingView::StreamingView(const Host& host, const AppInfo& app) : host(host), app(app) {
     Application::getPlatform()->disableScreenDimming(true);
+    MoonlightInputManager::instance().startControllerPolling();
 
     setFocusable(true);
     setHideHighlight(true);
@@ -293,6 +295,14 @@ void StreamingView::draw(NVGcontext* vg, float x, float y, float width,
         return;
     }
 
+    MoonlightInputManager::instance().setControllerPollingActive(
+        !tempInputLock && session->is_active() && this->focused);
+
+#ifdef __SWITCH__
+    if (Settings::instance().frames_queue_size() <= 1)
+        latchBeforeVsync();
+#endif
+
     session->draw(vg, (int) width, (int) height);
 
     if (!tempInputLock && session->is_active())
@@ -381,6 +391,10 @@ void StreamingView::draw(NVGcontext* vg, float x, float y, float width,
                 /*stats->video_render_stats.rendered_frames*/);
         }
 
+#ifdef __SWITCH__
+        statistics += fmt::format("Vsync latch delay | misses: {:.2f} ms | {}\n",
+                                  latchDelay.count() / 1e6, latchMissStat);
+#endif
         statistics += fmt::format("Frames queue underflows | skipped: {} | {}\n"
                                   "Queue empty | startup holds: {} | {}\n"
                                   "Queue overflow | paced skips: {} | {}\n"
@@ -497,6 +511,40 @@ void StreamingView::handleInput() {
     }
 }
 
+#ifdef __SWITCH__
+// Late latching: with double buffering the swapchain acquire in beginFrame()
+// returns right after vsync, so draw() starts phase-locked to the display.
+// Sleeping here lets frames decoded during the wait still make the next
+// vsync. The wait adapts: a missed vsync (draw interval ~2 periods) backs it
+// off and lowers a ceiling that only relaxes slowly, so probing rarely misses.
+void StreamingView::latchBeforeVsync() {
+    using namespace std::chrono;
+    constexpr nanoseconds period(16666667);
+    constexpr nanoseconds maxDelay = period - milliseconds(5);
+    constexpr nanoseconds growStep = microseconds(50);
+    constexpr nanoseconds ceilingRelaxStep = microseconds(5);
+
+    const auto now = steady_clock::now();
+    if (lastDrawStart.time_since_epoch().count() != 0) {
+        const auto interval = now - lastDrawStart;
+        if (interval > milliseconds(100)) {
+            // Suspended or loading; not a deadline miss.
+        } else if (interval > period * 3 / 2) {
+            latchMissStat++;
+            latchCeiling = std::max(nanoseconds::zero(), latchDelay - milliseconds(1));
+            latchDelay = std::max(nanoseconds::zero(), latchDelay - milliseconds(2));
+        } else {
+            latchCeiling = std::min(latchCeiling + ceilingRelaxStep, maxDelay);
+            latchDelay = std::min(latchDelay + growStep, latchCeiling);
+        }
+    }
+    lastDrawStart = now;
+
+    if (latchDelay > nanoseconds::zero())
+        std::this_thread::sleep_for(latchDelay);
+}
+#endif
+
 void StreamingView::handleOverlayCombo() {
     if (!this->focused)
         return;
@@ -605,6 +653,7 @@ StreamingView::~StreamingView() {
     updatePreferredDisplayMode(false);
 #endif
     
+    MoonlightInputManager::instance().stopControllerPolling();
     Application::getPlatform()->disableScreenDimming(false);
     Application::getPlatform()
         ->getInputManager()

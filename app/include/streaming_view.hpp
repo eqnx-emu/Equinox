@@ -12,6 +12,7 @@
 #include "loading_overlay.hpp"
 #include <Settings.hpp>
 #include <borealis.hpp>
+#include <chrono>
 #include <optional>
 #include "GameStreamClient.hpp"
 #include "MoonlightSession.hpp"
@@ -51,6 +52,14 @@ class StreamingView : public brls::Box {
     size_t bottombarDelayTask = -1;
     bool m_use_hdr = false;
     TwoFingerScrollGestureRecognizer* scrollTouchRecognizer = nullptr;
+
+#ifdef __SWITCH__
+    std::chrono::steady_clock::time_point lastDrawStart{};
+    std::chrono::nanoseconds latchDelay{0};
+    std::chrono::nanoseconds latchCeiling{std::chrono::milliseconds(11)};
+    size_t latchMissStat = 0;
+    void latchBeforeVsync();
+#endif
 
     void handleInput();
     void handleOverlayCombo();
