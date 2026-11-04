@@ -355,7 +355,7 @@ class Settings : public Singleton<Settings> {
     int m_rcas_strength = 20;
     bool m_click_by_tap = false;
     int m_decoder_threads = 4;
-    int m_frames_queue_size = 3;
+    int m_frames_queue_size = 1;
     bool m_sops = false;
     bool m_play_audio = false;
     bool m_write_log = false;

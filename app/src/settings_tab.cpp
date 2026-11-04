@@ -286,7 +286,7 @@ SettingsTab::SettingsTab() {
     });
 
     // Maps to frames_queue_size: 1 = no jitter reserve, 2 = one frame,
-    // 3+ = two frames (the previous always-on default).
+    // 3+ = two frames.
     framePacing->setText("settings/frame_pacing"_i18n);
     framePacing->setData({"settings/frame_pacing_latency"_i18n,
                           "settings/frame_pacing_balanced"_i18n,
