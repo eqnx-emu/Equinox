@@ -118,6 +118,10 @@
         "debug": "Debug",
         "debugging_view": "Mostrar janela de debug",
         "decoder_threads": "Decor Threads",
+        "frame_pacing": "Ritmo de quadros",
+        "frame_pacing_balanced": "Equilibrado",
+        "frame_pacing_latency": "Menor latência",
+        "frame_pacing_smooth": "Mais suave",
         "fps": "FPS",
         "guide_key": "Tecla Guia (Clique imediato)",
         "guide_key_buttons": "Combinação de botões",
@@ -174,6 +178,8 @@
         "zero_threads": "0 (Não usar threads)"
     },
     "streaming": {
+        "bad_connection": "Conexão ruim...",
+        "decoder_overloaded": "Decodificador sobrecarregado...",
         "connection": "Conexão",
         "debug_info": "Informações de debug",
         "disconnect": "Desconectar",

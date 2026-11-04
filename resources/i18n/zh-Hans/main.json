@@ -118,6 +118,10 @@
         "debug": "调试",
         "debugging_view": "显示调试画面",
         "decoder_threads": "解码器线程",
+        "frame_pacing": "Frame pacing",
+        "frame_pacing_balanced": "Balanced",
+        "frame_pacing_latency": "Lowest latency",
+        "frame_pacing_smooth": "Smoothest video",
         "fps": "FPS",
         "guide_key": "向导键（立即按下）",
         "guide_key_buttons": "按键组合",
@@ -174,6 +178,8 @@
         "zero_threads": "0（不使用线程）"
     },
     "streaming": {
+        "bad_connection": "Bad connection...",
+        "decoder_overloaded": "Decoder overloaded...",
         "connection": "连接选项",
         "debug_info": "调试信息",
         "disconnect": "断开连接",

@@ -118,6 +118,10 @@
         "debug": "デバッグ",
         "debugging_view": "デバッグビューを表示する",
         "decoder_threads": "デコーダースレッド",
+        "frame_pacing": "Frame pacing",
+        "frame_pacing_balanced": "Balanced",
+        "frame_pacing_latency": "Lowest latency",
+        "frame_pacing_smooth": "Smoothest video",
         "fps": "FPS",
         "guide_key": "ガイドキー (すぐにクリック)",
         "guide_key_buttons": "ボタンの組み合わせ",
@@ -174,6 +178,8 @@
         "zero_threads": "0 (使用しないスレッド)"
     },
     "streaming": {
+        "bad_connection": "Bad connection...",
+        "decoder_overloaded": "Decoder overloaded...",
         "connection": "接続",
         "debug_info": "デバッグ情報",
         "disconnect": "切断する",

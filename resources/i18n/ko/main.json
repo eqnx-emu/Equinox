@@ -118,6 +118,10 @@
         "debug": "디버그",
         "debugging_view": "디버깅 보기 표시",
         "decoder_threads": "디코더 스레드",
+        "frame_pacing": "Frame pacing",
+        "frame_pacing_balanced": "Balanced",
+        "frame_pacing_latency": "Lowest latency",
+        "frame_pacing_smooth": "Smoothest video",
         "fps": "FPS",
         "guide_key": "가이드 키 (즉시 클릭)",
         "guide_key_buttons": "버튼 조합",
@@ -174,6 +178,8 @@
         "zero_threads": "0 (스레드 사용 안 함)"
     },
     "streaming": {
+        "bad_connection": "Bad connection...",
+        "decoder_overloaded": "Decoder overloaded...",
         "connection": "연결",
         "debug_info": "디버그 정보",
         "disconnect": "연결 해제",

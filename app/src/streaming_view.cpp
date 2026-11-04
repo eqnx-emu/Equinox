@@ -18,6 +18,7 @@
 #include "streaming_input_overlay.hpp"
 #include "two_finger_scroll_recognizer.hpp"
 #include <Limelight.h>
+#include <algorithm>
 #include <chrono>
 #include <nanovg.h>
 
@@ -28,6 +29,7 @@
 #endif
 
 using namespace brls;
+using namespace brls::literals;
 
 #ifdef PLATFORM_TVOS
 extern void updatePreferredDisplayMode(bool streamActive);
@@ -299,18 +301,32 @@ void StreamingView::draw(NVGcontext* vg, float x, float y, float width,
     handleMouseInputCombo();
 
     if (session->connection_status_is_poor()) {
+        // moonlight-common-c reports "poor" for any late frame, including ones
+        // late because the local decoder can't keep up. Tell them apart.
+        auto decodeStats = session->session_stats()->video_decode_stats;
+        const float frameBudgetMs =
+            1000.0f / (float) std::max(Settings::instance().fps(), 1);
+        const bool decoderOverloaded =
+            decodeStats.current_decoding_time > frameBudgetMs * 0.9f ||
+            (decodeStats.current_received_fps > 0 &&
+             decodeStats.current_decoded_fps <
+                 decodeStats.current_received_fps * 0.9f);
+        const std::string warning =
+            "\uE140 " + (decoderOverloaded ? "streaming/decoder_overloaded"_i18n
+                                           : "streaming/bad_connection"_i18n);
+
         nvgFontSize(vg, 20);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
 
         nvgFontBlur(vg, 3);
         nvgFillColor(vg, nvgRGBA(0, 0, 0, 255));
         nvgFontFaceId(vg, Application::getFont(FONT_REGULAR));
-        nvgText(vg, 50, height - 28, "\uE140 Bad connection...", nullptr);
+        nvgText(vg, 50, height - 28, warning.c_str(), nullptr);
 
         nvgFontBlur(vg, 0);
         nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
         nvgFontFaceId(vg, Application::getFont(FONT_REGULAR));
-        nvgText(vg, 50, height - 28, "\uE140 Bad connection...", nullptr);
+        nvgText(vg, 50, height - 28, warning.c_str(), nullptr);
     }
 
     if (session->use_hdr() != m_use_hdr) {

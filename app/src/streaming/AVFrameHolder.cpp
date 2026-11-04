@@ -128,6 +128,36 @@ AVFrame* AVFrameQueue::pop(bool* consumed) {
         }
     }
 
+    if (targetBufferedFrames == 0) {
+        // Lowest-latency mode: no jitter reserve and no local-clock pacing.
+        // Every draw shows the newest decoded frame; older ones are dropped,
+        // which also turns a 120 FPS stream into the freshest 60 Hz output.
+        startupBuffering = false;
+        if (queue.empty()) {
+            if (bufferFrame) {
+                fakeFrameUsedStat++;
+                emptyQueueStat++;
+            }
+            return bufferFrame;
+        }
+
+        recycleFrame(freeQueue, bufferFrame);
+        while (queue.size() > 1) {
+            AVFrame* stale = queue.front();
+            queue.pop();
+            recycleFrame(freeQueue, stale);
+            framesDroppedStat++;
+            pacingSkipStat++;
+        }
+        bufferFrame = queue.front();
+        queue.pop();
+
+        if (consumed) {
+            *consumed = true;
+        }
+        return bufferFrame;
+    }
+
     if (startupBuffering && queue.size() <= targetBufferedFrames) {
         if (bufferFrame) {
             fakeFrameUsedStat++;

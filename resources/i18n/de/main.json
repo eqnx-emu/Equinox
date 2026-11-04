@@ -118,6 +118,10 @@
         "debug": "Debug",
         "debugging_view": "Debugansicht anzeigen",
         "decoder_threads": "Decoder Threads",
+        "frame_pacing": "Frame pacing",
+        "frame_pacing_balanced": "Balanced",
+        "frame_pacing_latency": "Lowest latency",
+        "frame_pacing_smooth": "Smoothest video",
         "fps": "FPS",
         "guide_key": "Guide Taste (keine Verzögerung)",
         "guide_key_buttons": "Tastenkombination",
@@ -174,6 +178,8 @@
         "zero_threads": "0 (Keine Threads benutzen)"
     },
     "streaming": {
+        "bad_connection": "Bad connection...",
+        "decoder_overloaded": "Decoder overloaded...",
         "connection": "Verbindung",
         "debug_info": "Debug Informationen",
         "disconnect": "Verbindung trennen",

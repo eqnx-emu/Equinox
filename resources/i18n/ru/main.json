@@ -118,6 +118,10 @@
         "debug": "Отладка",
         "debugging_view": "Показать окно отладки",
         "decoder_threads": "Потоки декодера",
+        "frame_pacing": "Frame pacing",
+        "frame_pacing_balanced": "Balanced",
+        "frame_pacing_latency": "Lowest latency",
+        "frame_pacing_smooth": "Smoothest video",
         "fps": "FPS",
         "guide_key": "Кнопка \"Guide\" (нажимается немедленно)",
         "guide_key_buttons": "Комбинация кнопок",
@@ -174,6 +178,8 @@
         "zero_threads": "0 (Не использовать потоки)"
     },
     "streaming": {
+        "bad_connection": "Bad connection...",
+        "decoder_overloaded": "Decoder overloaded...",
         "connection": "Соединение",
         "debug_info": "Отладочная информация",
         "disconnect": "Отключиться",

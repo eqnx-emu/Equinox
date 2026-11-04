@@ -17,6 +17,7 @@
 #include "UpscalingSupport.hpp"
 #include <cmath>
 #include <iomanip>
+#include <algorithm>
 #include <sstream>
 
 #define SET_SETTING(n, func)                                                   \
@@ -282,6 +283,18 @@ SettingsTab::SettingsTab() {
 #endif
             DEFAULT;
         }
+    });
+
+    // Maps to frames_queue_size: 1 = no jitter reserve, 2 = one frame,
+    // 3+ = two frames (the previous always-on default).
+    framePacing->setText("settings/frame_pacing"_i18n);
+    framePacing->setData({"settings/frame_pacing_latency"_i18n,
+                          "settings/frame_pacing_balanced"_i18n,
+                          "settings/frame_pacing_smooth"_i18n});
+    framePacing->setSelection(
+        std::clamp(Settings::instance().frames_queue_size(), 1, 3) - 1);
+    framePacing->getEvent()->subscribe([](int selected) {
+        Settings::instance().set_frames_queue_size(selected + 1);
     });
 
     std::vector<std::string> decoders = {"settings/zero_threads"_i18n, "2", "3",
