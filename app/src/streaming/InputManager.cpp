@@ -4,6 +4,13 @@
 #endif
 
 #include "InputManager.hpp"
+
+// Report Switch controllers as Nintendo so the host can pick a Switch layout automatically
+#ifdef __SWITCH__
+#define CONTROLLER_TYPE LI_CTYPE_NINTENDO
+#else
+#define CONTROLLER_TYPE LI_CTYPE_UNKNOWN
+#endif
 #include "Limelight.h"
 #include "Settings.hpp"
 #include <borealis.hpp>
@@ -475,7 +482,7 @@ void MoonlightInputManager::handleControllers(bool specialKey,
                 
                 for (int i = 0; i < controllersCount; i++) {
                     Logger::debug("StreamingView: send features message for controller #{}", i);
-                    LiSendControllerArrivalEvent(i, mappedControllersCount, LI_CTYPE_UNKNOWN, 0, LI_CCAP_RUMBLE | LI_CCAP_ACCEL | LI_CCAP_GYRO);
+                    LiSendControllerArrivalEvent(i, mappedControllersCount, CONTROLLER_TYPE, 0, LI_CCAP_RUMBLE | LI_CCAP_ACCEL | LI_CCAP_GYRO);
                 }
             }
 
