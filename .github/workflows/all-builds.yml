@@ -1,5 +1,7 @@
 name: All Builds
 
+# This fork only ships the Nintendo Switch build. The other platform
+# workflows are kept (workflow_call only) so upstream merges stay simple.
 on:
   push:
     branches: [ master ]
@@ -12,24 +14,3 @@ jobs:
   switch:
     name: Nintendo Switch
     uses: ./.github/workflows/docker-image.yml
-
-  psvita:
-    name: PS Vita
-    uses: ./.github/workflows/psvita.yml
-
-  android:
-    name: Android
-    uses: ./.github/workflows/android-apk.yml
-    secrets: inherit
-
-  macos:
-    name: macOS
-    uses: ./.github/workflows/macos.yml
-
-  windows:
-    name: Windows
-    uses: ./.github/workflows/windows.yml
-
-  linux:
-    name: Linux
-    uses: ./.github/workflows/linux.yml
