@@ -16,6 +16,8 @@ class SettingsTab : public brls::Box {
     SettingsTab();
     ~SettingsTab();
 
+    void updateBitrateHints();
+
     BRLS_BIND(brls::SelectorCell, resolution, "resolution");
     BRLS_BIND(brls::SelectorCell, resolutionScale, "resolution_scale");
     BRLS_BIND(brls::Header, imageAdjustmentsHeader, "image_adjustments_header");

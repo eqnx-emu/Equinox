@@ -104,6 +104,8 @@
     },
     "settings": {
         "audio_backend": "Audio driver",
+        "bitrate_below_min": "below recommended — image may blur in motion",
+        "bitrate_min_hint": "{} Mbps · min. recommended {} Mbps",
         "av1": "AV1 (Experimental)",
         "buttons": {
             "home": "Home",

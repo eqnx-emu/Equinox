@@ -16,6 +16,8 @@
 #include "button_selecting_dialog.hpp"
 #include "mapping_layout_editor.hpp"
 #include "UpscalingSupport.hpp"
+#include "StreamCapacity.hpp"
+#include <fmt/core.h>
 #include <cmath>
 #include <iomanip>
 #include <algorithm>
@@ -36,6 +38,10 @@
         break;
 
 using namespace brls::literals;
+
+#if defined(PLATFORM_IOS) || defined(PLATFORM_VISIONOS)
+extern void getWindowSize(int* w, int* h);
+#endif
 
 namespace {
 void updateStrengthControl(BooleanSliderCell* cell,
@@ -65,6 +71,45 @@ std::string getDitheringStrengthText(float strength) {
 std::string getRcasStrengthText(float strength) {
     return std::to_string(int(strength * 100.0f)) + "%";
 }
+
+std::string formatMbps(int kbps) {
+    std::stringstream stream;
+    stream << std::fixed << std::setprecision(1) << kbps / 1000.0f;
+    return stream.str();
+}
+
+// Same native-size source as MoonlightSession::start.
+int minRecommendedFor(int resolution) {
+    int nativeW = 0, nativeH = 0;
+    if (resolution == -1) {
+#if defined(PLATFORM_IOS) || defined(PLATFORM_VISIONOS)
+        getWindowSize(&nativeW, &nativeH);
+#else
+        nativeH = brls::Application::windowHeight;
+        nativeW = brls::Application::windowWidth;
+#endif
+    }
+    auto [w, h] = stream_size_for(resolution, nativeW, nativeH,
+                                  Settings::instance().native_resolution_scale());
+    return min_recommended_bitrate_kbps(w, h, Settings::instance().fps(),
+                                        Settings::instance().video_codec());
+}
+
+void applyBitrateHint(brls::Header* header, int currentKbps, int minKbps) {
+    const bool below = currentKbps < minKbps;
+    std::string text = fmt::format(fmt::runtime("settings/bitrate_min_hint"_i18n),
+                                   formatMbps(currentKbps), formatMbps(minKbps));
+    if (below)
+        text += " · " + "settings/bitrate_below_min"_i18n;
+    header->setSubtitle(text);
+
+    // Header exposes no subtitle color API; reach its inflated label by id.
+    if (auto* label = dynamic_cast<brls::Label*>(
+            header->getView("brls/header/subtitle"))) {
+        label->setTextColor(below ? nvgRGB(255, 140, 0)
+                                  : brls::Application::getTheme()["brls/header/subtitle"]);
+    }
+}
 }
 
 #if defined(__SWITCH__)
@@ -83,6 +128,15 @@ std::vector<std::string> audio_backends {
 std::vector<std::string> audio_backends;
 #endif
 
+
+void SettingsTab::updateBitrateHints() {
+    applyBitrateHint(header, Settings::instance().bitrate(),
+                     minRecommendedFor(Settings::instance().resolution()));
+#if defined(PLATFORM_SWITCH)
+    applyBitrateHint(handheldBitrateHeader, Settings::instance().handheld_bitrate(),
+                     minRecommendedFor(Settings::instance().handheld_resolution()));
+#endif
+}
 
 SettingsTab::SettingsTab() {
     // Inflate the tab from the XML file
@@ -128,7 +182,7 @@ SettingsTab::SettingsTab() {
             resolutionScale->setSelection(2);
             break;
     }
-    resolutionScale->getEvent()->subscribe([](int selected) {
+    resolutionScale->getEvent()->subscribe([this](int selected) {
         switch (selected) {
             SET_SETTING(0, set_native_resolution_scale(50));
             SET_SETTING(1, set_native_resolution_scale(75));
@@ -138,6 +192,7 @@ SettingsTab::SettingsTab() {
 #endif
             DEFAULT;
         }
+        updateBitrateHints();
     });
 
 #ifdef SUPPORT_UPSCALING
@@ -233,6 +288,7 @@ SettingsTab::SettingsTab() {
             DEFAULT;
         }
         updateNativeResolutionScaleVisibility();
+        updateBitrateHints();
     });
 
 #if defined(__PSV__)
@@ -268,7 +324,7 @@ SettingsTab::SettingsTab() {
 #endif
         DEFAULT;
     }
-    fps->getEvent()->subscribe([](int selected) {
+    fps->getEvent()->subscribe([this](int selected) {
         switch (selected) {
 #if defined(__PSV__)
             SET_SETTING(0, set_fps(24));
@@ -284,6 +340,7 @@ SettingsTab::SettingsTab() {
 #endif
             DEFAULT;
         }
+        updateBitrateHints();
     });
 
     // Maps to frames_queue_size: 1 = no jitter reserve, 2 = one frame,
@@ -340,8 +397,9 @@ SettingsTab::SettingsTab() {
     }
 
     codec->init("settings/video_codec"_i18n, supportedCodecNames,
-                selected, [supportedCodecs](int selected) {
+                selected, [this, supportedCodecs](int selected) {
                     Settings::instance().set_video_codec(supportedCodecs[selected]);
+                    updateBitrateHints();
                 });
 
     requestHdr->init("settings/request_hdr"_i18n, Settings::instance().request_hdr(),
@@ -374,13 +432,11 @@ SettingsTab::SettingsTab() {
     float progress = (Settings::instance().bitrate() - limitOffset) / limit;
     slider->getProgressEvent()->subscribe([this, limitOffset, limit](float progress) {
         int bitrate = progress * limit + limitOffset;
-        float fbitrate = bitrate / 1000.0f;
-        std::stringstream stream;
-        stream << std::fixed << std::setprecision(1) << fbitrate;
-        header->setSubtitle(stream.str() + " Mbps");
         Settings::instance().set_bitrate(bitrate);
+        updateBitrateHints();
     });
     slider->setProgress(progress);
+    updateBitrateHints();
 
 #if defined(PLATFORM_SWITCH)
     // Handheld profile: when enabled, the values above apply while docked and
@@ -400,9 +456,10 @@ SettingsTab::SettingsTab() {
 
     handheldResolution->init(
         "settings/handheld_resolution"_i18n, handheldResolutionNames,
-        handheldSelection, [handheldResolutionValues](int selected) {
+        handheldSelection, [this, handheldResolutionValues](int selected) {
             Settings::instance().set_handheld_resolution(
                 handheldResolutionValues[selected]);
+            updateBitrateHints();
         });
 
     auto updateHandheldControls = [this](bool enabled) {
@@ -416,19 +473,18 @@ SettingsTab::SettingsTab() {
 
     modeProfiles->init("settings/mode_profiles"_i18n,
                        Settings::instance().mode_profiles(),
-                       [updateHandheldControls](bool value) {
+                       [this, updateHandheldControls](bool value) {
                            Settings::instance().set_mode_profiles(value);
                            updateHandheldControls(value);
+                           updateBitrateHints();
                        });
     updateHandheldControls(Settings::instance().mode_profiles());
 
     handheldBitrateSlider->getProgressEvent()->subscribe(
         [this, limitOffset, limit](float progress) {
             int bitrate = progress * limit + limitOffset;
-            std::stringstream stream;
-            stream << std::fixed << std::setprecision(1) << bitrate / 1000.0f;
-            handheldBitrateHeader->setSubtitle(stream.str() + " Mbps");
             Settings::instance().set_handheld_bitrate(bitrate);
+            updateBitrateHints();
         });
     handheldBitrateSlider->setProgress(
         (Settings::instance().handheld_bitrate() - limitOffset) / limit);
