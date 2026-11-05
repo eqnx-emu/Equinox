@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <numeric>
 #include <vector>
 
@@ -107,7 +108,10 @@ std::vector<int> plan_stage_bitrates(int min_kbps, int max_kbps) {
     while (out.size() < 6) {
         int r = static_cast<int>(std::lround(v / kRoundStepKbps)) *
                 kRoundStepKbps;
-        if (r > max_kbps) break;
+        // Starting at the ceiling (min > max): round down so it still fits.
+        if (out.empty() && r > max_kbps)
+            r = max_kbps / kRoundStepKbps * kRoundStepKbps;
+        if (r > max_kbps || r < kRoundStepKbps) break;
         out.push_back(r);
         v *= 1.5;
     }
@@ -275,4 +279,18 @@ bool needs_confirmation(int running_app_id, int test_app_id) {
 ProfileTarget apply_target(bool mode_profiles, bool handheld_when_tested) {
     return (mode_profiles && handheld_when_tested) ? ProfileTarget::Handheld
                                                    : ProfileTarget::Docked;
+}
+
+std::string format_decimal(double value, int max_decimals, char decimal_sep) {
+    if (max_decimals < 0) max_decimals = 0;
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "%.*f", max_decimals, value);
+    std::string out(buf);
+    auto dot = out.find('.');
+    if (dot != std::string::npos) {
+        while (!out.empty() && out.back() == '0') out.pop_back();
+        if (!out.empty() && out.back() == '.') out.pop_back();
+        else out[dot] = decimal_sep;
+    }
+    return out;
 }

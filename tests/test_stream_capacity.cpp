@@ -109,6 +109,22 @@ TEST_CASE("plan_stage_bitrates") {
     CHECK(plan_stage_bitrates(30000, 40000) == std::vector<int>{30000});
 }
 
+TEST_CASE("plan_stage_bitrates starts at the ceiling when min exceeds it") {
+    // 9800 is not a 500 multiple: rounding to nearest would give 10000 > max.
+    CHECK(plan_stage_bitrates(15000, 9800) == std::vector<int>{9500});
+    CHECK(plan_stage_bitrates(15000, 9600) == std::vector<int>{9500});
+    CHECK(plan_stage_bitrates(15000, 400).empty());
+}
+
+TEST_CASE("format_decimal") {
+    CHECK(format_decimal(12.0, 1, '.') == "12");
+    CHECK(format_decimal(7.5, 1, ',') == "7,5");
+    CHECK(format_decimal(3.26, 1, '.') == "3.3");
+    CHECK(format_decimal(84.04, 1, ',') == "84");
+    CHECK(format_decimal(0.0, 1, '.') == "0");
+    CHECK(format_decimal(1.05, 2, ',') == "1,05");
+}
+
 TEST_CASE("evaluate_stage") {
     auto c = cfg(1080, 60, 15000);
     auto good = [](uint32_t var, float dec, uint32_t drop) {

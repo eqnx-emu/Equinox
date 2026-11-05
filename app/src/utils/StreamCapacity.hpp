@@ -96,3 +96,7 @@ bool needs_confirmation(int running_app_id, int test_app_id);
 
 enum class ProfileTarget { Docked, Handheld };
 ProfileTarget apply_target(bool mode_profiles, bool handheld_when_tested);
+
+// value with at most max_decimals decimals, trailing zeros dropped, using
+// decimal_sep as the separator ("12", "7,5").
+std::string format_decimal(double value, int max_decimals, char decimal_sep);

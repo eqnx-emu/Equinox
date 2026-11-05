@@ -2,7 +2,9 @@
 
 #include "GameStreamClient.hpp"
 #include "MoonlightSessionDecoderAndRenderProvider.hpp"
+#include "StreamCapacity.hpp"
 #include <nanovg.h>
+#include <optional>
 
 struct SessionStats {
     VideoDecodeStats video_decode_stats;
@@ -22,6 +24,13 @@ class MoonlightSession {
     void start(ServerCallback<bool> callback, bool is_sunshine);
     void stop(int terminate_app);
     void set_address(const std::string& address) { m_address = address; }
+
+    // Stream with these parameters instead of the Settings profile (used by
+    // the connection capacity test). Applies to the next start(). Such a
+    // session does not reconnect on its own: a drop ends it (is_terminated).
+    void set_config_override(const StageConfig& config) {
+        m_config_override = config;
+    }
 
     void restart();
 
@@ -104,6 +113,7 @@ class MoonlightSession {
     bool m_invalidate_renderer_pending = false;
     bool m_use_hdr = false;
     bool m_handheld_profile = false;
+    std::optional<StageConfig> m_config_override;
 
     SessionStats m_session_stats = {};
     uint64_t m_last_stats_update_ms = 0;
