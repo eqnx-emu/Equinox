@@ -1,3 +1,7 @@
+#ifdef __SWITCH__
+#include <switch.h>
+#endif
+
 #include "Settings.hpp"
 #include <jansson.h>
 #include <algorithm>
@@ -46,6 +50,14 @@ std::string make_preferred_path(const fs::path& path) {
 std::string settings_file_path(const std::string& working_dir) {
     return make_preferred_path(fs::path(working_dir) / "settings.json");
 }
+}
+
+bool Settings::is_handheld() {
+#ifdef __SWITCH__
+    return appletGetOperationMode() == AppletOperationMode_Handheld;
+#else
+    return false;
+#endif
 }
 
 std::string getVideoCodecName(VideoCodec codec) {
@@ -258,6 +270,22 @@ void Settings::load() {
             if (json_t* bitrate = json_object_get(settings, "bitrate")) {
                 if (json_typeof(bitrate) == JSON_INTEGER) {
                     m_bitrate = (int)json_integer_value(bitrate);
+                }
+            }
+
+            if (json_t* mode_profiles = json_object_get(settings, "mode_profiles")) {
+                m_mode_profiles = json_typeof(mode_profiles) == JSON_TRUE;
+            }
+
+            if (json_t* handheld_resolution = json_object_get(settings, "handheld_resolution")) {
+                if (json_typeof(handheld_resolution) == JSON_INTEGER) {
+                    m_handheld_resolution = (int)json_integer_value(handheld_resolution);
+                }
+            }
+
+            if (json_t* handheld_bitrate = json_object_get(settings, "handheld_bitrate")) {
+                if (json_typeof(handheld_bitrate) == JSON_INTEGER) {
+                    m_handheld_bitrate = (int)json_integer_value(handheld_bitrate);
                 }
             }
 
@@ -537,6 +565,9 @@ void Settings::save() {
             json_object_set_new(settings, "video_codec", json_integer(m_video_codec));
             json_object_set_new(settings, "audio_backend", json_integer(m_audio_backend));
             json_object_set_new(settings, "bitrate", json_integer(m_bitrate));
+            json_object_set_new(settings, "mode_profiles", m_mode_profiles ? json_true() : json_false());
+            json_object_set_new(settings, "handheld_resolution", json_integer(m_handheld_resolution));
+            json_object_set_new(settings, "handheld_bitrate", json_integer(m_handheld_bitrate));
             json_object_set_new(settings, "decoder_threads", json_integer(m_decoder_threads));
             json_object_set_new(settings, "frames_queue_size", json_integer(m_frames_queue_size));
             json_object_set_new(settings, "enable_hdr", m_enable_hdr ? json_true() : json_false());

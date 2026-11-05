@@ -81,9 +81,21 @@ MoonlightInputManager::MoonlightInputManager() {
             if (!inputEnabled) return;
             
             switch (event.type) {
-                case brls::SensorEventType::ACCEL:
-                    LiSendControllerMotionEvent((uint8_t)event.controllerIndex, LI_MOTION_TYPE_ACCEL, event.data[0], event.data[1], event.data[2]);
+                case brls::SensorEventType::ACCEL: {
+#ifdef __SWITCH__
+                    // libnx reports acceleration in G; the protocol expects m/s^2.
+                    // Without this the host sees ~1/10 of real gravity, which
+                    // breaks gravity-based motion fusion (gyro aiming tilt).
+                    constexpr float accelScale = 9.80665f;
+#else
+                    constexpr float accelScale = 1.0f;
+#endif
+                    LiSendControllerMotionEvent((uint8_t)event.controllerIndex, LI_MOTION_TYPE_ACCEL,
+                        event.data[0] * accelScale,
+                        event.data[1] * accelScale,
+                        event.data[2] * accelScale);
                     break;
+                }
                 case brls::SensorEventType::GYRO:
                     // Convert rad/s to deg/s
                     LiSendControllerMotionEvent((uint8_t)event.controllerIndex, LI_MOTION_TYPE_GYRO, 

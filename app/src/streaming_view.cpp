@@ -301,6 +301,16 @@ void StreamingView::draw(NVGcontext* vg, float x, float y, float width,
 #ifdef __SWITCH__
     if (Settings::instance().frames_queue_size() <= 1)
         latchBeforeVsync();
+
+    // Resolution/bitrate are negotiated at connect time, so a dock change
+    // mid-stream can only take effect on the next connection.
+    const int handheldMode = Settings::is_handheld() ? 1 : 0;
+    if (lastHandheldMode != -1 && handheldMode != lastHandheldMode &&
+        Settings::instance().mode_profiles() &&
+        (handheldMode == 1) != session->handheld_profile()) {
+        brls::Application::notify("streaming/profile_reconnect_hint"_i18n);
+    }
+    lastHandheldMode = handheldMode;
 #endif
 
     session->draw(vg, (int) width, (int) height);
@@ -350,7 +360,47 @@ void StreamingView::draw(NVGcontext* vg, float x, float y, float width,
     if (draw_stats) {
         auto stats = session->session_stats();
 
+        const int videoFormat = session->video_format();
+        const char* codecName =
+            (videoFormat & VIDEO_FORMAT_MASK_AV1)    ? "AV1"
+            : (videoFormat & VIDEO_FORMAT_MASK_H265) ? "HEVC"
+            : (videoFormat & VIDEO_FORMAT_MASK_H264) ? "H.264"
+                                                     : "?";
         auto statistics = fmt::format(
+            "Stream: {}x{} @ {} FPS | {}{} | {:.1f} Mbps",
+            session->stream_width(), session->stream_height(),
+            session->stream_fps(), codecName,
+            (videoFormat & VIDEO_FORMAT_MASK_10BIT) ? " 10-bit" : "",
+            session->bitrate() / 1000.0f);
+#ifdef __SWITCH__
+        statistics += Settings::instance().mode_profiles()
+                          ? (session->handheld_profile() ? " | Handheld profile"
+                                                         : " | Docked profile")
+                          : "";
+#endif
+        statistics += "\n";
+
+        uint32_t rtt = 0, rttVariance = 0;
+        const bool hasRtt = LiGetEstimatedRttInfo(&rtt, &rttVariance);
+        const auto& ds = stats->video_decode_stats;
+        const auto& rs = stats->video_render_stats;
+        const float networkMs = hasRtt ? rtt / 2.0f : 0.0f;
+        const float queueMs =
+            AVFrameHolder::instance().getFrameQueueSize() *
+            (1000.0f / (float) std::max(session->stream_fps(), 1));
+        const float totalMs = networkMs + ds.current_receive_time +
+                              ds.current_decoding_time + queueMs +
+                              rs.rendering_time;
+        if (hasRtt) {
+            statistics += fmt::format("Network RTT: {} ms (variance {} ms)\n",
+                                      rtt, rttVariance);
+        }
+        statistics += fmt::format(
+            "Latency estimate: {:.1f} ms (net {:.1f} + recv {:.1f} + decode {:.1f} + queue {:.1f} + render {:.1f})\n",
+            totalMs, networkMs, ds.current_receive_time,
+            ds.current_decoding_time, queueMs, rs.rendering_time);
+
+        statistics += fmt::format(
                     "Estimated host PC frame rate: {:.{}f} FPS\n"
                         "Incoming frame rate from network: {:.{}f} FPS\n"
                         "Decoding frame rate: {:.{}f} FPS\n"

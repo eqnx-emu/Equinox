@@ -13,9 +13,17 @@ extern void getWindowSize(int* w, int* h);
 using namespace brls;
 
 int m_video_format;
+static int m_stream_width = 0;
+static int m_stream_height = 0;
+static int m_stream_fps = 0;
 static MoonlightSession* m_active_session = nullptr;
 static MoonlightSessionDecoderAndRenderProvider* m_provider = nullptr;
 
+
+int MoonlightSession::video_format() const { return m_video_format; }
+int MoonlightSession::stream_width() const { return m_stream_width; }
+int MoonlightSession::stream_height() const { return m_stream_height; }
+int MoonlightSession::stream_fps() const { return m_stream_fps; }
 
 MoonlightSession* MoonlightSession::activeSession() {
     return m_active_session;
@@ -170,6 +178,9 @@ int MoonlightSession::video_decoder_setup(int video_format, int width,
                                           int height, int redraw_rate,
                                           void* context, int dr_flags) {
     m_video_format = video_format;
+    m_stream_width = width;
+    m_stream_height = height;
+    m_stream_fps = redraw_rate;
     if (m_active_session && m_active_session->m_video_decoder) {
         return m_active_session->m_video_decoder->setup(
             video_format, width, height, redraw_rate, context, dr_flags);
@@ -251,7 +262,10 @@ void MoonlightSession::start(ServerCallback<bool> callback, bool is_sunshine) {
 
     LiInitializeStreamConfiguration(&m_config);
 
-    int resolution = Settings::instance().resolution();
+    m_handheld_profile = Settings::instance().use_handheld_profile();
+    int resolution = m_handheld_profile
+                         ? Settings::instance().handheld_resolution()
+                         : Settings::instance().resolution();
     int h = resolution;
     int w = h * 16 / 9;
     if (resolution == -1) {
@@ -284,7 +298,12 @@ void MoonlightSession::start(ServerCallback<bool> callback, bool is_sunshine) {
     m_config.audioConfiguration = AUDIO_CONFIGURATION_STEREO;
     m_config.packetSize = 1392;
     m_config.streamingRemotely = STREAM_CFG_AUTO;
-    m_config.bitrate = Settings::instance().bitrate();
+    m_config.bitrate = m_handheld_profile
+                           ? Settings::instance().handheld_bitrate()
+                           : Settings::instance().bitrate();
+    brls::Logger::info("MoonlightSession: {} profile, {}x{} @ {} FPS, {} kbps",
+                       m_handheld_profile ? "handheld" : "docked",
+                       w, h, m_config.fps, m_config.bitrate);
     m_config.encryptionFlags = m_is_sunshine ? ENCFLG_ALL : ENCFLG_VIDEO;
 
     switch (Settings::instance().video_codec()) {

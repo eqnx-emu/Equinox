@@ -137,6 +137,33 @@ class Settings : public Singleton<Settings> {
     [[nodiscard]] int bitrate() const { return m_bitrate; }
     void set_bitrate(int bitrate) { m_bitrate = bitrate; }
 
+    // Separate stream profile used while the console is in handheld mode.
+    // The regular resolution/bitrate then act as the docked profile.
+    [[nodiscard]] bool mode_profiles() const { return m_mode_profiles; }
+    void set_mode_profiles(bool enabled) { m_mode_profiles = enabled; }
+
+    [[nodiscard]] int handheld_resolution() const { return m_handheld_resolution; }
+    void set_handheld_resolution(int resolution) { m_handheld_resolution = resolution; }
+
+    [[nodiscard]] int handheld_bitrate() const { return m_handheld_bitrate; }
+    void set_handheld_bitrate(int bitrate) { m_handheld_bitrate = bitrate; }
+
+    // True when the console is currently undocked (always false off-Switch).
+    [[nodiscard]] static bool is_handheld();
+
+    // True when the handheld profile applies to a stream started right now.
+    [[nodiscard]] bool use_handheld_profile() const {
+        return m_mode_profiles && is_handheld();
+    }
+
+    [[nodiscard]] int stream_resolution() const {
+        return use_handheld_profile() ? m_handheld_resolution : m_resolution;
+    }
+
+    [[nodiscard]] int stream_bitrate() const {
+        return use_handheld_profile() ? m_handheld_bitrate : m_bitrate;
+    }
+
     [[nodiscard]] bool request_hdr() const { 
 #ifdef SUPPORT_HDR
         return m_enable_hdr; 
@@ -347,6 +374,13 @@ class Settings : public Singleton<Settings> {
     AudioBackend m_audio_backend = SDL;
 #endif
     int m_bitrate = 10000;
+#ifdef __SWITCH__
+    bool m_mode_profiles = true;
+#else
+    bool m_mode_profiles = false;
+#endif
+    int m_handheld_resolution = 720;
+    int m_handheld_bitrate = 10000;
     bool m_enable_hdr = false;
     UpscalingMode m_upscaling_mode = UPSCALING_OFF;
     bool m_enable_dithering = false;

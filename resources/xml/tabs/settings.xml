@@ -59,6 +59,30 @@
                 grow="1"/>
 
             <brls:Header
+                id="handheld_header"
+                title="@i18n/settings/handheld_profile"
+                paddingTop="60"
+                lineTop="1px"/>
+
+            <brls:BooleanCell
+                id="mode_profiles"/>
+
+            <brls:SelectorCell
+                id="handheld_resolution"/>
+
+            <brls:Header
+                id="handheld_bitrate_header"
+                title="@i18n/settings/handheld_bitrate"
+                subtitle="10.0 Mbps"
+                paddingTop="40"/>
+
+            <brls:Slider
+                id="handheld_bitrate_slider"
+                width="auto"
+                height="84"
+                grow="1"/>
+
+            <brls:Header
                 id="image_adjustments_header"
                 title="@i18n/settings/image_adjustments"
                 paddingTop="60"
