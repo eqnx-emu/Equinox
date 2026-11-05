@@ -67,7 +67,12 @@ class MoonlightInputManager : public Singleton<MoonlightInputManager> {
     // press is sent within a few ms instead of waiting for the next UI frame.
     void startControllerPolling();
     void stopControllerPolling();
-    void setControllerPollingActive(bool active) { pollActive = active; }
+    void setControllerPollingActive(bool active) {
+        // A (re)connected host has no controllers yet: announce them again.
+        if (active && !pollActive)
+            announcedControllerCount = -1;
+        pollActive = active;
+    }
     static void leftMouseClick();
     static void rightMouseClick();
 
@@ -95,6 +100,9 @@ class MoonlightInputManager : public Singleton<MoonlightInputManager> {
     std::thread pollThread;
     std::atomic<bool> pollRunning = false;
     std::atomic<bool> pollActive = false;
+    // Controllers announced to the host with LiSendControllerArrivalEvent;
+    // -1 forces a new announcement (new stream or reconnect).
+    std::atomic<int> announcedControllerCount = -1;
     std::atomic<bool> pollSpecialKey = false;
     std::mutex controllersMutex;
 

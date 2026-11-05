@@ -440,6 +440,7 @@ static brls::SwitchInputManager* switchInputManager() {
 void MoonlightInputManager::startControllerPolling() {
     if (pollRunning.exchange(true))
         return;
+    announcedControllerCount = -1;
 #ifdef __SWITCH__
     // Motion is read on the poll thread at HID rate, right before it is sent,
     // instead of once per UI frame ahead of the vsync latch.
@@ -485,8 +486,6 @@ void MoonlightInputManager::handleControllers(bool specialKey,
     if (fromPollThread && (!pollActive || !inputEnabled))
         return;
 
-    static int lastControllerCount = 0;
-
     auto controllersCount = brls::Application::getPlatform()
                             ->getInputManager()
                             ->getControllersConnectedCount();
@@ -498,20 +497,30 @@ void MoonlightInputManager::handleControllers(bool specialKey,
 
     short mappedControllersCount = controllersToMap();
 
+    // Announce the controllers (type and capabilities) as soon as the stream
+    // runs and whenever the count changes. This used to be a function-local
+    // static that was only checked on a button change, so it survived across
+    // streams: the second stream in the same app run never announced its
+    // controllers, and the host created a default Xbox 360 pad instead of the
+    // type picked by the layout (e.g. the Switch controller).
+    if (announcedControllerCount != controllersCount) {
+        bool announced = true;
+        for (int i = 0; i < controllersCount; i++) {
+            announced &= LiSendControllerArrivalEvent(
+                             i, mappedControllersCount, controllerType(), 0,
+                             LI_CCAP_RUMBLE | LI_CCAP_ACCEL | LI_CCAP_GYRO) == 0;
+        }
+        if (announced) {
+            Logger::debug("StreamingView: announced {} controller(s)", controllersCount);
+            announcedControllerCount = controllersCount;
+        }
+    }
+
     for (int i = 0; i < controllersCount; i++) {
         GamepadState gamepadState = getControllerState(i, specialKey);
 
         if (!gamepadState.is_equal(lastGamepadStates[i])) {
             lastGamepadStates[i] = gamepadState;
-
-            if (lastControllerCount != controllersCount) {
-                lastControllerCount = controllersCount;
-                
-                for (int i = 0; i < controllersCount; i++) {
-                    Logger::debug("StreamingView: send features message for controller #{}", i);
-                    LiSendControllerArrivalEvent(i, mappedControllersCount, controllerType(), 0, LI_CCAP_RUMBLE | LI_CCAP_ACCEL | LI_CCAP_GYRO);
-                }
-            }
 
             if (LiSendMultiControllerEvent(
                     i, mappedControllersCount, gamepadState.buttonFlags,
