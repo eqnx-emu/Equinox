@@ -56,6 +56,7 @@ class MoonlightSession {
     static void connection_stage_failed(int, int);
     static void connection_started();
     static void connection_terminated(int);
+    void handle_connection_terminated(int error_code);
     static void connection_log_message(const char* format, ...);
     static void connection_rumble(unsigned short, unsigned short,
                                   unsigned short);
@@ -92,6 +93,7 @@ class MoonlightSession {
     bool m_is_active = false;
     bool m_is_terminated = false;
     bool m_stop_requested = false;
+    uint64_t m_generation = 0;
     bool m_connection_status_is_poor = false;
     bool m_use_hdr = false;
     bool m_handheld_profile = false;
