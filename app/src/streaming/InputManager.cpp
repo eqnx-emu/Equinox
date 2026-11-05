@@ -241,11 +241,8 @@ void MoonlightInputManager::handleRumble(unsigned short controller,
 
     float rumbleMultiplier = Settings::instance().get_rumble_force();
 
-    const unsigned short low = lowFreqMotor * rumbleMultiplier;
-    const unsigned short high = highFreqMotor * rumbleMultiplier;
-
-    rumbleCache[controller].lowFreqMotor = low;
-    rumbleCache[controller].highFreqMotor = high;
+    rumbleCache[controller].lowFreqMotor = lowFreqMotor * rumbleMultiplier;
+    rumbleCache[controller].highFreqMotor = highFreqMotor * rumbleMultiplier;
 
     brls::Application::getPlatform()->getInputManager()->sendRumble(
         controller, 
