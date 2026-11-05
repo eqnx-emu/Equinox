@@ -624,19 +624,20 @@ int gs_init(PSERVER_DATA server, const std::string address) {
     return result;
 }
 
-int gs_ping(PSERVER_DATA server, float* rtt_ms) {
+int gs_ping(PSERVER_DATA server, float* rtt_ms, HTTPRequestTimeout timeout) {
     return http_ping(build_probe_url(server->serverInfo.address,
                                      server->httpsPort, "/solstice/ping",
                                      unique_id),
-                     rtt_ms, HTTPRequestTimeoutLow);
+                     rtt_ms, timeout);
 }
 
 int gs_speedtest(
     PSERVER_DATA server, int seconds,
-    std::function<void(double elapsed_s, uint64_t bytes)> on_progress) {
+    std::function<void(double elapsed_s, uint64_t bytes)> on_progress,
+    std::shared_ptr<std::atomic<bool>> cancel) {
     int secs = clamp_speedtest_seconds(seconds);
     return http_download_discard(
         build_speedtest_url(server->serverInfo.address, server->httpsPort,
                             unique_id, secs),
-        secs + 5, on_progress);
+        secs + 5, on_progress, cancel.get());
 }

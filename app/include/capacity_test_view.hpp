@@ -13,6 +13,7 @@
 #include "StreamCapacity.hpp"
 #include <Settings.hpp>
 #include <borealis.hpp>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <memory>
@@ -86,6 +87,12 @@ class CapacityTestView : public brls::Box {
     bool sessionStarting = false;
     bool sessionStreaming = false;
     bool stageEnding = false;
+    // Stage 2+ whose start failed: one delayed retry before giving up.
+    bool stageRetried = false;
+    bool retryPending = false;
+    // Aborts an in-flight speedtest transfer on cancel / close.
+    std::shared_ptr<std::atomic<bool>> speedCancel =
+        std::make_shared<std::atomic<bool>>(false);
     std::vector<StageSample> samples;
     std::chrono::steady_clock::time_point stageStart, lastSample,
         lastFrameAdvance;
@@ -93,6 +100,10 @@ class CapacityTestView : public brls::Box {
     std::optional<CapacityVerdict> verdict;
     // Phase 3 not run (close-app confirmation declined or host error).
     bool stagesSkipped = false;
+    // No stage fits the measured speed.
+    bool tooSlow = false;
+    // Set in finish(): resolution height the Apply button also writes.
+    std::optional<int> applyResolution;
 
     // Widgets
     brls::Label* introLabel = nullptr;
@@ -135,7 +146,7 @@ class CapacityTestView : public brls::Box {
     void skipStages(const std::string& error = "");
     bool isTopActivity();
     void startStage();
-    void onStageStarted(bool ok);
+    void onStageStarted(bool ok, const std::string& error = "");
     void tickStage();
     void requestStageEnd(bool disconnected);
     void finishStage(bool disconnected);

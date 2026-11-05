@@ -66,11 +66,14 @@ LatencyGrade grade_latency(float avg_ms);
 float throughput_mbps(const std::vector<std::pair<double, uint64_t>>& progress,
                       double warmup_s);
 
-// min(100000, 0.8 x speed) in kbps; 100000 without a speed measurement.
-int stage_ceiling_kbps(std::optional<float> speed_mbps);
+// Phase-3 bitrate ceiling in kbps. With the Solstice test app (optimistic =
+// false) the measured speed is not a cap: always 100000. When optimistic
+// (Desktop/first-app fallback): min(100000, 0.8 x speed), 100000 without a
+// speed measurement.
+int stage_ceiling_kbps(std::optional<float> speed_mbps, bool optimistic);
 
 // Largest height of {1440,1080,720,540,480,360} whose minimum bitrate fits the
-// stage ceiling. nullopt when speed is unknown or current_height already fits.
+// 0.8 x speed (capped at 100000) kbps. nullopt when speed is unknown or current_height already fits.
 std::optional<int> suggest_resolution(std::optional<float> speed_mbps,
                                       int current_height, int fps,
                                       VideoCodec codec);

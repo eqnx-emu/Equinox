@@ -209,17 +209,24 @@ float throughput_mbps(const std::vector<std::pair<double, uint64_t>>& progress,
     return static_cast<float>((last.second - base->second) * 8.0 / dt / 1e6);
 }
 
-int stage_ceiling_kbps(std::optional<float> speed_mbps) {
+namespace {
+// min(100000, 0.8 x speed) kbps; 100000 without a speed measurement.
+int speed_ceiling_kbps(std::optional<float> speed_mbps) {
     if (!speed_mbps) return kMaxBitrateKbps;
     double c = 0.8 * static_cast<double>(*speed_mbps) * 1000.0;
     return static_cast<int>(std::min<double>(c, kMaxBitrateKbps));
+}
+} // namespace
+
+int stage_ceiling_kbps(std::optional<float> speed_mbps, bool optimistic) {
+    return optimistic ? speed_ceiling_kbps(speed_mbps) : kMaxBitrateKbps;
 }
 
 std::optional<int> suggest_resolution(std::optional<float> speed_mbps,
                                       int current_height, int fps,
                                       VideoCodec codec) {
     if (!speed_mbps) return std::nullopt;
-    const int ceiling = stage_ceiling_kbps(speed_mbps);
+    const int ceiling = speed_ceiling_kbps(speed_mbps);
     auto min_for = [&](int h) {
         auto sz = stream_size_for(h, 0, 0, 100);
         return min_recommended_bitrate_kbps(sz.first, sz.second, fps, codec);
@@ -249,9 +256,9 @@ CapacityVerdict summarize(std::optional<LatencyResult> latency,
     }
     if (v.best) {
         int rec = std::min(v.best->config.bitrate_kbps,
-                           stage_ceiling_kbps(speed_mbps));
+                           stage_ceiling_kbps(speed_mbps, v.optimistic));
         if (v.optimistic && speed_mbps) {
-            int cap = static_cast<int>(0.7 * *speed_mbps * 1000.0);
+            int cap = static_cast<int>(0.7 * *speed_mbps * 1000.0 + 1e-6);
             rec = std::min(rec, cap / kRoundStepKbps * kRoundStepKbps);
         }
         v.recommended_kbps = std::max(rec, 0);

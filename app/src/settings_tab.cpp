@@ -97,8 +97,8 @@ int minRecommendedFor(int resolution) {
 
 void applyBitrateHint(brls::Header* header, int currentKbps, int minKbps) {
     const bool below = currentKbps < minKbps;
-    std::string text = fmt::format(fmt::runtime("settings/bitrate_min_hint"_i18n),
-                                   formatMbps(currentKbps), formatMbps(minKbps));
+    std::string text = brls::getStr("settings/bitrate_min_hint", formatMbps(currentKbps),
+                      formatMbps(minKbps));
     if (below)
         text += " · " + "settings/bitrate_below_min"_i18n;
     header->setSubtitle(text);

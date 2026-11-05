@@ -117,6 +117,7 @@ CapacityTestView::CapacityTestView(const Host& host) : host(host) {
 
 CapacityTestView::~CapacityTestView() {
     *alive = false;
+    speedCancel->store(true);
     Application::getWindowFocusChangedEvent()->unsubscribe(
         windowFocusSubscription);
     if (session) {
@@ -413,11 +414,12 @@ void CapacityTestView::markProbesUnsupported() {
 }
 
 void CapacityTestView::pingWarmup() {
-    // Pays the TLS handshake under the 1 s timeout: never counted, and its
+    // Pays the TLS handshake (5 s timeout instead of the 1 s of measured pings): never counted, and its
     // failure is ignored unless the host says the endpoint doesn't exist.
     auto token = alive;
     GameStreamClient::instance().ping(
-        address, [this, token](const GSResult<float>& result) {
+        address,
+        [this, token](const GSResult<float>& result) {
             if (!*token || closing)
                 return;
             if (!result.isSuccess() && result.error() == "not_supported") {
@@ -426,7 +428,8 @@ void CapacityTestView::pingWarmup() {
                 return;
             }
             pingNext();
-        });
+        },
+        true);
 }
 
 void CapacityTestView::pingNext() {
@@ -530,7 +533,8 @@ void CapacityTestView::runSpeedtest() {
                 speedValue->setText("capacity/pending"_i18n);
             }
             afterSpeed();
-        });
+        },
+        speedCancel);
 }
 
 void CapacityTestView::updateSpeedProgress() {
@@ -587,10 +591,12 @@ void CapacityTestView::beginStages() {
         return;
     const int minKbps = min_recommended_bitrate_kbps(
         requested.width, requested.height, requested.fps, requested.codec);
-    plan = plan_stage_bitrates(minKbps, stage_ceiling_kbps(speedMbps));
+    plan = plan_stage_bitrates(minKbps, stage_ceiling_kbps(speedMbps, usedFallbackApp));
     stageIndex = 0;
     results.clear();
     if (plan.empty()) {
+        // Speed too low for any stage (only possible with the fallback app).
+        tooSlow = true;
         finish();
         return;
     }
@@ -709,15 +715,16 @@ void CapacityTestView::startStage() {
     session->start(
         [this, token](const GSResult<bool>& result) {
             const bool ok = result.isSuccess();
-            brls::sync([this, token, ok] {
+            const std::string error = ok ? "" : result.error();
+            brls::sync([this, token, ok, error] {
                 if (*token)
-                    onStageStarted(ok);
+                    onStageStarted(ok, error);
             });
         },
         isSunshine);
 }
 
-void CapacityTestView::onStageStarted(bool ok) {
+void CapacityTestView::onStageStarted(bool ok, const std::string& error) {
     sessionStarting = false;
     if (phase == Phase::Cancelling) {
         // Cancel waited for the start to finish before tearing down.
@@ -726,6 +733,27 @@ void CapacityTestView::onStageStarted(bool ok) {
         return;
     }
     if (!ok) {
+        // A launch the host refused is not a dropped connection: no data was
+        // measured, so it must not count against the network.
+        if (results.empty()) {
+            closeSession(launchedByTest);
+            skipStages(error.empty() ? "capacity/start_failed"_i18n : error);
+            return;
+        }
+        if (!stageRetried) {
+            // The host may still be tearing down the previous session.
+            stageRetried = true;
+            retryPending = true;
+            closeSession(false);
+            auto token = alive;
+            brls::delay(750, [this, token] {
+                if (!*token || closing)
+                    return;
+                retryPending = false;
+                startStage();
+            });
+            return;
+        }
         finishStage(true);
         return;
     }
@@ -830,6 +858,7 @@ void CapacityTestView::finishStage(bool disconnected) {
 
     if (next) {
         stageIndex++;
+        stageRetried = false;
         startStage();
     } else {
         finish();
@@ -902,6 +931,8 @@ void CapacityTestView::finish() {
     if (stagesSkipped) {
         bitrateValue->setText("capacity/skipped"_i18n);
         text = "capacity/skipped_detail"_i18n;
+    } else if (tooSlow && results.empty()) {
+        text = "capacity/too_slow"_i18n;
     } else if (verdict->recommended_kbps > 0) {
         const std::string avgLatency =
             verdict->latency && verdict->latency->loss_pct < 100.0f
@@ -927,15 +958,22 @@ void CapacityTestView::finish() {
     verdictLabel->setText(text);
     verdictLabel->setVisibility(Visibility::VISIBLE);
 
-    if (verdict->optimistic) {
+    if (verdict->optimistic && !stagesSkipped && !results.empty()) {
         warningLabel->setText("capacity/optimistic"_i18n);
         warningLabel->setVisibility(Visibility::VISIBLE);
     }
 
     closeButton->setText("capacity/close"_i18n);
+    applyResolution = downgradedFrom ? std::optional<int>(requested.height)
+                                     : std::nullopt;
     if (verdict->recommended_kbps > 0) {
         applyButton->setText(
-            brls::getStr("capacity/apply", mbps(verdict->recommended_kbps)));
+            applyResolution
+                ? brls::getStr("capacity/apply_at",
+                               mbps(verdict->recommended_kbps),
+                               *applyResolution)
+                : brls::getStr("capacity/apply",
+                               mbps(verdict->recommended_kbps)));
         applyButton->setVisibility(Visibility::VISIBLE);
         Application::giveFocus(applyButton);
     } else {
@@ -950,10 +988,15 @@ void CapacityTestView::applyRecommendation() {
     const int kbps = verdict->recommended_kbps;
     // Only the profile the test ran with.
     if (apply_target(settings.mode_profiles(), handheldWhenTested) ==
-        ProfileTarget::Handheld)
+        ProfileTarget::Handheld) {
         settings.set_handheld_bitrate(kbps);
-    else
+        if (applyResolution)
+            settings.set_handheld_resolution(*applyResolution);
+    } else {
         settings.set_bitrate(kbps);
+        if (applyResolution)
+            settings.set_resolution(*applyResolution);
+    }
     settings.save();
     Application::notify(brls::getStr("capacity/applied", mbps(kbps)));
     close();
@@ -966,7 +1009,7 @@ void CapacityTestView::cancel() {
         return;
     // Never touches settings. Stops the stream and closes the app only if
     // the test opened it.
-    if (sessionStarting) {
+    if (sessionStarting || retryPending) {
         // The session is still inside LiStartConnection on a worker thread;
         // tear it down once start() reports back (onStageStarted).
         phase = Phase::Cancelling;
@@ -996,6 +1039,7 @@ void CapacityTestView::close() {
         return;
     }
     closing = true;
+    speedCancel->store(true);
     sessionStreaming = false;
     setStreamingBackdrop(false);
     this->dismiss();

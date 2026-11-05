@@ -22,6 +22,7 @@
 #include "Data.hpp"
 #include <cstdint>
 #include <functional>
+#include <atomic>
 #include <string>
 
 enum HTTPRequestTimeout : long {
@@ -46,8 +47,10 @@ int http_ping(const std::string& url, float* rtt_ms,
 // GET `url`, discarding the body (only bytes are counted). `on_progress` is
 // invoked at most every 100 ms while data arrives, plus once at the end, with
 // the seconds since the request started and the total bytes received.
-// `timeout_s` is the whole-request timeout.
+// `timeout_s` is the whole-request timeout. Once *cancel becomes true the
+// transfer is aborted (GS_IO_ERROR).
 // Returns GS_OK, GS_NOT_SUPPORTED (HTTP 404) or GS_FAILED / GS_IO_ERROR.
 int http_download_discard(
     const std::string& url, long timeout_s,
-    const std::function<void(double elapsed_s, uint64_t bytes)>& on_progress);
+    const std::function<void(double elapsed_s, uint64_t bytes)>& on_progress,
+    const std::atomic<bool>* cancel = nullptr);

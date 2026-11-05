@@ -3,7 +3,9 @@
 #include "Settings.hpp"
 #include "client.h"
 #include "errors.h"
+#include <atomic>
 #include <functional>
+#include <memory>
 #include <map>
 #include <string>
 #include <utility>
@@ -98,11 +100,14 @@ class GameStreamClient : public Singleton<GameStreamClient> {
     void quit(const std::string& address, ServerCallback<bool>& callback);
     void quit(const Host& host, ServerCallback<bool>& callback);
 
-    // RTT in ms. Discard the first result (TLS warm-up) when sampling.
-    void ping(const std::string& address, ServerCallback<float>& callback);
+    // RTT in ms. Discard the first result (TLS warm-up) when sampling; pass
+    // warmup = true for that call (5 s timeout instead of 1 s).
+    void ping(const std::string& address, ServerCallback<float>& callback,
+              bool warmup = false);
     void speedtest(const std::string& address, int seconds,
                    std::function<void(double elapsed_s, uint64_t bytes)> on_progress,
-                   ServerCallback<bool>& callback);
+                   ServerCallback<bool>& callback,
+                   std::shared_ptr<std::atomic<bool>> cancel = nullptr);
 
   private:
     template <typename T, typename Worker>

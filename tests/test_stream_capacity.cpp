@@ -98,9 +98,14 @@ TEST_CASE("throughput_mbps") {
 }
 
 TEST_CASE("stage ceiling") {
-    CHECK(stage_ceiling_kbps(50.0f) == 40000);
-    CHECK(stage_ceiling_kbps(std::nullopt) == 100000);
-    CHECK(stage_ceiling_kbps(500.0f) == 100000);
+    // optimistic: min(100000, 0.8 x speed)
+    CHECK(stage_ceiling_kbps(50.0f, true) == 40000);
+    CHECK(stage_ceiling_kbps(std::nullopt, true) == 100000);
+    CHECK(stage_ceiling_kbps(500.0f, true) == 100000);
+    // Solstice test app: speed is not a cap
+    CHECK(stage_ceiling_kbps(50.0f, false) == 100000);
+    CHECK(stage_ceiling_kbps(5.0f, false) == 100000);
+    CHECK(stage_ceiling_kbps(std::nullopt, false) == 100000);
 }
 
 TEST_CASE("plan_stage_bitrates") {
@@ -161,7 +166,7 @@ TEST_CASE("CapacityTest.SuggestsLowerResolutionWhenSpeedTooLow") {
     auto v = summarize(std::nullopt, 12.0f, {p}, false, cfg(1080, 60, 15000));
     REQUIRE(v.suggested_resolution.has_value());
     CHECK(*v.suggested_resolution == 720);
-    CHECK(v.recommended_kbps <= 9600);
+    CHECK(v.recommended_kbps == 8000);
     auto none = summarize(std::nullopt, 12.0f, {}, false, cfg(1080, 60, 15000));
     CHECK(none.recommended_kbps == 0);
 }
@@ -175,6 +180,21 @@ TEST_CASE("summarize optimistic caps at 0.7 x speed") {
                        cfg(1080, 60, 15000));
     CHECK_FALSE(n.optimistic);
     CHECK(n.recommended_kbps == 27000);
+}
+
+TEST_CASE("summarize non-optimistic does not cap by speed") {
+    auto v = summarize(std::nullopt, 10.0f, {res(27000, true)}, false,
+                       cfg(1080, 60, 15000));
+    CHECK(v.recommended_kbps == 27000);
+    // the speed still drives the resolution suggestion
+    REQUIRE(v.suggested_resolution.has_value());
+}
+
+TEST_CASE("summarize optimistic rounding survives float noise") {
+    // 0.7 * 45 * 1000 is 31499.999999999996 in double: must still give 31500.
+    auto v = summarize(std::nullopt, 45.0f, {res(40500, true)}, true,
+                       cfg(1080, 60, 15000));
+    CHECK(v.recommended_kbps == 31500);
 }
 
 TEST_CASE("CapacityTest.PicksDesktopFallbackAndFlagsOptimistic") {

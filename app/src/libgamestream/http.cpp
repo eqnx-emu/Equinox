@@ -229,9 +229,17 @@ static size_t _write_count(void* contents, size_t size, size_t nmemb,
     return n;
 }
 
+// Non-zero aborts the transfer (CURLE_ABORTED_BY_CALLBACK).
+static int _xferinfo_cancel(void* userp, curl_off_t, curl_off_t, curl_off_t,
+                            curl_off_t) {
+    auto* cancel = static_cast<const std::atomic<bool>*>(userp);
+    return cancel->load() ? 1 : 0;
+}
+
 int http_download_discard(
     const std::string& url, long timeout_s,
-    const std::function<void(double elapsed_s, uint64_t bytes)>& on_progress) {
+    const std::function<void(double elapsed_s, uint64_t bytes)>& on_progress,
+    const std::atomic<bool>* cancel) {
     brls::Logger::info("Curl: Speedtest request:\n{}", url.c_str());
 
     auto curl = makeCurl();
@@ -247,6 +255,11 @@ int http_download_discard(
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &state);
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout_s);
+    if (cancel) {
+        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+        curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, _xferinfo_cancel);
+        curl_easy_setopt(curl, CURLOPT_XFERINFODATA, cancel);
+    }
 
     CURLcode res = curl_easy_perform(curl);
     auto end = std::chrono::steady_clock::now();
