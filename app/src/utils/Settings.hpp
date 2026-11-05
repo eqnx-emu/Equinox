@@ -28,7 +28,12 @@ struct KeyMappingLayout {
     std::string title;
     bool editable;
     std::map<int, int> mapping;
+    // Report the controller to the host as a Nintendo controller instead of an Xbox one
+    bool nintendoController = false;
 };
+
+// Number of built-in layouts that precede the user-created ones
+constexpr int BASE_MAPPING_LAYOUTS_COUNT = 3;
 
 struct KeyComboOptions {
     int holdTime;

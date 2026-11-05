@@ -60,6 +60,7 @@ class MoonlightInputManager : public Singleton<MoonlightInputManager> {
     void handleRumbleTriggers(unsigned short controller, unsigned short lowFreqMotor, unsigned short highFreqMotor);
     void updateTouchScreenPanDelta(brls::PanGestureStatus panStatus);
     void reloadButtonMappingLayout();
+    static uint8_t controllerType();
     void setInputEnabled(bool enabled) { inputEnabled = enabled; }
 
     // Gamepads are polled on a dedicated thread while streaming so a button
