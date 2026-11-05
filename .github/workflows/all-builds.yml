@@ -2,9 +2,9 @@ name: All Builds
 
 # This fork only ships the Nintendo Switch build. The other platform
 # workflows are kept (workflow_call only) so upstream merges stay simple.
+# Pushes to master are built by fork-switch-release.yml, which also
+# publishes the release, so they are not built twice.
 on:
-  push:
-    branches: [ master ]
   pull_request:
     branches: [ master ]
   workflow_dispatch:

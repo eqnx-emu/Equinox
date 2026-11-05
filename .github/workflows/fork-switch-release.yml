@@ -2,7 +2,8 @@
 # Builds the Switch NRO on every push to master and publishes it as a GitHub
 # release named after the version in CMakeLists.txt. The in-app updater reads
 # the latest release, so bump VERSION_ALTER to ship an update; pushes that keep
-# the same version do not publish anything.
+# the same version are still built (as the master CI build) but do not publish
+# anything.
 name: Fork Switch Release
 permissions: {}
 
@@ -50,7 +51,6 @@ jobs:
   build:
     name: Build NRO
     needs: version
-    if: needs.version.outputs.exists == 'false'
     permissions:
       contents: read
     uses: ./.github/workflows/docker-image.yml
@@ -58,6 +58,7 @@ jobs:
   release:
     name: Publish release
     needs: [version, build]
+    if: needs.version.outputs.exists == 'false'
     runs-on: ubuntu-latest
     permissions:
       contents: write
