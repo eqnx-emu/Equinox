@@ -57,6 +57,11 @@ class StreamingView : public brls::Box {
 
     void onWindowFocusChanged(bool focused);
 
+    std::string buildStatsText();
+    std::string statsText;
+    std::chrono::steady_clock::time_point statsTextTime{};
+    float statsBounds[4] = {0, 0, 0, 0};
+
 #ifdef __SWITCH__
     std::chrono::steady_clock::time_point lastDrawStart{};
     std::chrono::nanoseconds latchDelay{0};

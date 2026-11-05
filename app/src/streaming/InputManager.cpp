@@ -8,6 +8,9 @@
 #include "Limelight.h"
 #include "Settings.hpp"
 #include <borealis.hpp>
+#ifdef __SWITCH__
+#include <borealis/platforms/switch/switch_input.hpp>
+#endif
 #include <streaming_view.hpp>
 #include <algorithm>
 #include <chrono>
@@ -231,8 +234,6 @@ void MoonlightInputManager::updateTouchScreenPanDelta(
 void MoonlightInputManager::handleRumble(unsigned short controller,
                                          unsigned short lowFreqMotor,
                                          unsigned short highFreqMotor) {
-    brls::Logger::debug("Rumble {} {}", lowFreqMotor, highFreqMotor);
-
     if (controller >= GAMEPADS_MAX) {
         brls::Logger::warning("Ignoring rumble for out-of-range controller {}", controller);
         return;
@@ -252,8 +253,6 @@ void MoonlightInputManager::handleRumble(unsigned short controller,
 void MoonlightInputManager::handleRumbleTriggers(uint16_t controllerNumber, 
                                                   uint16_t leftTriggerMotor, 
                                                   uint16_t rightTriggerMotor) {
-    brls::Logger::debug("Rumble Trigger {} {}", leftTriggerMotor, rightTriggerMotor);
-
     if (controllerNumber >= GAMEPADS_MAX) {
         brls::Logger::warning("Ignoring trigger rumble for out-of-range controller {}", controllerNumber);
         return;
@@ -431,9 +430,21 @@ GamepadState MoonlightInputManager::getControllerState(int controllerNum,
     return gamepadState;
 }
 
+#ifdef __SWITCH__
+static brls::SwitchInputManager* switchInputManager() {
+    return static_cast<brls::SwitchInputManager*>(
+        brls::Application::getPlatform()->getInputManager());
+}
+#endif
+
 void MoonlightInputManager::startControllerPolling() {
     if (pollRunning.exchange(true))
         return;
+#ifdef __SWITCH__
+    // Motion is read on the poll thread at HID rate, right before it is sent,
+    // instead of once per UI frame ahead of the vsync latch.
+    switchInputManager()->setSensorPollingExternal(true);
+#endif
     pollThread = std::thread(&MoonlightInputManager::controllerPollLoop, this);
 }
 
@@ -443,14 +454,25 @@ void MoonlightInputManager::stopControllerPolling() {
         return;
     if (pollThread.joinable())
         pollThread.join();
+#ifdef __SWITCH__
+    switchInputManager()->setSensorPollingExternal(false);
+#endif
 }
 
 void MoonlightInputManager::controllerPollLoop() {
+#ifdef __SWITCH__
+    // Run just above the UI thread (0x2C) so a busy frame cannot delay input.
+    svcSetThreadPriority(CUR_THREAD_HANDLE, 0x2B);
+#endif
     // HID refreshes controller state every ~5 ms; 4 ms keeps us just ahead.
     constexpr auto pollInterval = std::chrono::milliseconds(4);
     while (pollRunning) {
-        if (pollActive && inputEnabled)
+        if (pollActive && inputEnabled) {
             handleControllers(pollSpecialKey, true);
+#ifdef __SWITCH__
+            switchInputManager()->pollControllerSensors();
+#endif
+        }
         std::this_thread::sleep_for(pollInterval);
     }
 }
