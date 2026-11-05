@@ -122,6 +122,10 @@
         "frame_pacing_balanced": "Equilibrado",
         "frame_pacing_latency": "Menor latencia",
         "frame_pacing_smooth": "Más fluido",
+        "handheld_profile": "Handheld mode",
+        "mode_profiles": "Separate profile in handheld mode",
+        "handheld_resolution": "Handheld resolution",
+        "handheld_bitrate": "Handheld bitrate",
         "fps": "FPS",
         "guide_key": "Botón de Guía (Activación inmediata)",
         "guide_key_buttons": "Combinación de botones",
@@ -180,6 +184,7 @@
     "streaming": {
         "bad_connection": "Mala conexión...",
         "decoder_overloaded": "Decodificador sobrecargado...",
+        "profile_reconnect_hint": "Dock mode changed: reconnect to apply the other stream profile",
         "connection": "Conexión",
         "debug_info": "Información de debug",
         "disconnect": "Desconectar",

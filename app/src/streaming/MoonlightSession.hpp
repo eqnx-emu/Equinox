@@ -38,6 +38,14 @@ class MoonlightSession {
         return m_use_hdr;
     }
 
+    // Negotiated stream parameters (valid once the video decoder is set up).
+    int video_format() const;
+    int stream_width() const;
+    int stream_height() const;
+    int stream_fps() const;
+    int bitrate() const { return m_config.bitrate; }
+    bool handheld_profile() const { return m_handheld_profile; }
+
     SessionStats* session_stats() const {
         return (SessionStats*)&m_session_stats;
     }
@@ -86,6 +94,7 @@ class MoonlightSession {
     bool m_stop_requested = false;
     bool m_connection_status_is_poor = false;
     bool m_use_hdr = false;
+    bool m_handheld_profile = false;
 
     SessionStats m_session_stats = {};
     uint64_t m_last_stats_update_ms = 0;

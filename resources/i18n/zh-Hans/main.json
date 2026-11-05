@@ -122,6 +122,10 @@
         "frame_pacing_balanced": "Balanced",
         "frame_pacing_latency": "Lowest latency",
         "frame_pacing_smooth": "Smoothest video",
+        "handheld_profile": "Handheld mode",
+        "mode_profiles": "Separate profile in handheld mode",
+        "handheld_resolution": "Handheld resolution",
+        "handheld_bitrate": "Handheld bitrate",
         "fps": "FPS",
         "guide_key": "向导键（立即按下）",
         "guide_key_buttons": "按键组合",
@@ -180,6 +184,7 @@
     "streaming": {
         "bad_connection": "Bad connection...",
         "decoder_overloaded": "Decoder overloaded...",
+        "profile_reconnect_hint": "Dock mode changed: reconnect to apply the other stream profile",
         "connection": "连接选项",
         "debug_info": "调试信息",
         "disconnect": "断开连接",

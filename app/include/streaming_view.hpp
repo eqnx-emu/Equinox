@@ -59,6 +59,7 @@ class StreamingView : public brls::Box {
     std::chrono::nanoseconds latchCeiling{std::chrono::milliseconds(11)};
     size_t latchMissStat = 0;
     void latchBeforeVsync();
+    int lastHandheldMode = -1;
 #endif
 
     void handleInput();

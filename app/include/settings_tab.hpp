@@ -31,6 +31,11 @@ class SettingsTab : public brls::Box {
     BRLS_BIND(brls::BooleanCell, hwDecoding, "use_hw_decoding");
     BRLS_BIND(brls::Header, header, "header");
     BRLS_BIND(brls::Slider, slider, "slider");
+    BRLS_BIND(brls::Header, handheldHeader, "handheld_header");
+    BRLS_BIND(brls::BooleanCell, modeProfiles, "mode_profiles");
+    BRLS_BIND(brls::SelectorCell, handheldResolution, "handheld_resolution");
+    BRLS_BIND(brls::Header, handheldBitrateHeader, "handheld_bitrate_header");
+    BRLS_BIND(brls::Slider, handheldBitrateSlider, "handheld_bitrate_slider");
     BRLS_BIND(brls::SelectorCell, audioBackend, "audio_backend");
     BRLS_BIND(brls::BooleanCell, optimal, "optimal");
     BRLS_BIND(brls::BooleanCell, pcAudio, "pcAudio");

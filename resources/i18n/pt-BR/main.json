@@ -122,6 +122,10 @@
         "frame_pacing_balanced": "Equilibrado",
         "frame_pacing_latency": "Menor latência",
         "frame_pacing_smooth": "Mais suave",
+        "handheld_profile": "Modo portátil",
+        "mode_profiles": "Perfil separado no modo portátil",
+        "handheld_resolution": "Resolução no portátil",
+        "handheld_bitrate": "Bitrate no portátil",
         "fps": "FPS",
         "guide_key": "Tecla Guia (Clique imediato)",
         "guide_key_buttons": "Combinação de botões",
@@ -180,6 +184,7 @@
     "streaming": {
         "bad_connection": "Conexão ruim...",
         "decoder_overloaded": "Decodificador sobrecarregado...",
+        "profile_reconnect_hint": "Modo do console mudou: reconecte para aplicar o outro perfil",
         "connection": "Conexão",
         "debug_info": "Informações de debug",
         "disconnect": "Desconectar",

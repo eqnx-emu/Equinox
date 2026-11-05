@@ -381,6 +381,64 @@ SettingsTab::SettingsTab() {
     });
     slider->setProgress(progress);
 
+#if defined(PLATFORM_SWITCH)
+    // Handheld profile: when enabled, the values above apply while docked and
+    // these apply while undocked. The mode is sampled when a stream starts.
+    const std::vector<int> handheldResolutionValues = {480, 540, 720, 1080};
+    std::vector<std::string> handheldResolutionNames;
+    for (int value : handheldResolutionValues)
+        handheldResolutionNames.push_back(std::to_string(value) + "p");
+
+    auto handheldIt = std::find(handheldResolutionValues.begin(),
+                                handheldResolutionValues.end(),
+                                Settings::instance().handheld_resolution());
+    int handheldSelection =
+        handheldIt != handheldResolutionValues.end()
+            ? (int) (handheldIt - handheldResolutionValues.begin())
+            : 2;
+
+    handheldResolution->init(
+        "settings/handheld_resolution"_i18n, handheldResolutionNames,
+        handheldSelection, [handheldResolutionValues](int selected) {
+            Settings::instance().set_handheld_resolution(
+                handheldResolutionValues[selected]);
+        });
+
+    auto updateHandheldControls = [this](bool enabled) {
+        handheldResolution->setVisibility(enabled ? brls::Visibility::VISIBLE
+                                                  : brls::Visibility::GONE);
+        handheldBitrateHeader->setVisibility(
+            enabled ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+        handheldBitrateSlider->setVisibility(
+            enabled ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+    };
+
+    modeProfiles->init("settings/mode_profiles"_i18n,
+                       Settings::instance().mode_profiles(),
+                       [updateHandheldControls](bool value) {
+                           Settings::instance().set_mode_profiles(value);
+                           updateHandheldControls(value);
+                       });
+    updateHandheldControls(Settings::instance().mode_profiles());
+
+    handheldBitrateSlider->getProgressEvent()->subscribe(
+        [this, limitOffset, limit](float progress) {
+            int bitrate = progress * limit + limitOffset;
+            std::stringstream stream;
+            stream << std::fixed << std::setprecision(1) << bitrate / 1000.0f;
+            handheldBitrateHeader->setSubtitle(stream.str() + " Mbps");
+            Settings::instance().set_handheld_bitrate(bitrate);
+        });
+    handheldBitrateSlider->setProgress(
+        (Settings::instance().handheld_bitrate() - limitOffset) / limit);
+#else
+    handheldHeader->removeFromSuperView(true);
+    modeProfiles->removeFromSuperView(true);
+    handheldResolution->removeFromSuperView(true);
+    handheldBitrateHeader->removeFromSuperView(true);
+    handheldBitrateSlider->removeFromSuperView(true);
+#endif
+
 #if defined(__SWITCH__)
     audioBackend->init("settings/audio_backend"_i18n, audio_backends, 0,
                        [](int) { Settings::instance().set_audio_backend(AUDREN); });
