@@ -51,7 +51,6 @@ jobs:
   build:
     name: Build NRO
     needs: version
-    if: needs.version.outputs.exists == 'false'
     permissions:
       contents: read
     uses: ./.github/workflows/docker-image.yml
@@ -59,6 +58,7 @@ jobs:
   release:
     name: Publish release
     needs: [version, build]
+    if: needs.version.outputs.exists == 'false'
     runs-on: ubuntu-latest
     permissions:
       contents: write
