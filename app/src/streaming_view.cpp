@@ -113,6 +113,12 @@ StreamingView::StreamingView(const Host& host, const AppInfo& app) : host(host),
             }, result.value().isSunshine());
         });
 
+    // Subscribed once here, not in onFocusGained, which runs again every time
+    // an overlay closes.
+    windowFocusSubscription =
+        Application::getWindowFocusChangedEvent()->subscribe(
+            [this](bool focused) { this->onWindowFocusChanged(focused); });
+
     MoonlightInputManager::instance().reloadButtonMappingLayout();
 
     static bool lMouseKeyGate = false;
@@ -288,8 +294,32 @@ void StreamingView::onFocusLost() {
         cancelDelay(bottombarDelayTask);
 }
 
+void StreamingView::onWindowFocusChanged(bool focused) {
+    if (windowFocused == focused)
+        return;
+
+    windowFocused = focused;
+    Logger::info("StreamingView: window focus {}", focused ? "gained" : "lost");
+
+    if (!focused) {
+        // HOME menu or console sleep: stop sending input and stop rendering
+        // before the graphics service goes away underneath the session.
+        MoonlightInputManager::instance().setControllerPollingActive(false);
+        MoonlightInputManager::instance().dropInput();
+    }
+
+    session->set_suspended(!focused);
+}
+
 void StreamingView::draw(NVGcontext* vg, float x, float y, float width,
                          float height, Style style, FrameContext* ctx) {
+    // Off screen, run nothing: no stream, input or overlays. This comes before
+    // the termination check so a session dropped because the console turned
+    // wifi off for sleep is not torn down while the compositor is stopped; the
+    // check below picks it up on the first frame back.
+    if (!windowFocused)
+        return;
+
     if (session->is_terminated()) {
         terminate(false);
         return;
@@ -705,6 +735,8 @@ StreamingView::~StreamingView() {
     
     MoonlightInputManager::instance().stopControllerPolling();
     Application::getPlatform()->disableScreenDimming(false);
+    Application::getWindowFocusChangedEvent()->unsubscribe(
+        windowFocusSubscription);
     Application::getPlatform()
         ->getInputManager()
         ->getKeyboardKeyStateChanged()
