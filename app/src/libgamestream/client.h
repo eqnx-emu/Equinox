@@ -22,6 +22,8 @@
 #include "Data.hpp"
 #include "xml.h"
 #include <Limelight.h>
+#include <cstdint>
+#include <functional>
 #include <stdbool.h>
 
 #define MIN_SUPPORTED_GFE_VERSION 3
@@ -55,3 +57,11 @@ int gs_applist(PSERVER_DATA server, PAPP_LIST* app_list);
 int gs_unpair(PSERVER_DATA server);
 int gs_pair(PSERVER_DATA server, char* pin);
 int gs_quit_app(PSERVER_DATA server);
+
+// Latency/speed probes against the Solstice host (GS_NOT_SUPPORTED on 404).
+// Callers should discard one warm-up gs_ping before sampling so the TLS
+// handshake is not measured (the curl handle is reused between pings).
+int gs_ping(PSERVER_DATA server, float* rtt_ms);
+// seconds is clamped to [1,10]; the body is discarded, only bytes are counted.
+int gs_speedtest(PSERVER_DATA server, int seconds,
+                 std::function<void(double elapsed_s, uint64_t bytes)> on_progress);

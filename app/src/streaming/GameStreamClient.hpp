@@ -98,6 +98,12 @@ class GameStreamClient : public Singleton<GameStreamClient> {
     void quit(const std::string& address, ServerCallback<bool>& callback);
     void quit(const Host& host, ServerCallback<bool>& callback);
 
+    // RTT in ms. Discard the first result (TLS warm-up) when sampling.
+    void ping(const std::string& address, ServerCallback<float>& callback);
+    void speedtest(const std::string& address, int seconds,
+                   std::function<void(double elapsed_s, uint64_t bytes)> on_progress,
+                   ServerCallback<bool>& callback);
+
   private:
     template <typename T, typename Worker>
     void with_cached_server_data(const std::string& address,

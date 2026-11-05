@@ -22,6 +22,7 @@
 #include "CryptoManager.hpp"
 #include "errors.h"
 #include "http.h"
+#include "HostProbe.hpp"
 #include <Limelight.h>
 #include <borealis/core/logger.hpp>
 #include <errno.h>
@@ -621,4 +622,21 @@ int gs_init(PSERVER_DATA server, const std::string address) {
     server->serverInfo.serverInfoGfeVersion =
         server->serverInfoGfeVersion.c_str();
     return result;
+}
+
+int gs_ping(PSERVER_DATA server, float* rtt_ms) {
+    return http_ping(build_probe_url(server->serverInfo.address,
+                                     server->httpsPort, "/solstice/ping",
+                                     unique_id),
+                     rtt_ms, HTTPRequestTimeoutLow);
+}
+
+int gs_speedtest(
+    PSERVER_DATA server, int seconds,
+    std::function<void(double elapsed_s, uint64_t bytes)> on_progress) {
+    int secs = clamp_speedtest_seconds(seconds);
+    return http_download_discard(
+        build_speedtest_url(server->serverInfo.address, server->httpsPort,
+                            unique_id, secs),
+        secs + 5, on_progress);
 }

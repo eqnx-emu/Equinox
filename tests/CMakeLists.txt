@@ -12,3 +12,8 @@ add_executable(test_stream_capacity
 target_include_directories(test_stream_capacity PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
     "${MOONLIGHT_ROOT}/extern")
+
+add_executable(test_host_probe test_host_probe.cpp)
+target_include_directories(test_host_probe PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
