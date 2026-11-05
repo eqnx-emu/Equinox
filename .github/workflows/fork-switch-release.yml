@@ -1,0 +1,82 @@
+---
+# Builds the Switch NRO on every push to master and publishes it as a GitHub
+# release named after the version in CMakeLists.txt. The in-app updater reads
+# the latest release, so bump VERSION_ALTER to ship an update; pushes that keep
+# the same version do not publish anything.
+name: Fork Switch Release
+permissions: {}
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Version
+    if: github.repository_owner != 'XITRIX'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      exists: ${{ steps.version.outputs.exists }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          get() { sed -n "s/^set(VERSION_$1 \"\([0-9]*\)\")/\1/p" CMakeLists.txt | tr -d '\r'; }
+          version="$(get MAJOR).$(get MINOR).$(get ALTER)"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          if gh release view "v${version}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release v${version} already exists, nothing to publish."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Publishing v${version}."
+          fi
+
+  build:
+    name: Build NRO
+    needs: version
+    if: needs.version.outputs.exists == 'false'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/docker-image.yml
+
+  release:
+    name: Publish release
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download NRO
+        uses: actions/download-artifact@v4
+        with:
+          name: Moonlight-Switch.nro
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          sha="$(sha256sum Moonlight-Switch.nro | cut -d' ' -f1)"
+          gh release create "v${VERSION}" Moonlight-Switch.nro \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target "${GITHUB_SHA}" \
+            --title "Moonlight-Switch ${VERSION}" \
+            --notes "Switch build of ${GITHUB_SHA}. SHA256 of Moonlight-Switch.nro: \`${sha}\`" \
+            --latest

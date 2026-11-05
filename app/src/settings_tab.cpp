@@ -10,6 +10,7 @@
 #endif
 
 #include "settings_tab.hpp"
+#include "Updater.hpp"
 #include "Settings.hpp"
 #include "helper.hpp"
 #include "button_selecting_dialog.hpp"
@@ -816,6 +817,18 @@ SettingsTab::SettingsTab() {
                        Settings::instance().set_write_log(value);
                        brls::Application::enableDebuggingView(value);
                    });
+
+    autoUpdate->init("update/auto_check"_i18n,
+                     Settings::instance().auto_update_check(), [](bool value) {
+                         Settings::instance().set_auto_update_check(value);
+                     });
+
+    checkUpdate->setText("update/check_now"_i18n);
+    checkUpdate->setDetailText(APP_VERSION);
+    checkUpdate->registerClickAction([](View* view) {
+        Updater::checkAndPrompt(false);
+        return true;
+    });
 }
 
 void SettingsTab::updateDeadZoneItems() {

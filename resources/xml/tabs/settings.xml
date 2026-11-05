@@ -231,6 +231,17 @@
                 
             <brls:BooleanCell
                 id="writeLog"/>
+
+            <brls:Header
+                title="@i18n/update/title"
+                paddingTop="60"
+                lineTop="1px"/>
+
+            <brls:BooleanCell
+                id="auto_update"/>
+
+            <brls:DetailCell
+                id="check_update"/>
             
         </brls:Box>
 
