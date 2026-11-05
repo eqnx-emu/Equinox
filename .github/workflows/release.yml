@@ -1,9 +1,10 @@
 name: Draft Release
 
+# Upstream draft-release flow. In this fork releases are published by
+# fork-switch-release.yml; running this on the tag it creates turned the
+# release back into a draft and hid it from the in-app updater.
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: read
