@@ -206,5 +206,17 @@
         "favorites": "Favoritos",
         "settings": "Configurações"
     },
+    "update": {
+        "title": "Atualizações",
+        "check_now": "Procurar atualizações agora",
+        "available": "O Moonlight {} está disponível (você tem o {}).\n\nBaixar e instalar agora? O Moonlight vai reiniciar.",
+        "later": "Depois",
+        "install": "Atualizar",
+        "downloading": "Baixando atualização...",
+        "installed": "O Moonlight {} foi instalado. O Moonlight vai reiniciar agora.",
+        "failed": "A atualização falhou.",
+        "up_to_date": "O Moonlight está atualizado.",
+        "unsupported": "A atualização só funciona com o Moonlight aberto como NRO do cartão SD."
+    },
     "title": "Moonlight"
 }

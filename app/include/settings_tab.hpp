@@ -62,6 +62,7 @@ class SettingsTab : public brls::Box {
     BRLS_BIND(brls::Header, mouseSpeedHeader, "mouse_speed_header");
     BRLS_BIND(brls::Slider, mouseSpeedSlider, "mouse_speed_slider");
     BRLS_BIND(brls::BooleanCell, writeLog, "writeLog");
+    BRLS_BIND(brls::DetailCell, checkUpdate, "check_update");
 
     static brls::View* create();
 

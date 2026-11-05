@@ -206,5 +206,17 @@
         "favorites": "Favorites",
         "settings": "Settings"
     },
+    "update": {
+        "title": "Updates",
+        "check_now": "Check for updates now",
+        "available": "Moonlight {} is available (you have {}).\n\nDownload and install it now? Moonlight will restart.",
+        "later": "Later",
+        "install": "Update",
+        "downloading": "Downloading update...",
+        "installed": "Moonlight {} is installed. Moonlight will now restart.",
+        "failed": "The update failed.",
+        "up_to_date": "Moonlight is up to date.",
+        "unsupported": "Updates only work when Moonlight is launched as an NRO from the SD card."
+    },
     "title": "Moonlight"
 }
