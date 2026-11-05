@@ -8,7 +8,8 @@
 #include <utility>
 #include <vector>
 
-enum VideoCodec : int { H264, H265, AV1 };
+#include "VideoCodec.hpp"
+
 std::string getVideoCodecName(VideoCodec codec);
 
 enum UpscalingMode : int { UPSCALING_OFF, UPSCALING_METALFX, UPSCALING_FSR1 };

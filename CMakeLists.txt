@@ -8,6 +8,7 @@ include(${EXTERN_PATH}/cmake/commonOption.cmake)
 
 # Dependencies
 option(USE_SHARED_LIB "Whether to use shared libs provided by system" OFF)
+option(MOONLIGHT_BUILD_TESTS "Build unit tests (desktop only)" OFF)
 cmake_dependent_option(USE_SYSTEM_FMT "" OFF "NOT USE_SHARED_LIB" ON)
 cmake_dependent_option(USE_SYSTEM_TINYXML2 "" OFF "NOT USE_SHARED_LIB" ON)
 
@@ -788,4 +789,8 @@ if (WIN32 AND PLATFORM_DESKTOP AND MOONLIGHT_DESKTOP_USE_SYSTEM_PACKAGES AND
             -P "${CMAKE_CURRENT_SOURCE_DIR}/extern/cmake/stage_runtime_deps.cmake"
         DEPENDS ${PROJECT_NAME}
         VERBATIM)
+endif ()
+
+if (PLATFORM_DESKTOP AND MOONLIGHT_BUILD_TESTS)
+    add_subdirectory(tests)
 endif ()

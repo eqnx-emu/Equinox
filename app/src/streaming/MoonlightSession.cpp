@@ -3,6 +3,7 @@
 #include "GameStreamClient.hpp"
 #include "InputManager.hpp"
 #include "Settings.hpp"
+#include "StreamCapacity.hpp"
 #include "borealis.hpp"
 #include <string.h>
 
@@ -289,31 +290,17 @@ void MoonlightSession::start(ServerCallback<bool> callback, bool is_sunshine) {
     int resolution = m_handheld_profile
                          ? Settings::instance().handheld_resolution()
                          : Settings::instance().resolution();
-    int h = resolution;
-    int w = h * 16 / 9;
+    int nativeW = 0, nativeH = 0;
     if (resolution == -1) {
 #if defined(PLATFORM_IOS) || defined(PLATFORM_VISIONOS)
-        getWindowSize(&w, &h);
+        getWindowSize(&nativeW, &nativeH);
 #else
-        h = Application::windowHeight;
-        w = Application::windowWidth;
+        nativeH = Application::windowHeight;
+        nativeW = Application::windowWidth;
 #endif
-
-        int nativeResolutionScale = Settings::instance().native_resolution_scale();
-        if (nativeResolutionScale != 100 && w > 0 && h > 0) {
-            w = (w * nativeResolutionScale + 50) / 100;
-            h = (h * nativeResolutionScale + 50) / 100;
-        }
     }
-
-    // Prohibit odd values rounding up
-    if ((h & 1) == 1) {
-        h += 1;
-    }
-
-    if ((w & 1) == 1) {
-        w += 1;
-    }
+    auto [w, h] = stream_size_for(resolution, nativeW, nativeH,
+                                  Settings::instance().native_resolution_scale());
 
     m_config.width = w;
     m_config.height = h;
