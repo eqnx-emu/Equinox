@@ -52,6 +52,10 @@ class StreamingView : public brls::Box {
     size_t bottombarDelayTask = -1;
     bool m_use_hdr = false;
     TwoFingerScrollGestureRecognizer* scrollTouchRecognizer = nullptr;
+    brls::Event<bool>::Subscription windowFocusSubscription;
+    bool windowFocused = true;
+
+    void onWindowFocusChanged(bool focused);
 
 #ifdef __SWITCH__
     std::chrono::steady_clock::time_point lastDrawStart{};
