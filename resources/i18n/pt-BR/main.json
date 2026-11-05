@@ -79,7 +79,9 @@
         "suggest_result": "Sua conexão não aguenta {}p{}; tente {}p.",
         "yes": "Sim",
         "no": "Não",
-        "continue": "Continuar"
+        "continue": "Continuar",
+        "skipped": "Pulado",
+        "skipped_detail": "Teste de bitrate pulado — nenhuma configuração foi alterada."
     },
     "common": {
         "cancel": "Cancelar",

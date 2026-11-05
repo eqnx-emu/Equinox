@@ -91,6 +91,8 @@ class CapacityTestView : public brls::Box {
         lastFrameAdvance;
     uint32_t lastFrames = 0;
     std::optional<CapacityVerdict> verdict;
+    // Phase 3 not run (close-app confirmation declined or host error).
+    bool stagesSkipped = false;
 
     // Widgets
     brls::Label* introLabel = nullptr;
@@ -119,7 +121,6 @@ class CapacityTestView : public brls::Box {
     void showReady();
     void computeRequestedConfig();
     void onStartPressed();
-    void quitRunningAppThenStart();
     void beginProbes();
     void markProbesUnsupported();
     void pingWarmup();
@@ -129,6 +130,10 @@ class CapacityTestView : public brls::Box {
     void updateSpeedProgress();
     void afterSpeed();
     void beginStages();
+    void quitRunningAppThenStages();
+    void startStages();
+    void skipStages(const std::string& error = "");
+    bool isTopActivity();
     void startStage();
     void onStageStarted(bool ok);
     void tickStage();

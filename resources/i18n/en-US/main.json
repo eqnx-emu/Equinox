@@ -79,7 +79,9 @@
         "suggest_result": "Your connection can't handle {}p{}; try {}p.",
         "yes": "Yes",
         "no": "No",
-        "continue": "Continue"
+        "continue": "Continue",
+        "skipped": "Skipped",
+        "skipped_detail": "Bitrate test skipped — no settings were changed."
     },
     "common": {
         "cancel": "Cancel",

@@ -103,8 +103,12 @@ CapacityTestView::CapacityTestView(const Host& host) : host(host) {
     windowFocusSubscription =
         Application::getWindowFocusChangedEvent()->subscribe(
             [this](bool focused) {
-                if (!focused && !gone() && phase != Phase::Ready &&
-                    phase != Phase::Done && phase != Phase::Loading)
+                // Only while our screen is on top: with a dialog open,
+                // dismiss() would pop the dialog instead and leave this
+                // view stuck. Nothing streams while a dialog is shown.
+                if (!focused && !gone() && isTopActivity() &&
+                    phase != Phase::Ready && phase != Phase::Done &&
+                    phase != Phase::Loading)
                     cancel();
             });
 
@@ -382,66 +386,8 @@ void CapacityTestView::onStartPressed() {
                                     codec_name(requested.codec),
                                     testApp.name));
 
-    if (needs_confirmation(runningAppId, testApp.app_id)) {
-        std::string running = std::to_string(runningAppId);
-        for (const auto& app : apps)
-            if (app.app_id == runningAppId)
-                running = app.name;
-
-        auto token = alive;
-        auto* dialog =
-            new Dialog(brls::getStr("capacity/confirm", running));
-        dialog->addButton("capacity/cancel"_i18n, [] {});
-        dialog->addButton("capacity/continue"_i18n, [this, token] {
-            if (*token && !closing && phase == Phase::Ready)
-                quitRunningAppThenStart();
-        });
-        dialog->open();
-        return;
-    }
-
-    // Already running the test app: resume it and leave it running after.
-    launchedByTest = runningAppId != testApp.app_id;
+    // The running app is only touched right before phase 3 (beginStages).
     beginProbes();
-}
-
-void CapacityTestView::quitRunningAppThenStart() {
-    phase = Phase::Preparing;
-    startButton->setVisibility(Visibility::GONE);
-    closeButton->setText("capacity/cancel"_i18n);
-    Application::giveFocus(closeButton);
-    statusLabel->setText("capacity/loading"_i18n);
-
-    auto token = alive;
-    GameStreamClient::instance().quit(
-        address, [this, token](const GSResult<bool>& result) {
-            if (!*token || closing)
-                return;
-            if (!result.isSuccess()) {
-                statusLabel->setText(" ");
-                showError(result.error());
-                showReady();
-                return;
-            }
-            // The cached server data still lists the old app; refresh it so
-            // the first stage launches instead of resuming.
-            GameStreamClient::instance().connect(
-                host, [this, token](const GSResult<SERVER_DATA>& result) {
-                    if (!*token || closing)
-                        return;
-                    if (!result.isSuccess()) {
-                        statusLabel->setText(" ");
-                        showError(result.error());
-                        showReady();
-                        return;
-                    }
-                    address =
-                        GameStreamClient::instance().active_address(host);
-                    runningAppId = result.value().currentGame;
-                    launchedByTest = runningAppId != testApp.app_id;
-                    beginProbes();
-                });
-        });
 }
 
 // MARK: Phase 1 - latency
@@ -639,7 +585,6 @@ void CapacityTestView::afterSpeed() {
 void CapacityTestView::beginStages() {
     if (closing)
         return;
-    phase = Phase::Stages;
     const int minKbps = min_recommended_bitrate_kbps(
         requested.width, requested.height, requested.fps, requested.codec);
     plan = plan_stage_bitrates(minKbps, stage_ceiling_kbps(speedMbps));
@@ -649,7 +594,94 @@ void CapacityTestView::beginStages() {
         finish();
         return;
     }
+
+    // Phases 1-2 took a while: refresh which app is running before asking.
+    phase = Phase::Preparing;
+    statusLabel->setText("capacity/loading"_i18n);
+    auto token = alive;
+    GameStreamClient::instance().connect(
+        host, [this, token](const GSResult<SERVER_DATA>& result) {
+            if (!*token || closing)
+                return;
+            if (!result.isSuccess()) {
+                skipStages(result.error());
+                return;
+            }
+            address = GameStreamClient::instance().active_address(host);
+            runningAppId = result.value().currentGame;
+
+            if (!needs_confirmation(runningAppId, testApp.app_id)) {
+                // Already running the test app: resume it and leave it
+                // running after.
+                launchedByTest = runningAppId != testApp.app_id;
+                startStages();
+                return;
+            }
+
+            std::string running = std::to_string(runningAppId);
+            for (const auto& app : apps)
+                if (app.app_id == runningAppId)
+                    running = app.name;
+
+            // Not cancelable: the choice must be explicit (B would leave the
+            // test waiting between phases).
+            auto* dialog =
+                new Dialog(brls::getStr("capacity/confirm", running));
+            dialog->setCancelable(false);
+            dialog->addButton("capacity/cancel"_i18n, [this, token] {
+                if (*token && !closing)
+                    skipStages();
+            });
+            dialog->addButton("capacity/continue"_i18n, [this, token] {
+                if (*token && !closing)
+                    quitRunningAppThenStages();
+            });
+            dialog->open();
+        });
+}
+
+void CapacityTestView::quitRunningAppThenStages() {
+    auto token = alive;
+    GameStreamClient::instance().quit(
+        address, [this, token](const GSResult<bool>& result) {
+            if (!*token || closing)
+                return;
+            if (!result.isSuccess()) {
+                skipStages(result.error());
+                return;
+            }
+            // The cached server data still lists the old app; refresh it so
+            // the first stage launches instead of resuming.
+            GameStreamClient::instance().connect(
+                host, [this, token](const GSResult<SERVER_DATA>& result) {
+                    if (!*token || closing)
+                        return;
+                    if (!result.isSuccess()) {
+                        skipStages(result.error());
+                        return;
+                    }
+                    address =
+                        GameStreamClient::instance().active_address(host);
+                    runningAppId = result.value().currentGame;
+                    launchedByTest = runningAppId != testApp.app_id;
+                    startStages();
+                });
+        });
+}
+
+void CapacityTestView::startStages() {
+    if (closing)
+        return;
+    phase = Phase::Stages;
     startStage();
+}
+
+void CapacityTestView::skipStages(const std::string& error) {
+    // Show phases 1-2 only; nothing launched, nothing written.
+    stagesSkipped = true;
+    finish();
+    if (!error.empty())
+        showError(error);
 }
 
 void CapacityTestView::startStage() {
@@ -867,7 +899,10 @@ void CapacityTestView::finish() {
     }
 
     std::string text;
-    if (verdict->recommended_kbps > 0) {
+    if (stagesSkipped) {
+        bitrateValue->setText("capacity/skipped"_i18n);
+        text = "capacity/skipped_detail"_i18n;
+    } else if (verdict->recommended_kbps > 0) {
         const std::string avgLatency =
             verdict->latency && verdict->latency->loss_pct < 100.0f
                 ? dec(verdict->latency->avg_ms)
@@ -942,9 +977,24 @@ void CapacityTestView::cancel() {
     close();
 }
 
+bool CapacityTestView::isTopActivity() {
+    const auto& stack = Application::getActivitiesStack();
+    return !stack.empty() && stack.back() == getParentActivity();
+}
+
 void CapacityTestView::close() {
     if (closing)
         return;
+    if (!isTopActivity()) {
+        // dismiss() pops the top activity: wait until a dialog over us is
+        // gone instead of closing it in our place.
+        auto token = alive;
+        brls::delay(100, [this, token] {
+            if (*token)
+                close();
+        });
+        return;
+    }
     closing = true;
     sessionStreaming = false;
     setStreamingBackdrop(false);
