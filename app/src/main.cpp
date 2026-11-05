@@ -25,7 +25,6 @@ unsigned int sceLibcHeapSize             = 24 * 1024 * 1024;
 #include <borealis.hpp>
 #include <string>
 
-#include "Updater.hpp"
 #include "add_host_tab.hpp"
 #include "host_tab.hpp"
 #include "link_cell.hpp"
@@ -168,9 +167,6 @@ int main(int argc, char* argv[]) {
     // Create and push the main activity to the stack if cannot run game from arguments
     if (!startFromArgs(argc, argv)) {
         brls::Application::pushActivity(new MainActivity());
-
-        if (Settings::instance().auto_update_check())
-            Updater::checkAndPrompt(true);
     }
 
     brls::Application::enableDebuggingView(Settings::instance().write_log());

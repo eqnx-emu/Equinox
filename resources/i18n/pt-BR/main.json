@@ -208,7 +208,6 @@
     },
     "update": {
         "title": "Atualizações",
-        "auto_check": "Procurar atualizações ao iniciar",
         "check_now": "Procurar atualizações agora",
         "available": "O Moonlight {} está disponível (você tem o {}).\n\nBaixar e instalar agora? O Moonlight vai reiniciar.",
         "later": "Depois",

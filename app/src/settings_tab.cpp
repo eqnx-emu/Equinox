@@ -818,11 +818,6 @@ SettingsTab::SettingsTab() {
                        brls::Application::enableDebuggingView(value);
                    });
 
-    autoUpdate->init("update/auto_check"_i18n,
-                     Settings::instance().auto_update_check(), [](bool value) {
-                         Settings::instance().set_auto_update_check(value);
-                     });
-
     checkUpdate->setText("update/check_now"_i18n);
     checkUpdate->setDetailText(APP_VERSION);
     checkUpdate->registerClickAction([](View* view) {

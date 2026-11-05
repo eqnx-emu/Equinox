@@ -237,9 +237,6 @@
                 paddingTop="60"
                 lineTop="1px"/>
 
-            <brls:BooleanCell
-                id="auto_update"/>
-
             <brls:DetailCell
                 id="check_update"/>
             

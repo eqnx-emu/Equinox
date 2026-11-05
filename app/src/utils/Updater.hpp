@@ -6,9 +6,9 @@
 
 // Self-update from the GitHub releases of this fork.
 //
-// Each release carries a Moonlight-Switch.nro asset. On Switch the app checks
-// the latest release at startup and, when it is newer, offers to download it,
-// replace the NRO it was launched from and relaunch.
+// Each release carries a Moonlight-Switch.nro asset. On Switch, when the user
+// asks from Settings, the app checks the latest release and, when it is newer,
+// offers to download it, replace the NRO it was launched from and relaunch.
 namespace Updater {
 
 struct UpdateInfo {
@@ -23,8 +23,8 @@ bool supported();
 // True when `candidate` ("v1.5.5" or "1.5.5") is newer than `current`.
 bool isNewer(const std::string& candidate, const std::string& current);
 
-// Checks in the background. Unless `silent`, shows the result even when there
-// is no update or the check fails.
+// Checks in the background and reports the result in a dialog. With `silent`,
+// only an available update is shown.
 void checkAndPrompt(bool silent);
 
 } // namespace Updater

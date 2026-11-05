@@ -357,10 +357,6 @@ void Settings::load() {
             if (json_t* write_log = json_object_get(settings, "write_log")) {
                 m_write_log = json_typeof(write_log) == JSON_TRUE;
             }
-
-            if (json_t* auto_update_check = json_object_get(settings, "auto_update_check")) {
-                m_auto_update_check = json_typeof(auto_update_check) == JSON_TRUE;
-            }
             
             if (json_t* swap_ui_keys = json_object_get(settings, "swap_ui_keys")) {
                 m_swap_ui_keys = json_typeof(swap_ui_keys) == JSON_TRUE;
@@ -594,7 +590,6 @@ void Settings::save() {
             json_object_set_new(settings, "sops", m_sops ? json_true() : json_false());
             json_object_set_new(settings, "play_audio", m_play_audio ? json_true() : json_false());
             json_object_set_new(settings, "write_log", m_write_log ? json_true() : json_false());
-            json_object_set_new(settings, "auto_update_check", m_auto_update_check ? json_true() : json_false());
             json_object_set_new(settings, "swap_ui_keys", m_swap_ui_keys ? json_true() : json_false());
             json_object_set_new(settings, "swap_joycon_stick_to_dpad", m_swap_joycon_stick_to_dpad ? json_true() : json_false());
             json_object_set_new(settings, "touchscreen_mouse_mode", m_touchscreen_mouse_mode ? json_true() : json_false());
