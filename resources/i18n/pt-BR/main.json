@@ -273,7 +273,7 @@
     "hosts": {
         "title": "Seus PCs",
         "subtitle": "Escolha um PC para ver os jogos.",
-        "empty": "Nenhum PC pareado ainda. Adicione um em \"Adicionar host\".",
+        "empty": "Pareie um PC para começar a jogar.",
         "status_fetching": "Procurando...",
         "status_online": "Online",
         "status_asleep": "Desligado ou dormindo",
@@ -288,6 +288,8 @@
         "action_retry": "Procurar de novo",
         "wake": "Acordar",
         "library": "Ver jogos",
-        "options": "Opções"
+        "options": "Opções",
+        "empty_title": "Nenhum PC ainda",
+        "empty_body": "Abra \"Adicionar host\" na barra lateral. O PC precisa ter o Solstice ou o Sunshine e estar na mesma rede."
     }
 }

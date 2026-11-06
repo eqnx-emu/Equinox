@@ -177,11 +177,45 @@ int main(int argc, char* argv[]) {
     brls::Theme::getLightTheme().addColor("equinox/muted", nvgRGB(96, 100, 120));
     brls::Theme::getLightTheme().addColor("equinox/status_on", nvgRGB(158, 98, 0));
     brls::Theme::getLightTheme().addColor("equinox/status_moon", nvgRGB(52, 88, 186));
-    brls::Theme::getDarkTheme().addColor("equinox/card", nvgRGB(58, 60, 72));
-    brls::Theme::getDarkTheme().addColor("equinox/card_inner", nvgRGB(46, 48, 58));
-    brls::Theme::getDarkTheme().addColor("equinox/muted", nvgRGB(178, 182, 204));
+    brls::Theme::getDarkTheme().addColor("equinox/card", nvgRGB(35, 40, 73));
+    brls::Theme::getDarkTheme().addColor("equinox/card_inner", nvgRGB(27, 31, 62));
+    brls::Theme::getDarkTheme().addColor("equinox/muted", nvgRGB(174, 179, 214));
     brls::Theme::getDarkTheme().addColor("equinox/status_on", nvgRGB(244, 184, 96));
     brls::Theme::getDarkTheme().addColor("equinox/status_moon", nvgRGB(157, 184, 255));
+
+    // Equinox palette for the dark theme: dusk blue ground, sun amber accent
+    // (focus, active tab, primary buttons) and moon blue for secondary info.
+    // addColor overrides Borealis' defaults.
+    {
+        auto& dark = brls::Theme::getDarkTheme();
+        const NVGcolor amber = nvgRGB(244, 184, 96);
+        dark.addColor("brls/background", nvgRGB(22, 26, 51));
+        dark.addColor("brls/text", nvgRGB(238, 240, 250));
+        dark.addColor("brls/text_disabled", nvgRGB(110, 116, 160));
+        dark.addColor("brls/accent", amber);
+        dark.addColor("brls/click_pulse", nvgRGBA(244, 184, 96, 38));
+        dark.addColor("brls/highlight/background", nvgRGB(31, 35, 71));
+        dark.addColor("brls/highlight/color1", amber);
+        dark.addColor("brls/highlight/color2", nvgRGB(255, 215, 154));
+        dark.addColor("brls/applet_frame/separator", nvgRGB(47, 53, 99));
+        dark.addColor("brls/sidebar/background", nvgRGB(28, 32, 66));
+        dark.addColor("brls/sidebar/active_item", amber);
+        dark.addColor("brls/sidebar/separator", nvgRGB(47, 53, 99));
+        dark.addColor("brls/header/border", nvgRGB(60, 66, 110));
+        dark.addColor("brls/header/rectangle", nvgRGB(157, 184, 255));
+        dark.addColor("brls/header/subtitle", nvgRGB(174, 179, 214));
+        dark.addColor("brls/button/primary_enabled_background", amber);
+        dark.addColor("brls/button/primary_enabled_text", nvgRGB(22, 26, 51));
+        dark.addColor("brls/button/default_enabled_background", nvgRGB(45, 51, 96));
+        dark.addColor("brls/button/default_disabled_background", nvgRGB(45, 51, 96));
+        dark.addColor("brls/button/highlight_enabled_text", amber);
+        dark.addColor("brls/button/highlight_disabled_text", amber);
+        dark.addColor("brls/list/listItem_value_color", nvgRGB(157, 184, 255));
+        dark.addColor("brls/slider/pointer_color", nvgRGB(45, 51, 96));
+        dark.addColor("brls/slider/pointer_border_color", nvgRGB(90, 97, 152));
+        dark.addColor("brls/slider/line_filled", amber);
+        dark.addColor("brls/slider/line_empty", nvgRGB(60, 66, 110));
+    }
 
     // Add custom values to the style
     brls::getStyle().addMetric("about/padding_top_bottom", 50);

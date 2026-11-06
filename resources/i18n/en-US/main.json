@@ -273,7 +273,7 @@
     "hosts": {
         "title": "Your PCs",
         "subtitle": "Pick a PC to see its games.",
-        "empty": "No PCs paired yet. Add one in \"Add host\".",
+        "empty": "Pair a PC to start streaming.",
         "status_fetching": "Looking for it...",
         "status_online": "Online",
         "status_asleep": "Off or asleep",
@@ -288,6 +288,8 @@
         "action_retry": "Try again",
         "wake": "Wake up",
         "library": "Games",
-        "options": "Options"
+        "options": "Options",
+        "empty_title": "No PCs yet",
+        "empty_body": "Open \"Add host\" in the sidebar. The PC needs Solstice or Sunshine and has to be on the same network."
     }
 }
