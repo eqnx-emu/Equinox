@@ -23,7 +23,7 @@ namespace Updater {
 namespace {
 
 const char* const RELEASES_URL =
-    "https://api.github.com/repos/luizfbalves/Moonlight-Switch/releases/latest";
+    "https://api.github.com/repos/luizfbalves/Solstice-Switch/releases/latest";
 const char* const ASSET_NAME = "Moonlight-Switch.nro";
 
 std::vector<int> parseVersion(std::string version) {
