@@ -6,7 +6,7 @@
 
 // Self-update from the GitHub releases of this fork.
 //
-// Each release carries a Moonlight-Switch.nro asset. On Switch, when the user
+// Each release carries a Equinox.nro asset. On Switch, when the user
 // asks from Settings, the app checks the latest release and, when it is newer,
 // offers to download it, replace the NRO it was launched from and relaunch.
 namespace Updater {

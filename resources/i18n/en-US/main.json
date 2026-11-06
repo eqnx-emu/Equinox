@@ -1,6 +1,6 @@
 {
     "about": {
-        "about": "Moonlight-Switch is a third-party game streaming client based on Moonlight-Common-C for the Nintendo Switch",
+        "about": "Equinox is a third-party game streaming client based on Moonlight-Common-C for the Nintendo Switch",
         "link_gbatemp": "GbaTemp Page",
         "link_github": "GitHub Page",
         "link_patreon": "Patreon Page",
@@ -13,7 +13,7 @@
         "thanks_5": " Everyone involved into app development",
         "thanks_6": " You, for using my homebrew!",
         "title": "About",
-        "version": "Moonlight-Switch v{} by XITRIX"
+        "version": "Equinox v{}, based on Moonlight-Switch by XITRIX"
     },
     "add_host": {
         "connect": "Connect",
@@ -259,14 +259,14 @@
     "update": {
         "title": "Updates",
         "check_now": "Check for updates now",
-        "available": "Moonlight {} is available (you have {}).\n\nDownload and install it now? Moonlight will restart.",
+        "available": "Equinox {} is available (you have {}).\n\nDownload and install it now? Equinox will restart.",
         "later": "Later",
         "install": "Update",
         "downloading": "Downloading update...",
-        "installed": "Moonlight {} is installed. Moonlight will now restart.",
+        "installed": "Equinox {} is installed. Equinox will now restart.",
         "failed": "The update failed.",
-        "up_to_date": "Moonlight is up to date.",
-        "unsupported": "Updates only work when Moonlight is launched as an NRO from the SD card."
+        "up_to_date": "Equinox is up to date.",
+        "unsupported": "Updates only work when Equinox is launched as an NRO from the SD card."
     },
-    "title": "Moonlight"
+    "title": "Equinox"
 }

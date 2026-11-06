@@ -24,7 +24,7 @@ namespace {
 
 const char* const RELEASES_URL =
     "https://api.github.com/repos/luizfbalves/Equinox/releases/latest";
-const char* const ASSET_NAME = "Moonlight-Switch.nro";
+const char* const ASSET_NAME = "Equinox.nro";
 
 std::vector<int> parseVersion(std::string version) {
     if (!version.empty() && (version[0] == 'v' || version[0] == 'V'))
@@ -77,7 +77,7 @@ bool httpGet(const std::string& url, curl_write_callback write, void* user,
 
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Moonlight-Switch/" APP_VERSION);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Equinox/" APP_VERSION);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
     curl_easy_setopt(curl, CURLOPT_CAINFO, CA_BUNDLE);

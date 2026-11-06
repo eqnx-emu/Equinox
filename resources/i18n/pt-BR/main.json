@@ -1,6 +1,6 @@
 {
     "about": {
-        "about": "Moonlight-Switch é um aplicativo terceiro para streaming de jogos baseado no Moonlight-Common-C para Nintendo Switch",
+        "about": "Equinox é um aplicativo terceiro para streaming de jogos baseado no Moonlight-Common-C para Nintendo Switch",
         "link_gbatemp": "Página do GbaTemp",
         "link_github": "Página do GitHub",
         "link_patreon": "Página do Patreon",
@@ -13,7 +13,7 @@
         "thanks_5": " Todos envolvidos com o desenvolvimento do aplicativo",
         "thanks_6": " Você, por usar meu homebrew!",
         "title": "Sobre",
-        "version": "Moonlight-Switch v{} by XITRIX"
+        "version": "Equinox v{}, baseado no Moonlight-Switch de XITRIX"
     },
     "add_host": {
         "connect": "Conectar",
@@ -259,14 +259,14 @@
     "update": {
         "title": "Atualizações",
         "check_now": "Procurar atualizações agora",
-        "available": "O Moonlight {} está disponível (você tem o {}).\n\nBaixar e instalar agora? O Moonlight vai reiniciar.",
+        "available": "O Equinox {} está disponível (você tem o {}).\n\nBaixar e instalar agora? O Equinox vai reiniciar.",
         "later": "Depois",
         "install": "Atualizar",
         "downloading": "Baixando atualização...",
-        "installed": "O Moonlight {} foi instalado. O Moonlight vai reiniciar agora.",
+        "installed": "O Equinox {} foi instalado. O Equinox vai reiniciar agora.",
         "failed": "A atualização falhou.",
-        "up_to_date": "O Moonlight está atualizado.",
-        "unsupported": "A atualização só funciona com o Moonlight aberto como NRO do cartão SD."
+        "up_to_date": "O Equinox está atualizado.",
+        "unsupported": "A atualização só funciona com o Equinox aberto como NRO do cartão SD."
     },
-    "title": "Moonlight"
+    "title": "Equinox"
 }

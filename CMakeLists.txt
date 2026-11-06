@@ -77,6 +77,8 @@ set(PACKAGE_NAME "ru.xitrix.Moonlight")
 set(PSN_TITLE_ID  "MNTL00000")
 set(PSN_VERSION  "01.00")
 set(PROJECT_AUTHOR "XITRIX")
+# Name shown in the Switch homebrew menu. The build target stays "Moonlight".
+set(APP_DISPLAY_NAME "Equinox")
 set(PROJECT_ICON ${CMAKE_CURRENT_SOURCE_DIR}/resources/img/moonlight_icon.jpg)
 set(PROJECT_RESOURCES ${CMAKE_CURRENT_SOURCE_DIR}/resources)
 
@@ -391,7 +393,7 @@ elseif (PLATFORM_SWITCH)
         gen_dksh("${PROJECT_RESOURCES}/shaders")
     endif ()
     add_custom_target(${PROJECT_NAME}.nro DEPENDS ${PROJECT_NAME}
-        COMMAND ${NX_NACPTOOL_EXE} --create "${PROJECT_NAME}" "${PROJECT_AUTHOR}" "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}" ${PROJECT_NAME}.nacp --titleid=${PROJECT_TITLEID}
+        COMMAND ${NX_NACPTOOL_EXE} --create "${APP_DISPLAY_NAME}" "${PROJECT_AUTHOR}" "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}" ${PROJECT_NAME}.nacp --titleid=${PROJECT_TITLEID}
         COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/resources
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_RESOURCES} ${CMAKE_BINARY_DIR}/resources
         COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/resources/font

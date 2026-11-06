@@ -66,7 +66,7 @@ jobs:
       - name: Download NRO
         uses: actions/download-artifact@v4
         with:
-          name: Moonlight-Switch.nro
+          name: Equinox.nro
 
       - name: Publish
         env:
@@ -74,10 +74,10 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           set -euo pipefail
-          sha="$(sha256sum Moonlight-Switch.nro | cut -d' ' -f1)"
-          gh release create "v${VERSION}" Moonlight-Switch.nro \
+          sha="$(sha256sum Equinox.nro | cut -d' ' -f1)"
+          gh release create "v${VERSION}" Equinox.nro \
             --repo "${GITHUB_REPOSITORY}" \
             --target "${GITHUB_SHA}" \
-            --title "Moonlight-Switch ${VERSION}" \
-            --notes "Switch build of ${GITHUB_SHA}. SHA256 of Moonlight-Switch.nro: \`${sha}\`" \
+            --title "Equinox ${VERSION}" \
+            --notes "Switch build of ${GITHUB_SHA}. SHA256 of Equinox.nro: \`${sha}\`" \
             --latest

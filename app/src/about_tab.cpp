@@ -23,7 +23,7 @@ AboutTab::AboutTab() {
     std::string subtitle = fmt::format(fmt::runtime("about/version"_i18n), APP_VERSION);
     versionLabel->setSubtitle(subtitle);
 
-    std::string githubLink = "https://github.com/XITRIX/Moonlight-Switch";
+    std::string githubLink = "https://github.com/luizfbalves/Equinox";
     github->addGestureRecognizer(new TapGestureRecognizer(github));
     github->title->setText("about/link_github"_i18n);
     github->subtitle->setText(githubLink);

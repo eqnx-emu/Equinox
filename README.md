@@ -1,6 +1,6 @@
-# Moonlight-Switch
+# Equinox
 
-Moonlight-Switch is a port of [Moonlight Game Streaming Project](https://github.com/moonlight-stream "Moonlight Game Streaming Project") for Nintendo Switch.
+Equinox is a Nintendo Switch streaming client for [Solstice](https://github.com/luizfbalves/Solstice) and Sunshine hosts, adding a connection capacity test and minimum bitrate hints. It is based on [Moonlight-Switch](https://github.com/XITRIX/Moonlight-Switch) by XITRIX, a port of [Moonlight Game Streaming Project](https://github.com/moonlight-stream "Moonlight Game Streaming Project") for Nintendo Switch.
 
 ## Screenshots
 <details>
@@ -16,12 +16,10 @@ Moonlight-Switch is a port of [Moonlight Game Streaming Project](https://github.
 
 # Installing
 ### Switch
-1. Download latest Moonlight-Switch [release](https://github.com/XITRIX/Moonlight-Switch/releases).
-2. Put Moonlight.nro to sdcard:/switch/Moonlight-Switch;
+1. Download the latest Equinox [release](https://github.com/luizfbalves/Equinox/releases).
+2. Put Equinox.nro to sdcard:/switch/Equinox;
 3. Launch hbmenu over *Title Redirection* (for FULL RAM access);
-4. Launch moonlight.
-
-Or download it from [HB App Store](https://apps.fortheusers.org/switch/Moonlight-Switch)
+4. Launch Equinox.
 
 > [!TIP]
 > To be able to use high bitrate setting especially with 1080p - resolution, you need to overclock CPU/GPU of your console.

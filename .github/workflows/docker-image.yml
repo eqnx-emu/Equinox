@@ -39,13 +39,13 @@ jobs:
       run: make -C build/switch Moonlight.nro -j8
 
     - name: Rename artifact 
-      run: mv build/switch/Moonlight.nro build/switch/Moonlight-Switch.nro
+      run: mv build/switch/Moonlight.nro build/switch/Equinox.nro
 
-    - name: Upload Moonlight-Switch.nro
+    - name: Upload Equinox.nro
       uses: actions/upload-artifact@master
       with:
-        name: Moonlight-Switch.nro
-        path: build/switch/Moonlight-Switch.nro
+        name: Equinox.nro
+        path: build/switch/Equinox.nro
 
     - name: Upload Moonlight-Switch.elf
       uses: actions/upload-artifact@master
