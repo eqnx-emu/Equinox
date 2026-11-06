@@ -9,7 +9,7 @@
 #include "Settings.hpp"
 #include "about_tab.hpp"
 #include "add_host_tab.hpp"
-#include "host_tab.hpp"
+#include "hosts_tab.hpp"
 #include "settings_tab.hpp"
 
 MainTabs::MainTabs() {
@@ -46,19 +46,13 @@ void MainTabs::refillTabs(bool keepFocus) {
 
     clearTabs();
 
-    bool hasAnyFavorite = Settings::instance().has_any_favorite();
-    if (hasAnyFavorite) {
-        addTab("tabs/favorites"_i18n, [this] { return this->favoriteTab; });
-        addSeparator();
-    }
-    lastHasAnyFavorites = hasAnyFavorite;
+    addTab("tabs/hosts"_i18n, HostsTab::create);
 
-    auto hosts = Settings::instance().hosts();
-    for (const Host& host : hosts) {
-        addTab(host.hostname, [host] { return new HostTab(host); });
-    }
-    if (!hosts.empty())
-        addSeparator();
+    bool hasAnyFavorite = Settings::instance().has_any_favorite();
+    if (hasAnyFavorite)
+        addTab("tabs/favorites"_i18n, [this] { return this->favoriteTab; });
+    lastHasAnyFavorites = hasAnyFavorite;
+    addSeparator();
 
     addTab("tabs/add_host"_i18n, AddHostTab::create);
     addTab("tabs/settings"_i18n, SettingsTab::create);

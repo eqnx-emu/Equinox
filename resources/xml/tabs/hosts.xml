@@ -1,0 +1,42 @@
+<brls:Box
+    width="auto"
+    height="auto">
+
+    <brls:ScrollingFrame
+        width="auto"
+        height="auto"
+        axis="column"
+        alignItems="stretch"
+        grow="1.0" >
+
+        <brls:Box
+            id="container"
+            width="10000"
+            height="auto"
+            axis="column"
+            alignItems="stretch"
+            paddingTop="@style/brls/tab_details/padding_top"
+            paddingRight="@style/brls/tab_details/padding_right"
+            paddingBottom="@style/brls/tab_details/padding_bottom"
+            paddingLeft="@style/brls/tab_details/padding_left">
+
+            <brls:Label
+                id="title"
+                width="auto"
+                height="auto"
+                fontSize="30"/>
+
+            <brls:Label
+                id="subtitle"
+                width="auto"
+                height="auto"
+                marginTop="6"
+                marginBottom="24"
+                fontSize="16"
+                textColor="@theme/equinox/muted"/>
+
+        </brls:Box>
+
+    </brls:ScrollingFrame>
+
+</brls:Box>

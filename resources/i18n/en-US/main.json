@@ -254,7 +254,8 @@
         "about": "About",
         "add_host": "Add host",
         "favorites": "Favorites",
-        "settings": "Settings"
+        "settings": "Settings",
+        "hosts": "Your PCs"
     },
     "update": {
         "title": "Updates",
@@ -268,5 +269,25 @@
         "up_to_date": "Equinox is up to date.",
         "unsupported": "Updates only work when Equinox is launched as an NRO from the SD card."
     },
-    "title": "Equinox"
+    "title": "Equinox",
+    "hosts": {
+        "title": "Your PCs",
+        "subtitle": "Pick a PC to see its games.",
+        "empty": "No PCs paired yet. Add one in \"Add host\".",
+        "status_fetching": "Looking for it...",
+        "status_online": "Online",
+        "status_asleep": "Off or asleep",
+        "status_unreachable": "Out of reach",
+        "address": "Address",
+        "running_caption": "Running now",
+        "running_loading": "Loading...",
+        "running_unknown": "Unknown game",
+        "action_open": "Open",
+        "action_resume": "Resume game",
+        "action_wake": "Wake up",
+        "action_retry": "Try again",
+        "wake": "Wake up",
+        "library": "Games",
+        "options": "Options"
+    }
 }

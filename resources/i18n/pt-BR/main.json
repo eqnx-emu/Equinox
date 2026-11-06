@@ -254,7 +254,8 @@
         "about": "Sobre",
         "add_host": "Adicionar host",
         "favorites": "Favoritos",
-        "settings": "Configurações"
+        "settings": "Configurações",
+        "hosts": "Seus PCs"
     },
     "update": {
         "title": "Atualizações",
@@ -268,5 +269,25 @@
         "up_to_date": "O Equinox está atualizado.",
         "unsupported": "A atualização só funciona com o Equinox aberto como NRO do cartão SD."
     },
-    "title": "Equinox"
+    "title": "Equinox",
+    "hosts": {
+        "title": "Seus PCs",
+        "subtitle": "Escolha um PC para ver os jogos.",
+        "empty": "Nenhum PC pareado ainda. Adicione um em \"Adicionar host\".",
+        "status_fetching": "Procurando...",
+        "status_online": "Online",
+        "status_asleep": "Desligado ou dormindo",
+        "status_unreachable": "Fora de alcance",
+        "address": "Endereço",
+        "running_caption": "Rodando agora",
+        "running_loading": "Carregando...",
+        "running_unknown": "Jogo desconhecido",
+        "action_open": "Abrir",
+        "action_resume": "Continuar jogo",
+        "action_wake": "Acordar PC",
+        "action_retry": "Procurar de novo",
+        "wake": "Acordar",
+        "library": "Ver jogos",
+        "options": "Opções"
+    }
 }

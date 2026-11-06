@@ -1,0 +1,96 @@
+<brls:Box
+    width="230"
+    height="320"
+    axis="column"
+    alignItems="stretch"
+    focusable="true"
+    cornerRadius="16"
+    highlightCornerRadius="18"
+    hideHighlightBackground="true"
+    backgroundColor="@theme/equinox/card">
+
+    <HorizonView
+        id="horizon"
+        width="auto"
+        height="104"/>
+
+    <brls:Box
+        width="auto"
+        height="auto"
+        grow="1"
+        axis="column"
+        alignItems="stretch"
+        paddingLeft="18"
+        paddingRight="18"
+        paddingBottom="18">
+
+        <brls:Label
+            id="name"
+            width="auto"
+            height="auto"
+            fontSize="21"
+            singleLine="true"/>
+
+        <brls:Label
+            id="status"
+            width="auto"
+            height="auto"
+            marginTop="4"
+            fontSize="15"
+            singleLine="true"/>
+
+        <brls:Box
+            id="info_box"
+            width="auto"
+            height="auto"
+            axis="column"
+            alignItems="stretch"
+            marginTop="12"
+            padding="10"
+            cornerRadius="10"
+            backgroundColor="@theme/equinox/card_inner">
+
+            <brls:Label
+                id="info_caption"
+                width="auto"
+                height="auto"
+                fontSize="13"
+                singleLine="true"
+                textColor="@theme/equinox/muted"/>
+
+            <brls:Label
+                id="info_value"
+                width="auto"
+                height="auto"
+                marginTop="2"
+                fontSize="16"
+                singleLine="true"/>
+
+        </brls:Box>
+
+        <brls:Box
+            width="auto"
+            height="0"
+            grow="1"/>
+
+        <brls:Box
+            id="action_pill"
+            width="auto"
+            height="40"
+            axis="row"
+            justifyContent="center"
+            alignItems="center"
+            cornerRadius="20">
+
+            <brls:Label
+                id="action_label"
+                width="auto"
+                height="auto"
+                fontSize="15"
+                singleLine="true"/>
+
+        </brls:Box>
+
+    </brls:Box>
+
+</brls:Box>

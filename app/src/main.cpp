@@ -26,7 +26,8 @@ unsigned int sceLibcHeapSize             = 24 * 1024 * 1024;
 #include <string>
 
 #include "add_host_tab.hpp"
-#include "host_tab.hpp"
+#include "host_card.hpp"
+#include "hosts_tab.hpp"
 #include "link_cell.hpp"
 #include "main_activity.hpp"
 #include "main_tabs_view.hpp"
@@ -149,7 +150,8 @@ int main(int argc, char* argv[]) {
     brls::Application::registerXMLView("LinkCell", LinkCell::create);
 
     brls::Application::registerXMLView("MainTabs", MainTabs::create);
-    brls::Application::registerXMLView("HostTab", HostTab::create);
+    brls::Application::registerXMLView("HostsTab", HostsTab::create);
+    brls::Application::registerXMLView("HorizonView", HorizonView::create);
     brls::Application::registerXMLView("AddHostTab", AddHostTab::create);
     brls::Application::registerXMLView("SettingsTab", SettingsTab::create);
 
@@ -158,6 +160,28 @@ int main(int argc, char* argv[]) {
                                    nvgRGB(2, 176, 183));
     brls::Theme::getDarkTheme().addColor("captioned_image/caption",
                                   nvgRGB(51, 186, 227));
+
+    // Home screen host cards. The sky keeps the same night palette in both
+    // themes; the card and text colors follow the theme.
+    for (auto* theme : {&brls::Theme::getLightTheme(), &brls::Theme::getDarkTheme()}) {
+        theme->addColor("equinox/sky_day", nvgRGB(46, 52, 102));
+        theme->addColor("equinox/sky_night", nvgRGB(26, 30, 61));
+        theme->addColor("equinox/sun", nvgRGB(244, 184, 96));
+        theme->addColor("equinox/moon", nvgRGB(157, 184, 255));
+        theme->addColor("equinox/horizon_on", nvgRGB(107, 116, 184));
+        theme->addColor("equinox/horizon_off", nvgRGB(90, 97, 152));
+        theme->addColor("equinox/pill_text", nvgRGB(22, 26, 51));
+    }
+    brls::Theme::getLightTheme().addColor("equinox/card", nvgRGB(255, 255, 255));
+    brls::Theme::getLightTheme().addColor("equinox/card_inner", nvgRGB(239, 241, 247));
+    brls::Theme::getLightTheme().addColor("equinox/muted", nvgRGB(96, 100, 120));
+    brls::Theme::getLightTheme().addColor("equinox/status_on", nvgRGB(158, 98, 0));
+    brls::Theme::getLightTheme().addColor("equinox/status_moon", nvgRGB(52, 88, 186));
+    brls::Theme::getDarkTheme().addColor("equinox/card", nvgRGB(58, 60, 72));
+    brls::Theme::getDarkTheme().addColor("equinox/card_inner", nvgRGB(46, 48, 58));
+    brls::Theme::getDarkTheme().addColor("equinox/muted", nvgRGB(178, 182, 204));
+    brls::Theme::getDarkTheme().addColor("equinox/status_on", nvgRGB(244, 184, 96));
+    brls::Theme::getDarkTheme().addColor("equinox/status_moon", nvgRGB(157, 184, 255));
 
     // Add custom values to the style
     brls::getStyle().addMetric("about/padding_top_bottom", 50);
