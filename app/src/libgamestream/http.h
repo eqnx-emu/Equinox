@@ -25,6 +25,10 @@
 #include <atomic>
 #include <string>
 
+// Total time for a request. Connecting is capped separately at
+// HTTPConnectTimeout, so a PC that is gone fails fast even on a long request.
+constexpr long HTTPConnectTimeout = 4;
+
 enum HTTPRequestTimeout : long {
     HTTPRequestTimeoutLow = 1,
     HTTPRequestTimeoutMedium = 5,

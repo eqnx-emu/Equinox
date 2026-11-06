@@ -84,7 +84,9 @@ static int load_serverinfo(PSERVER_DATA server, bool https) {
 
     Data data;
 
-    if (http_request(url, &data, HTTPRequestTimeoutLow) != GS_OK) {
+    // 5 s total so a PC on slow Wi-Fi or over the internet still answers;
+    // an absent one still fails within the connect timeout.
+    if (http_request(url, &data, HTTPRequestTimeoutMedium) != GS_OK) {
         ret = GS_IO_ERROR;
         goto cleanup;
     }
@@ -196,7 +198,8 @@ static int load_server_status(PSERVER_DATA server) {
     return ret;
 }
 
-static std::string _gs_error = "";
+// Per thread: requests to several PCs run at once, each sets its own error.
+static thread_local std::string _gs_error;
 
 void gs_set_error(std::string error) { _gs_error = error; }
 

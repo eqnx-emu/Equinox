@@ -27,6 +27,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <map>
+#include <memory>
 #include <mutex>
 #include <string>
 
@@ -104,29 +106,33 @@ int http_request(const std::string& url, Data* data,
                  HTTPRequestTimeout timeout) {
     brls::Logger::info("Curl: Request:\n{}", url.c_str());
 
+    auto curl = makeCurl();
+    if (!curl) return GS_FAILED;
+
     auto* http_data = (HTTP_DATA*)malloc(sizeof(HTTP_DATA));
     http_data->memory = (char*)malloc(1);
     http_data->size = 0;
 
-    auto curl = makeCurl();
-    if (!curl) return GS_FAILED;
-
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, http_data);
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT,
+                     std::min<long>(timeout, HTTPConnectTimeout));
 
     CURLcode res = curl_easy_perform(curl);
 
+    // Error paths release the handle too: an offline PC is polled often.
     if (res != CURLE_OK) {
         gs_set_error(curl_easy_strerror(res));
         brls::Logger::error("Curl: error: {}", gs_error().c_str());
         free(http_data->memory);
         free(http_data);
+        freeCurl(curl);
         return GS_FAILED;
     } else if (http_data->memory == nullptr) {
         brls::Logger::error("Curl: memory = NULL");
-        free(http_data->memory);
         free(http_data);
+        freeCurl(curl);
         return GS_OUT_OF_MEMORY;
     }
 
@@ -169,9 +175,31 @@ static int status_to_result(CURL* curl) {
 
 int http_ping(const std::string& url, float* rtt_ms,
               HTTPRequestTimeout timeout) {
-    static std::mutex pingMutex;
-    static CURL* pingCurl = nullptr;
-    std::lock_guard<std::mutex> lock(pingMutex);
+    // One kept-alive handle per host, so a slow or absent PC doesn't hold
+    // up pings to the others.
+    struct PingHandle {
+        std::mutex mutex;
+        CURL* curl = nullptr;
+    };
+    static std::mutex handlesMutex;
+    static std::map<std::string, std::unique_ptr<PingHandle>> handles;
+
+    const auto schemeEnd = url.find("://");
+    const auto hostEnd = url.find('/', schemeEnd == std::string::npos
+                                           ? 0
+                                           : schemeEnd + 3);
+    const std::string hostKey = url.substr(0, hostEnd);
+
+    PingHandle* handle;
+    {
+        std::lock_guard<std::mutex> lock(handlesMutex);
+        auto& slot = handles[hostKey];
+        if (!slot)
+            slot = std::make_unique<PingHandle>();
+        handle = slot.get();
+    }
+    std::lock_guard<std::mutex> lock(handle->mutex);
+    CURL*& pingCurl = handle->curl;
 
     if (!pingCurl) {
         pingCurl = makeCurl();
@@ -183,6 +211,8 @@ int http_ping(const std::string& url, float* rtt_ms,
     }
     curl_easy_setopt(pingCurl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(pingCurl, CURLOPT_TIMEOUT, (long)timeout);
+    curl_easy_setopt(pingCurl, CURLOPT_CONNECTTIMEOUT,
+                     std::min<long>(timeout, HTTPConnectTimeout));
 
     auto start = std::chrono::steady_clock::now();
     CURLcode res = curl_easy_perform(pingCurl);
@@ -270,6 +300,8 @@ int http_download_discard(
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &state);
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout_s);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT,
+                     std::min<long>(timeout_s, HTTPConnectTimeout));
     if (cancel) {
         curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
         curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, _xferinfo_cancel);

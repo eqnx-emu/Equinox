@@ -83,8 +83,15 @@ void MoonlightSession::connection_stage_complete(int stage) {
     brls::Logger::info("MoonlightSession: Complete: {}", stages[stage]);
 }
 
+// Set by connection_stage_failed, which runs on the thread inside
+// LiStartConnection; read there after it returns.
+static thread_local int s_failed_stage = -1;
+static thread_local int s_failed_error = 0;
+
 void MoonlightSession::connection_stage_failed(int stage, int error_code) {
     brls::Logger::error("MoonlightSession: Failed: {} with error code: {}", stages[stage], error_code);
+    s_failed_stage = stage;
+    s_failed_error = error_code;
 }
 
 void MoonlightSession::connection_started() {
@@ -381,17 +388,46 @@ void MoonlightSession::start(ServerCallback<bool> callback, bool is_sunshine) {
                     auto m_data =
                         GameStreamClient::instance().server_data(m_address);
 
+                    s_failed_stage = -1;
+                    s_failed_error = 0;
                     int result = LiStartConnection(
                         &m_data.serverInfo, &m_config, &m_connection_callbacks,
                         &m_video_callbacks, &m_audio_callbacks, NULL, 0, NULL, 0);
 
+                    // Say which step failed and which ports it needs, so a
+                    // firewall can be told apart from a decoder problem.
+                    std::string error;
                     if (result != 0) {
+                        brls::Logger::error(
+                            "MoonlightSession: LiStartConnection failed: {}",
+                            result);
                         LiStopConnection();
-                        callback(
-                            GSResult<bool>::failure("error/stream_start"_i18n));
-                    } else {
-                        callback(GSResult<bool>::success(true));
+
+                        if (s_failed_stage >= 0) {
+                            char ports[128] = {};
+                            LiStringifyPortFlags(
+                                LiGetPortFlagsFromStage(s_failed_stage), ", ",
+                                ports, sizeof(ports));
+                            error = brls::getStr("error/stream_start_stage",
+                                                 LiGetStageName(s_failed_stage),
+                                                 s_failed_error);
+                            if (ports[0])
+                                error += "\n" + brls::getStr(
+                                                     "error/stream_start_ports",
+                                                     std::string(ports));
+                        } else {
+                            error = "error/stream_start"_i18n;
+                        }
                     }
+
+                    // Callers touch the UI, so answer on the main thread
+                    // like the rest of the start path does.
+                    brls::sync([callback, result, error]() {
+                        if (result != 0)
+                            callback(GSResult<bool>::failure(error));
+                        else
+                            callback(GSResult<bool>::success(true));
+                    });
                 });
             } else {
                 brls::Logger::error(

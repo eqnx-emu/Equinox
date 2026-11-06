@@ -778,15 +778,12 @@ void CapacityTestView::startStage() {
     samples.clear();
 
     auto token = alive;
-    // The success path calls back from a worker thread.
+    // Called back on the main thread; the token covers a closed view.
     session->start(
         [this, token](const GSResult<bool>& result) {
-            const bool ok = result.isSuccess();
-            const std::string error = ok ? "" : result.error();
-            brls::sync([this, token, ok, error] {
-                if (*token)
-                    onStageStarted(ok, error);
-            });
+            if (*token)
+                onStageStarted(result.isSuccess(),
+                               result.isSuccess() ? "" : result.error());
         },
         isSunshine);
 }
