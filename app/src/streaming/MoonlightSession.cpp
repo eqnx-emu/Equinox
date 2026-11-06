@@ -3,6 +3,7 @@
 #include "GameStreamClient.hpp"
 #include "InputManager.hpp"
 #include "Settings.hpp"
+#include "StreamCapacity.hpp"
 #include "borealis.hpp"
 #include <string.h>
 
@@ -123,7 +124,8 @@ void MoonlightSession::handle_connection_terminated(int error_code) {
         return;
     }
 
-    if (error_code != 0) {
+    // A capacity-test stage must report the drop, not hide it by reconnecting.
+    if (error_code != 0 && !m_config_override) {
         brls::Logger::info("MoonlightSession: Reconnection attempt");
 
         // Connection is already terminated here; avoid toggling the user stop flag.
@@ -289,32 +291,19 @@ void MoonlightSession::start(ServerCallback<bool> callback, bool is_sunshine) {
     int resolution = m_handheld_profile
                          ? Settings::instance().handheld_resolution()
                          : Settings::instance().resolution();
-    int h = resolution;
-    int w = h * 16 / 9;
+    int nativeW = 0, nativeH = 0;
     if (resolution == -1) {
 #if defined(PLATFORM_IOS) || defined(PLATFORM_VISIONOS)
-        getWindowSize(&w, &h);
+        getWindowSize(&nativeW, &nativeH);
 #else
-        h = Application::windowHeight;
-        w = Application::windowWidth;
+        nativeH = Application::windowHeight;
+        nativeW = Application::windowWidth;
 #endif
-
-        int nativeResolutionScale = Settings::instance().native_resolution_scale();
-        if (nativeResolutionScale != 100 && w > 0 && h > 0) {
-            w = (w * nativeResolutionScale + 50) / 100;
-            h = (h * nativeResolutionScale + 50) / 100;
-        }
     }
+    auto [w, h] = stream_size_for(resolution, nativeW, nativeH,
+                                  Settings::instance().native_resolution_scale());
 
-    // Prohibit odd values rounding up
-    if ((h & 1) == 1) {
-        h += 1;
-    }
-
-    if ((w & 1) == 1) {
-        w += 1;
-    }
-
+    VideoCodec codec = Settings::instance().video_codec();
     m_config.width = w;
     m_config.height = h;
     m_config.fps = Settings::instance().fps();
@@ -324,12 +313,21 @@ void MoonlightSession::start(ServerCallback<bool> callback, bool is_sunshine) {
     m_config.bitrate = m_handheld_profile
                            ? Settings::instance().handheld_bitrate()
                            : Settings::instance().bitrate();
+    if (m_config_override) {
+        m_config.width = m_config_override->width;
+        m_config.height = m_config_override->height;
+        m_config.fps = m_config_override->fps;
+        m_config.bitrate = m_config_override->bitrate_kbps;
+        codec = m_config_override->codec;
+    }
     brls::Logger::info("MoonlightSession: {} profile, {}x{} @ {} FPS, {} kbps",
-                       m_handheld_profile ? "handheld" : "docked",
-                       w, h, m_config.fps, m_config.bitrate);
+                       m_config_override ? "test"
+                       : m_handheld_profile ? "handheld" : "docked",
+                       m_config.width, m_config.height, m_config.fps,
+                       m_config.bitrate);
     m_config.encryptionFlags = m_is_sunshine ? ENCFLG_ALL : ENCFLG_VIDEO;
 
-    switch (Settings::instance().video_codec()) {
+    switch (codec) {
     case H264:
         m_config.supportedVideoFormats = VIDEO_FORMAT_H264;
         break;
@@ -429,6 +427,13 @@ void MoonlightSession::restart() {
     // stopped the stream before it ran. Don't bring it back.
     if (m_stop_requested || m_is_terminated)
         return;
+
+    if (m_config_override) {
+        // Capacity-test stage: count it as a lost connection instead.
+        m_is_active = false;
+        m_is_terminated = true;
+        return;
+    }
 
     LiStopConnection();
 

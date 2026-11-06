@@ -20,8 +20,13 @@
 #pragma once
 
 #include "Data.hpp"
+#include "http.h"
 #include "xml.h"
 #include <Limelight.h>
+#include <atomic>
+#include <cstdint>
+#include <memory>
+#include <functional>
 #include <stdbool.h>
 
 #define MIN_SUPPORTED_GFE_VERSION 3
@@ -55,3 +60,15 @@ int gs_applist(PSERVER_DATA server, PAPP_LIST* app_list);
 int gs_unpair(PSERVER_DATA server);
 int gs_pair(PSERVER_DATA server, char* pin);
 int gs_quit_app(PSERVER_DATA server);
+
+// Latency/speed probes against the Solstice host (GS_NOT_SUPPORTED on 404).
+// Callers should discard one warm-up gs_ping before sampling so the TLS
+// handshake is not measured (the curl handle is reused between pings). Pass
+// HTTPRequestTimeoutMedium for that warm-up (it pays the handshake) and
+// HTTPRequestTimeoutLow for measured pings.
+int gs_ping(PSERVER_DATA server, float* rtt_ms, HTTPRequestTimeout timeout);
+// seconds is clamped to [1,10]; the body is discarded, only bytes are counted.
+// Setting *cancel aborts the transfer promptly (returns GS_IO_ERROR).
+int gs_speedtest(PSERVER_DATA server, int seconds,
+                 std::function<void(double elapsed_s, uint64_t bytes)> on_progress,
+                 std::shared_ptr<std::atomic<bool>> cancel = nullptr);

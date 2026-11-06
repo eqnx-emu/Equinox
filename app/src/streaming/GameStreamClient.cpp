@@ -784,3 +784,57 @@ void GameStreamClient::quit(const Host& host,
                             ServerCallback<bool>& callback) {
     quit(active_address(host), callback);
 }
+
+void GameStreamClient::ping(const std::string& address,
+                            ServerCallback<float>& callback, bool warmup) {
+    with_cached_server_data<float>(
+        address, "Firstly call connect() & pair()...", callback,
+        [this, warmup](const std::string& cachedAddress,
+                       ServerCallback<float>& callback) {
+            auto server_data = m_server_data[cachedAddress];
+
+            float rtt = 0.0f;
+            int status = gs_ping((PSERVER_DATA)&server_data, &rtt,
+                                 warmup ? HTTPRequestTimeoutMedium
+                                        : HTTPRequestTimeoutLow);
+
+            brls::sync([callback, status, rtt] {
+                if (status == GS_OK) {
+                    callback(GSResult<float>::success(rtt));
+                } else if (status == GS_NOT_SUPPORTED) {
+                    callback(GSResult<float>::failure("not_supported"));
+                } else {
+                    callback(GSResult<float>::failure(gs_error()));
+                }
+            });
+        });
+}
+
+// on_progress is invoked on the worker thread (not the UI thread); callers
+// must marshal to the UI themselves (e.g. brls::sync).
+void GameStreamClient::speedtest(
+    const std::string& address, int seconds,
+    std::function<void(double elapsed_s, uint64_t bytes)> on_progress,
+    ServerCallback<bool>& callback,
+    std::shared_ptr<std::atomic<bool>> cancel) {
+    with_cached_server_data<bool>(
+        address, "Firstly call connect() & pair()...", callback,
+        [this, seconds, on_progress, cancel](const std::string& cachedAddress,
+                                     ServerCallback<bool>& callback) {
+            auto server_data = m_server_data[cachedAddress];
+
+            int status =
+                gs_speedtest((PSERVER_DATA)&server_data, seconds, on_progress,
+                            cancel);
+
+            brls::sync([callback, status] {
+                if (status == GS_OK) {
+                    callback(GSResult<bool>::success(true));
+                } else if (status == GS_NOT_SUPPORTED) {
+                    callback(GSResult<bool>::failure("not_supported"));
+                } else {
+                    callback(GSResult<bool>::failure(gs_error()));
+                }
+            });
+        });
+}

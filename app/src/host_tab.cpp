@@ -8,6 +8,7 @@
 #include "host_tab.hpp"
 #include "GameStreamClient.hpp"
 #include "app_list_view.hpp"
+#include "capacity_test_view.hpp"
 #include "helper.hpp"
 #include "main_tabs_view.hpp"
 
@@ -46,6 +47,14 @@ HostTab::HostTab(const Host& host) : host(host) {
 
                        return true;
                    });
+
+    registerAction("capacity/action"_i18n, ControllerButton::BUTTON_X,
+                   [this](View* view) {
+                       if (state == AVAILABLE)
+                           CapacityTestView::open(this->host);
+                       return true;
+                   });
+    setActionAvailable(ControllerButton::BUTTON_X, false);
 
     connect->registerClickAction([this](View* view) {
         switch (state) {
@@ -122,6 +131,7 @@ void HostTab::reloadHost() {
     header->setTitle("host/status"_i18n + ": " + "host/fetching"_i18n);
     header->setSubtitle(host_subtitle(host));
     connect->setText("host/wait"_i18n);
+    setActionAvailable(ControllerButton::BUTTON_X, false);
 
     ASYNC_RETAIN
     GameStreamClient::instance().connect(
@@ -137,6 +147,7 @@ void HostTab::reloadHost() {
                                         : connectedAddress);
                 connect->setText("host/connect"_i18n);
                 state = AVAILABLE;
+                setActionAvailable(ControllerButton::BUTTON_X, true);
             } else {
                 header->setTitle("host/status"_i18n + ": " +
                                  "host/unable"_i18n);
