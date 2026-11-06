@@ -237,3 +237,91 @@ TEST_CASE("CapacityTest.ApplyTargetsProfileUsedByTest") {
     CHECK(apply_target(false, true) == ProfileTarget::Docked);
     CHECK(apply_target(false, false) == ProfileTarget::Docked);
 }
+
+static LatencyResult lat(float avg, float jitter, float loss = 0.0f) {
+    LatencyResult l{};
+    l.min_ms = avg;
+    l.avg_ms = avg;
+    l.max_ms = avg;
+    l.jitter_ms = jitter;
+    l.loss_pct = loss;
+    return l;
+}
+
+static CapacityVerdict verdict_with(std::optional<LatencyResult> latency,
+                                    int best_kbps, float rtt_var = 0.0f,
+                                    float drop = 0.0f) {
+    CapacityVerdict v{};
+    v.latency = latency;
+    if (best_kbps > 0) {
+        StageResult r = res(best_kbps, true);
+        r.avg_rtt_variance_ms = rtt_var;
+        r.drop_pct = drop;
+        v.best = r;
+        v.recommended_kbps = best_kbps;
+    }
+    return v;
+}
+
+TEST_CASE("Recommend.StableLinkPrefersLowestLatencyPacing") {
+    auto r = recommend_settings(verdict_with(lat(2, 0.3f), 40000), std::nullopt);
+    CHECK(r.bitrate_kbps == 40000);
+    CHECK_FALSE(r.resolution.has_value());
+    REQUIRE(r.frame_pacing.has_value());
+    CHECK(*r.frame_pacing == 1);
+}
+
+TEST_CASE("Recommend.SomeJitterPicksBalancedPacing") {
+    auto r = recommend_settings(verdict_with(lat(8, 4.0f), 20000), std::nullopt);
+    REQUIRE(r.frame_pacing.has_value());
+    CHECK(*r.frame_pacing == 2);
+}
+
+TEST_CASE("Recommend.HighJitterOrLossPicksSmoothPacing") {
+    auto jittery = recommend_settings(verdict_with(lat(20, 12.0f), 15000),
+                                      std::nullopt);
+    REQUIRE(jittery.frame_pacing.has_value());
+    CHECK(*jittery.frame_pacing == 3);
+
+    auto lossy = recommend_settings(verdict_with(lat(5, 0.5f, 3.0f), 15000),
+                                    std::nullopt);
+    REQUIRE(lossy.frame_pacing.has_value());
+    CHECK(*lossy.frame_pacing == 3);
+}
+
+TEST_CASE("Recommend.StreamJitterCountsToo") {
+    // Ping jitter is low but the stream itself saw RTT variance.
+    auto r = recommend_settings(verdict_with(lat(2, 0.3f), 20000, 5.0f),
+                                std::nullopt);
+    REQUIRE(r.frame_pacing.has_value());
+    CHECK(*r.frame_pacing == 2);
+}
+
+TEST_CASE("Recommend.DroppedFramesNeverGetLowestLatency") {
+    auto r = recommend_settings(verdict_with(lat(2, 0.3f), 20000, 0.0f, 0.5f),
+                                std::nullopt);
+    REQUIRE(r.frame_pacing.has_value());
+    CHECK(*r.frame_pacing >= 2);
+}
+
+TEST_CASE("Recommend.ResolutionFromDowngradeThenSpeedSuggestion") {
+    auto v = verdict_with(lat(2, 0.3f), 10000);
+    v.suggested_resolution = 720;
+    CHECK(recommend_settings(v, 540).resolution == std::optional<int>(540));
+    CHECK(recommend_settings(v, std::nullopt).resolution ==
+          std::optional<int>(720));
+}
+
+TEST_CASE("Recommend.NothingWhenNoStagePassed") {
+    auto r = recommend_settings(verdict_with(lat(2, 0.3f), 0), std::nullopt);
+    CHECK(r.bitrate_kbps == 0);
+    CHECK_FALSE(r.frame_pacing.has_value());
+    CHECK_FALSE(r.resolution.has_value());
+}
+
+TEST_CASE("Recommend.NoLatencyDataKeepsPacingFromStream") {
+    auto r = recommend_settings(verdict_with(std::nullopt, 20000, 0.0f),
+                                std::nullopt);
+    REQUIRE(r.frame_pacing.has_value());
+    CHECK(*r.frame_pacing == 1);
+}

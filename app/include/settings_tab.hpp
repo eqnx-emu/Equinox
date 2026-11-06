@@ -78,7 +78,7 @@ class SettingsTab : public brls::Box {
     // Settings are split into groups: the tab opens on a menu with one entry
     // per group, and B goes back to it from inside a group.
     struct Group {
-        brls::DetailCell* entry;
+        brls::Box* entry;
         brls::Box* content;
         std::string title;
     };

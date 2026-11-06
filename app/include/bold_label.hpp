@@ -22,3 +22,14 @@ class BoldLabel : public brls::Label {
 
     static brls::View* create() { return new BoldLabel(); }
 };
+
+// A label drawn with the Material Icons font. Its code points overlap the
+// Switch button glyphs, so icons cannot rely on the font fallback chain.
+class IconLabel : public brls::Label {
+  public:
+    IconLabel() {
+        int icons = brls::Application::getFont(brls::FONT_MATERIAL_ICONS);
+        if (icons != brls::FONT_INVALID)
+            this->font = icons;
+    }
+};

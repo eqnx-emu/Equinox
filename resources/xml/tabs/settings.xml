@@ -32,33 +32,7 @@
                 width="auto"
                 height="auto"
                 axis="column"
-                alignItems="stretch">
-
-                <brls:DetailCell
-                    id="menu_video"/>
-
-                <brls:DetailCell
-                    id="menu_handheld"/>
-
-                <brls:DetailCell
-                    id="menu_image"/>
-
-                <brls:DetailCell
-                    id="menu_audio"/>
-
-                <brls:DetailCell
-                    id="menu_controls"/>
-
-                <brls:DetailCell
-                    id="menu_shortcuts"/>
-
-                <brls:DetailCell
-                    id="menu_input"/>
-
-                <brls:DetailCell
-                    id="menu_system"/>
-
-            </brls:Box>
+                alignItems="stretch"/>
 
             <brls:Box
                 id="group_video"
@@ -208,6 +182,7 @@
 
                 <brls:DetailCell
                     id="swap_game"/>
+
 
                 <brls:Header
                     title="@i18n/settings/deadzone/title"

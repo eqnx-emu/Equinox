@@ -268,6 +268,32 @@ CapacityVerdict summarize(std::optional<LatencyResult> latency,
     return v;
 }
 
+StreamRecommendation
+recommend_settings(const CapacityVerdict& verdict,
+                   std::optional<int> downgraded_resolution) {
+    StreamRecommendation r{};
+    if (!verdict.best || verdict.recommended_kbps <= 0)
+        return r;
+
+    r.bitrate_kbps = verdict.recommended_kbps;
+    r.resolution = downgraded_resolution ? downgraded_resolution
+                                         : verdict.suggested_resolution;
+
+    float jitter = verdict.best->avg_rtt_variance_ms;
+    float loss = 0.0f;
+    if (verdict.latency) {
+        jitter = std::max(jitter, verdict.latency->jitter_ms);
+        loss = verdict.latency->loss_pct;
+    }
+    int pacing = 1;
+    if (jitter > 8.0f || loss > 2.0f)
+        pacing = 3;
+    else if (jitter > 2.0f || loss > 0.0f || verdict.best->drop_pct > 0.0f)
+        pacing = 2;
+    r.frame_pacing = pacing;
+    return r;
+}
+
 TestAppChoice choose_test_app(const std::vector<std::string>& app_names) {
     for (const auto& n : app_names) {
         if (n == "Solstice Network Test") return TestAppChoice::SolsticeTestApp;

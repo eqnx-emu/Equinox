@@ -92,6 +92,23 @@ CapacityVerdict summarize(std::optional<LatencyResult> latency,
                           const std::vector<StageResult>& results,
                           bool used_fallback_app, const StageConfig& requested);
 
+// Settings the test recommends. Empty / zero fields mean "keep the current
+// value".
+struct StreamRecommendation {
+    int bitrate_kbps;                 // 0 when no stage passed
+    std::optional<int> resolution;    // new height
+    std::optional<int> frame_pacing;  // frames_queue_size: 1 lowest latency,
+                                      // 2 balanced, 3 smoothest
+};
+
+// Bitrate from the best passing stage; resolution from a test that already
+// ran at a lower one (downgraded_resolution), else from the speed
+// suggestion; frame pacing from the worst of ping jitter and in-stream RTT
+// variance, bumped up by packet loss or dropped frames.
+StreamRecommendation
+recommend_settings(const CapacityVerdict& verdict,
+                   std::optional<int> downgraded_resolution);
+
 enum class TestAppChoice { SolsticeTestApp, Desktop, FirstApp };
 TestAppChoice choose_test_app(const std::vector<std::string>& app_names);
 
