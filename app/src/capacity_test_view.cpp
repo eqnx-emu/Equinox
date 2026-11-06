@@ -13,6 +13,7 @@
 
 #include "capacity_test_view.hpp"
 #include "AVFrameHolder.hpp"
+#include "StageRetry.hpp"
 #include "helper.hpp"
 #include <Limelight.h>
 #include <algorithm>
@@ -746,8 +747,14 @@ void CapacityTestView::onStageStarted(bool ok, const std::string& error) {
             retryPending = true;
             closeSession(false);
             auto token = alive;
-            brls::delay(750, [this, token] {
-                if (!*token || closing)
+            const StageRetryTicket ticket{retryGeneration,
+                                          (unsigned)stageIndex};
+            retryDelayHandle = brls::delay(750, [this, token, ticket] {
+                if (!*token)
+                    return;
+                if (!should_run_stage_retry(
+                        ticket, {retryGeneration, (unsigned)stageIndex}, true,
+                        phase == Phase::Cancelling, closing))
                     return;
                 retryPending = false;
                 startStage();
@@ -859,6 +866,7 @@ void CapacityTestView::finishStage(bool disconnected) {
     if (next) {
         stageIndex++;
         stageRetried = false;
+        retryGeneration++;
         startStage();
     } else {
         finish();
@@ -1009,7 +1017,18 @@ void CapacityTestView::cancel() {
         return;
     // Never touches settings. Stops the stream and closes the app only if
     // the test opened it.
-    if (sessionStarting || retryPending) {
+    if (retryPending && !sessionStarting) {
+        // Waiting out the retry delay: no stream exists, so none may start.
+        brls::cancelDelay(retryDelayHandle);
+        retryGeneration++;
+        retryPending = false;
+        phase = Phase::Cancelling;
+        if (launchedByTest)
+            GameStreamClient::instance().quit(address, [](auto) {});
+        close();
+        return;
+    }
+    if (sessionStarting) {
         // The session is still inside LiStartConnection on a worker thread;
         // tear it down once start() reports back (onStageStarted).
         phase = Phase::Cancelling;

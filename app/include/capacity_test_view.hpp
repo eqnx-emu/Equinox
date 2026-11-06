@@ -90,6 +90,9 @@ class CapacityTestView : public brls::Box {
     // Stage 2+ whose start failed: one delayed retry before giving up.
     bool stageRetried = false;
     bool retryPending = false;
+    // Bumped on cancel / stage change: a stale delayed retry must not run.
+    uint32_t retryGeneration = 0;
+    size_t retryDelayHandle = 0;
     // Aborts an in-flight speedtest transfer on cancel / close.
     std::shared_ptr<std::atomic<bool>> speedCancel =
         std::make_shared<std::atomic<bool>>(false);

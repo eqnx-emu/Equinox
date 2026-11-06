@@ -17,3 +17,8 @@ add_executable(test_host_probe test_host_probe.cpp)
 target_include_directories(test_host_probe PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
     "${MOONLIGHT_ROOT}/extern")
+
+add_executable(test_stage_retry test_stage_retry.cpp)
+target_include_directories(test_stage_retry PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
