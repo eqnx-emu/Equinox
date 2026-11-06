@@ -15,6 +15,7 @@
 #include "helper.hpp"
 #include "button_selecting_dialog.hpp"
 #include "mapping_layout_editor.hpp"
+#include "main_tabs_view.hpp"
 #include "UpscalingSupport.hpp"
 #include "StreamCapacity.hpp"
 #include <fmt/core.h>
@@ -573,7 +574,7 @@ SettingsTab::SettingsTab() {
                                         .get_current_mapping_layout());
                             this->swapGame->setDetailText(currentLayout.title);
                         });
-                    this->present(editor);
+                    MainTabs::presentWithHeader(this, editor);
                 }
             });
 
@@ -597,7 +598,7 @@ SettingsTab::SettingsTab() {
                                     this->swapGame->setDetailText(
                                         currentLayout.title);
                                 });
-                            this->present(editor);
+                            MainTabs::presentWithHeader(this, editor);
                         }
                     });
                 return true;

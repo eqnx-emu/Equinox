@@ -60,3 +60,17 @@ class HostCard : public brls::Box {
     void wake();
     void openOptions();
 };
+
+// Last card of the grid: opens the screen that finds or adds a PC.
+class AddHostCard : public brls::Box {
+  public:
+    // primary: no PC is paired yet, so this is the main action on screen.
+    explicit AddHostCard(bool primary);
+
+    BRLS_BIND(HorizonView, horizon, "horizon");
+    BRLS_BIND(brls::Label, name, "name");
+    BRLS_BIND(brls::Label, status, "status");
+    BRLS_BIND(brls::Box, infoBox, "info_box");
+    BRLS_BIND(brls::Box, actionPill, "action_pill");
+    BRLS_BIND(brls::Label, actionLabel, "action_label");
+};

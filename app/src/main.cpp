@@ -23,9 +23,12 @@ unsigned int sceLibcHeapSize             = 24 * 1024 * 1024;
 #include <cstdlib>
 
 #include <borealis.hpp>
+#include <algorithm>
 #include <string>
+#include <vector>
 
 #include "add_host_tab.hpp"
+#include "bold_label.hpp"
 #include "host_card.hpp"
 #include "hosts_tab.hpp"
 #include "link_cell.hpp"
@@ -52,6 +55,61 @@ unsigned int sceLibcHeapSize             = 24 * 1024 * 1024;
 #include <main_args.hpp>
 
 using namespace brls::literals; // for _i18n
+
+namespace {
+
+bool loadBundledFont(const std::string& name, const std::string& file) {
+#ifdef USE_LIBROMFS
+    try {
+        auto& font = romfs::get(file);
+        if (font.valid())
+            return brls::Application::loadFontFromMemory(
+                name, (void*)font.data(), font.size(), false);
+    } catch (...) {
+    }
+    return false;
+#else
+    return brls::Application::loadFontFromFile(name,
+                                               std::string(BRLS_RESOURCES) + file);
+#endif
+}
+
+// Equinox uses Onest for its interface. The platform fonts loaded by Borealis
+// stay as fallbacks, so CJK text and button glyphs keep rendering.
+void loadEquinoxFonts() {
+    NVGcontext* vg = brls::Application::getNVGContext();
+
+    std::vector<int> fallbacks;
+    for (const std::string& name :
+         {brls::FONT_REGULAR, brls::FONT_CHINESE_SIMPLIFIED,
+          brls::FONT_CHINESE_SIMPLIFIED_EXT, brls::FONT_CHINESE_TRADITIONAL,
+          brls::FONT_KOREAN_REGULAR, brls::FONT_SWITCH_ICONS,
+          brls::FONT_MATERIAL_ICONS, brls::FONT_EMOJI}) {
+        int id = brls::Application::getFont(name);
+        if (id != brls::FONT_INVALID &&
+            std::find(fallbacks.begin(), fallbacks.end(), id) == fallbacks.end())
+            fallbacks.push_back(id);
+    }
+
+    auto addFallbacks = [&](const std::string& name) {
+        int id = brls::Application::getFont(name);
+        for (int fallback : fallbacks)
+            nvgAddFallbackFontId(vg, id, fallback);
+    };
+
+    if (loadBundledFont(EQUINOX_BOLD_FONT, "font/onest_semibold.ttf"))
+        addFallbacks(EQUINOX_BOLD_FONT);
+    else
+        brls::Logger::warning("Could not load the Onest semibold font");
+
+    // Replaces the "regular" handle before any label reads the default font.
+    if (loadBundledFont(brls::FONT_REGULAR, "font/onest_regular.ttf"))
+        addFallbacks(brls::FONT_REGULAR);
+    else
+        brls::Logger::warning("Could not load the Onest regular font");
+}
+
+} // namespace
 
 #ifdef __SWITCH__
 namespace {
@@ -134,6 +192,7 @@ int main(int argc, char* argv[]) {
             new SwitchMoonlightSessionDecoderAndRenderProvider());
 
     brls::Application::createWindow("title"_i18n);
+    loadEquinoxFonts();
 
     auto home = Application::getPlatform()->getHomeDirectory("Moonlight-Switch");
     Settings::instance().set_working_dir(home);
@@ -152,6 +211,7 @@ int main(int argc, char* argv[]) {
     brls::Application::registerXMLView("MainTabs", MainTabs::create);
     brls::Application::registerXMLView("HostsTab", HostsTab::create);
     brls::Application::registerXMLView("HorizonView", HorizonView::create);
+    brls::Application::registerXMLView("BoldLabel", BoldLabel::create);
     brls::Application::registerXMLView("AddHostTab", AddHostTab::create);
     brls::Application::registerXMLView("SettingsTab", SettingsTab::create);
 

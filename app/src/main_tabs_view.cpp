@@ -23,6 +23,11 @@ MainTabs::MainTabs() {
 
 void MainTabs::willAppear(bool resetState) {
     Box::willAppear(resetState);
+    presenting = false;
+    if (auto* applet = getAppletFrame()) {
+        frame = applet;
+        frame->setHeaderVisibility(brls::Visibility::GONE);
+    }
     updateFavoritesIfNeeded();
     favoriteTab->refreshIfNeeded();
 }
@@ -54,12 +59,29 @@ void MainTabs::refillTabs(bool keepFocus) {
     lastHasAnyFavorites = hasAnyFavorite;
     addSeparator();
 
-    addTab("tabs/add_host"_i18n, AddHostTab::create);
     addTab("tabs/settings"_i18n, SettingsTab::create);
     addSeparator();
     addTab("tabs/about"_i18n, AboutTab::create);
     sidebar->setContentOffsetY(-40, false);
     focusTab(newFocus);
+}
+
+void MainTabs::presentWithHeader(brls::View* from, brls::View* view) {
+    brls::AppletFrame* applet = from->getAppletFrame();
+    if (!applet)
+        return;
+    if (instanse && instanse->frame == applet)
+        instanse->presenting = true;
+    applet->setHeaderVisibility(brls::Visibility::VISIBLE);
+    applet->pushContentView(view);
+}
+
+void MainTabs::onHostAdded() {
+    if (presenting && frame) {
+        frame->popContentView([this] { refillTabs(false); });
+        return;
+    }
+    refillTabs();
 }
 
 View* MainTabs::create() { return new MainTabs(); }

@@ -206,7 +206,7 @@ void AddHostTab::connectHost(const Host& host) {
                     if (result.value().paired) {
                         showAlert("add_host/paired_error"_i18n, [pairedHost] {
                             Settings::instance().add_host(pairedHost);
-                            MainTabs::getInstanse()->refillTabs();
+                            MainTabs::getInstanse()->onHostAdded();
                         });
 
                         return;
@@ -229,7 +229,7 @@ void AddHostTab::connectHost(const Host& host) {
                             dialog->dismiss([result, pairedHost] {
                                 if (result.isSuccess()) {
                                     Settings::instance().add_host(pairedHost);
-                                    MainTabs::getInstanse()->refillTabs();
+                                    MainTabs::getInstanse()->onHostAdded();
                                     AddHostTab::startSearching();
                                 } else {
                                     showError(result.error(), [] {

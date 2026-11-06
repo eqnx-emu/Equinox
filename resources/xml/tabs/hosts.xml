@@ -20,7 +20,7 @@
             paddingBottom="@style/brls/tab_details/padding_bottom"
             paddingLeft="@style/brls/tab_details/padding_left">
 
-            <brls:Label
+            <BoldLabel
                 id="title"
                 width="auto"
                 height="auto"

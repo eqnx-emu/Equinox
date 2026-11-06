@@ -289,7 +289,9 @@
         "wake": "Acordar",
         "library": "Ver jogos",
         "options": "Opções",
-        "empty_title": "Nenhum PC ainda",
-        "empty_body": "Abra \"Adicionar host\" na barra lateral. O PC precisa ter o Solstice ou o Sunshine e estar na mesma rede."
+        "add_title": "Novo PC",
+        "add_body": "Encontre na rede ou digite o endereço IP.",
+        "add_action": "Adicionar PC",
+        "add_screen": "Adicionar PC"
     }
 }

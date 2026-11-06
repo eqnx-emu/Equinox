@@ -4,6 +4,7 @@
 //
 
 #include "host_card.hpp"
+#include "add_host_tab.hpp"
 #include "app_list_view.hpp"
 #include "capacity_test_view.hpp"
 #include "helper.hpp"
@@ -305,7 +306,9 @@ void HostCard::activate() {
     }
 }
 
-void HostCard::openLibrary() { this->present(new AppListView(this->host)); }
+void HostCard::openLibrary() {
+    MainTabs::presentWithHeader(this, new AppListView(this->host));
+}
 
 void HostCard::resumeRunningApp() {
     if (runningApp.app_id == 0)
@@ -381,4 +384,37 @@ void HostCard::openOptions() {
 
     dialog->addButton("common/cancel"_i18n, [] {});
     dialog->open();
+}
+
+// MARK: - AddHostCard
+
+AddHostCard::AddHostCard(bool primary) {
+    this->inflateFromXMLRes("xml/cells/host_card.xml");
+
+    // A sun still under the horizon: the next PC to come up.
+    horizon->setState(HostCardState::FETCHING);
+    name->setText("hosts/add_title"_i18n);
+    status->setSingleLine(false);
+    status->setTextColor(themeColor("equinox/muted"));
+    status->setText("hosts/add_body"_i18n);
+    infoBox->setVisibility(Visibility::GONE);
+
+    if (primary) {
+        actionPill->setBackgroundColor(themeColor("equinox/sun"));
+        actionLabel->setTextColor(themeColor("equinox/pill_text"));
+    } else {
+        actionPill->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
+        actionPill->setBorderColor(themeColor("equinox/horizon_off"));
+        actionPill->setBorderThickness(1.5f);
+        actionLabel->setTextColor(themeColor("brls/text"));
+    }
+    actionLabel->setText("hosts/add_action"_i18n);
+
+    this->addGestureRecognizer(new TapGestureRecognizer(this));
+    this->registerClickAction([this](View* view) {
+        auto* screen = new AddHostTab();
+        screen->getAppletFrameItem()->title = "hosts/add_screen"_i18n;
+        MainTabs::presentWithHeader(this, screen);
+        return true;
+    });
 }
