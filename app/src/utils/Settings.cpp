@@ -50,6 +50,38 @@ std::string make_preferred_path(const fs::path& path) {
 std::string settings_file_path(const std::string& working_dir) {
     return make_preferred_path(fs::path(working_dir) / "settings.json");
 }
+
+// Written first, then moved over settings.json, so a power cut or a full
+// card mid-save never leaves a cut-off settings file.
+std::string settings_temp_path(const std::string& working_dir) {
+    return settings_file_path(working_dir) + ".tmp";
+}
+
+bool save_settings_file(json_t* root, const std::string& working_dir) {
+    const std::string path = settings_file_path(working_dir);
+    const std::string temp = settings_temp_path(working_dir);
+    std::error_code ec;
+
+    if (json_dump_file(root, temp.c_str(), JSON_INDENT(4)) != 0) {
+        brls::Logger::error("Settings: could not write {}", temp);
+        fs::remove(temp, ec);
+        return false;
+    }
+
+    fs::rename(temp, path, ec);
+    if (ec) {
+        // Horizon won't rename over an existing file. If the app dies
+        // between these two steps, load() picks up the .tmp copy.
+        fs::remove(path, ec);
+        fs::rename(temp, path, ec);
+    }
+    if (ec) {
+        brls::Logger::error("Settings: could not replace {}: {}", path,
+                            ec.message());
+        return false;
+    }
+    return true;
+}
 }
 
 bool Settings::is_handheld() {
@@ -164,6 +196,13 @@ void Settings::load() {
     loadBaseLayouts();
 
     json_t* root = json_load_file(settings_file_path(m_working_dir).c_str(), 0, nullptr);
+    if (!root) {
+        // A save that stopped before replacing settings.json.
+        root = json_load_file(settings_temp_path(m_working_dir).c_str(), 0,
+                              nullptr);
+        if (root)
+            brls::Logger::warning("Settings: recovered from the temp file");
+    }
     
     if (root && json_typeof(root) == JSON_OBJECT) {
         if (json_t* hosts = json_object_get(root, "hosts")) {
@@ -652,7 +691,7 @@ void Settings::save() {
             json_object_set_new(root, "mapping_layouts", hosts);
         }
         
-        json_dump_file(root, settings_file_path(m_working_dir).c_str(), JSON_INDENT(4));
+        save_settings_file(root, m_working_dir);
         json_decref(root);
     }
 }
