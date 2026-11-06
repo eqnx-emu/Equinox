@@ -1,5 +1,6 @@
 #include "Singleton.hpp"
 #include <map>
+#include <memory>
 #include <mutex>
 #include <string>
 #pragma once
@@ -20,10 +21,9 @@ class BoxArtManager : public Singleton<BoxArtManager> {
     static std::string get_texture_path(const Host& host, int app_id);
 
   private:
-    std::mutex m_mutex;
-    // Serializes the file work: the library and favorites can fetch the
-    // same cover at once.
-    std::mutex m_write_mutex;
+    std::mutex m_mutex; // guards both maps
+    // One per cover file: two requests for the same cover take turns.
+    std::map<std::string, std::shared_ptr<std::mutex>> m_write_mutexes;
     std::map<std::string, bool> m_has_boxart;
     static void compress_texture(const std::string& path);
 };

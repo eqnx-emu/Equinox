@@ -65,6 +65,7 @@ void CoverCarousel::addView(View* view) {
 void CoverCarousel::clearViews(bool free) {
     Box::clearViews(free);
     selected = 0;
+    selectionTime = 0;
     position.reset(0.0f);
 }
 

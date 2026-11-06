@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <map>
 #include <string>
+#include <vector>
 
 enum class HostCardState { FETCHING, ONLINE, RUNNING, ASLEEP, UNREACHABLE };
 
@@ -59,6 +60,8 @@ class HostCard : public PressableBox {
     // Last known library facts; kept while the PC is asleep or away.
     int gameCount = -1;
     int favoriteCount = 0;
+    // Games in the last app list, to count favorites still installed.
+    std::vector<int> appIds;
     bool supports4K = false;
     void updateInfo();
     HostCardState state = HostCardState::FETCHING;
@@ -75,7 +78,7 @@ class HostCard : public PressableBox {
         HostCardState state;
         AppInfo runningApp;
         int gameCount;
-        int favoriteCount;
+        std::vector<int> appIds;
         bool supports4K;
         int64_t takenAt;
     };

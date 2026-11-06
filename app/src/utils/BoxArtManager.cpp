@@ -3,15 +3,26 @@
 #include "Settings.hpp"
 #include <CImg.h>
 #include <cctype>
+#include <cstdio>
 #include <filesystem>
+#include <memory>
 
 namespace fs = std::filesystem;
 
 namespace {
+// Hosts report 00:00:00:00:00:00 when they can't read the interface (VMs,
+// VPNs): that says nothing about which PC it is.
+bool usable_mac(const std::string& mac) {
+    for (char c : mac)
+        if (c != '0' && c != ':' && c != '-')
+            return true;
+    return false;
+}
+
 // Folder name for a PC: its MAC when known (stable across address
 // changes), otherwise its address or name, kept to filename-safe characters.
 std::string host_folder(const Host& host) {
-    std::string source = !host.mac.empty()       ? host.mac
+    std::string source = usable_mac(host.mac)    ? host.mac
                          : !host.address.empty() ? host.address
                                                  : host.hostname;
     std::string folder;
@@ -47,9 +58,32 @@ bool BoxArtManager::has_boxart(const Host& host, int app_id) {
     return exists;
 }
 
+namespace {
+// Whole file written and closed without error.
+bool write_file(const std::string& path, const Data& data) {
+    FILE* f = fopen(path.c_str(), "wb");
+    if (!f)
+        return false;
+    const bool written =
+        data.size() == 0 ||
+        fwrite(data.bytes(), data.size(), 1, f) == 1;
+    return fclose(f) == 0 && written;
+}
+} // namespace
+
 void BoxArtManager::set_data(const Host& host, Data data, int app_id) {
     const std::string path = get_texture_path(host, app_id);
-    std::lock_guard<std::mutex> writeGuard(m_write_mutex);
+    // The library and favorites can fetch the same cover at once: one
+    // writer per file, while other covers are saved in parallel.
+    std::shared_ptr<std::mutex> fileMutex;
+    {
+        std::lock_guard<std::mutex> guard(m_mutex);
+        auto& slot = m_write_mutexes[path];
+        if (!slot)
+            slot = std::make_shared<std::mutex>();
+        fileMutex = slot;
+    }
+    std::lock_guard<std::mutex> writeGuard(*fileMutex);
 
     std::error_code ec;
     if (fs::file_size(path, ec) > 0 && !ec) {
@@ -66,22 +100,35 @@ void BoxArtManager::set_data(const Host& host, Data data, int app_id) {
     const std::string temp =
         (fs::path(path).parent_path() / (std::to_string(app_id) + ".tmp.png"))
             .string();
-    data.write_to_file(temp);
-    try {
-        compress_texture(temp);
-    } catch (...) {
-        // Not an image CImg can read: keep the original bytes.
+    bool ok = data.size() > 0 && write_file(temp, data);
+    if (ok) {
+        try {
+            compress_texture(temp);
+        } catch (...) {
+            // Not an image CImg can read, or saving it failed half-way:
+            // keep the original bytes.
+            ok = write_file(temp, data);
+        }
     }
-    ec.clear();
-    fs::rename(temp, path, ec);
-    if (ec && fs::exists(temp)) {
-        // Horizon won't rename over an existing file.
-        fs::remove(path, ec);
+
+    if (ok) {
+        ec.clear();
         fs::rename(temp, path, ec);
+        std::error_code existsEc;
+        if (ec && fs::exists(temp, existsEc)) {
+            // Horizon won't rename over an existing file.
+            fs::remove(path, ec);
+            fs::rename(temp, path, ec);
+        }
+        ok = !ec;
+    }
+    if (!ok) {
+        // A broken cover would never be fetched again: drop it.
+        fs::remove(temp, ec);
     }
 
     std::lock_guard<std::mutex> guard(m_mutex);
-    m_has_boxart[path] = !ec;
+    m_has_boxart[path] = ok;
 }
 
 void BoxArtManager::compress_texture(const std::string& path) {

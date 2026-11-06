@@ -33,6 +33,7 @@ void FavoriteTab::refreshIfNeeded() {
 }
 
 void FavoriteTab::updateAppList() {
+    buildGeneration++;
     container->clearViews();
     std::vector<Host> hosts = Settings::instance().hosts();
     for (const Host& host : hosts) {
@@ -112,15 +113,15 @@ void FavoriteTab::updateAppList() {
             return ((AppCell*)v)->needsCover();
         });
         if (pending) {
+            const uint64_t generation = buildGeneration;
             ASYNC_RETAIN
             GameStreamClient::instance().connect(
-                host, [ASYNC_TOKEN, gridView](GSResult<SERVER_DATA> result) {
+                host, [ASYNC_TOKEN, gridView, generation](
+                          GSResult<SERVER_DATA> result) {
                     ASYNC_RELEASE
-                    // The list may have been rebuilt since.
-                    const auto& children = container->getChildren();
-                    if (!result.isSuccess() ||
-                        std::find(children.begin(), children.end(), gridView) ==
-                            children.end())
+                    // Rebuilt since: gridView is gone (and its address may
+                    // belong to a new grid).
+                    if (!result.isSuccess() || generation != buildGeneration)
                         return;
                     for (View* v : gridView->getChildren())
                         if (((AppCell*)v)->needsCover())
@@ -133,16 +134,26 @@ void FavoriteTab::updateAppList() {
 void FavoriteTab::rebuildAfterUnstar(int section, int index) {
     updateAppList();
 
-    if (section >= (int)container->getChildren().size())
-        section = (int)container->getChildren().size() - 2;
+    auto& children = container->getChildren();
+    // Children alternate header, grid. The group may be gone: use the grid
+    // now at that spot, or the one before it.
+    GridView* grid = nullptr;
+    for (int i : {section, section + 1, section - 1}) {
+        if (i >= 0 && i < (int)children.size()) {
+            grid = dynamic_cast<GridView*>(children[i]);
+            if (grid)
+                break;
+        }
+    }
+    if (!grid && !children.empty())
+        grid = dynamic_cast<GridView*>(children.back());
 
-    if (section <= 0) {
+    if (!grid) {
         MainTabs::getInstanse()->updateFavoritesIfNeeded();
         return;
     }
 
-    auto& items =
-        ((GridView*)container->getChildren()[section])->getChildren();
+    auto& items = grid->getChildren();
     const int newIndex = std::min(index, (int)items.size() - 1);
     if (newIndex < 0)
         return;

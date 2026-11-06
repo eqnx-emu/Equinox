@@ -103,7 +103,7 @@ void freeCurl(CURL* curl) {
 }
 
 int http_request(const std::string& url, Data* data,
-                 HTTPRequestTimeout timeout) {
+                 HTTPRequestTimeout timeout, long connect_timeout) {
     brls::Logger::info("Curl: Request:\n{}", url.c_str());
 
     auto curl = makeCurl();
@@ -117,7 +117,7 @@ int http_request(const std::string& url, Data* data,
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT,
-                     std::min<long>(timeout, HTTPConnectTimeout));
+                     std::min<long>(timeout, connect_timeout));
 
     CURLcode res = curl_easy_perform(curl);
 

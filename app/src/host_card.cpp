@@ -220,9 +220,9 @@ std::string HostCard::snapshotKey() const {
 }
 
 void HostCard::saveSnapshot() {
-    snapshots()[snapshotKey()] = Snapshot{state,         runningApp,
-                                          gameCount,     favoriteCount,
-                                          supports4K,    (int64_t)getCPUTimeUsec()};
+    snapshots()[snapshotKey()] = Snapshot{state,     runningApp,
+                                          gameCount, appIds,
+                                          supports4K, (int64_t)getCPUTimeUsec()};
 }
 
 bool HostCard::restoreSnapshot() {
@@ -234,8 +234,13 @@ bool HostCard::restoreSnapshot() {
     const Snapshot& snap = it->second;
     runningApp = snap.runningApp;
     gameCount = snap.gameCount;
-    // Stars may have changed in the library since; settings know the count.
-    favoriteCount = (int)host.favorites.size();
+    appIds = snap.appIds;
+    // Stars may have changed in the library since: count them again, only
+    // for games still installed (as refresh does).
+    favoriteCount = 0;
+    for (int id : appIds)
+        if (Settings::instance().is_favorite(host, id))
+            favoriteCount++;
     supports4K = snap.supports4K;
     applyState(snap.state);
     updateInfo();
@@ -291,6 +296,9 @@ void HostCard::refresh() {
                     if (apps.isSuccess()) {
                         gameCount = (int)apps.value().size();
                         favoriteCount = 0;
+                        appIds.clear();
+                        for (const AppInfo& app : apps.value())
+                            appIds.push_back(app.app_id);
                         for (const AppInfo& app : apps.value())
                             if (Settings::instance().is_favorite(this->host,
                                                                  app.app_id))

@@ -9,6 +9,7 @@
 #include "helper.hpp"
 #include "main_tabs_view.hpp"
 #include <memory>
+#include <chrono>
 #include <random>
 
 #if defined(_WIN32)
@@ -126,11 +127,10 @@ void AddHostTab::findHost() {
     searchBox->clearViews();
     searchHeader->setTitle("add_host/search"_i18n);
     loader->setVisibility(brls::Visibility::VISIBLE);
-    ASYNC_RETAIN
+    // Called once per PC found. No token: the destructor cancels the search,
+    // and find_hosts drops every answer from a cancelled search.
     GameStreamClient::find_hosts(
-        [ASYNC_TOKEN, generation](const GSResult<std::vector<Host>>& result) {
-            ASYNC_RELEASE
-
+        [this, generation](const GSResult<std::vector<Host>>& result) {
             if (generation != searchGeneration) {
                 return;
             }
@@ -174,7 +174,18 @@ void AddHostTab::connectHost(const Host& host) {
                         return;
                     }
 
-                    std::random_device random;
+                    // random_device is a fixed-seed generator on Switch:
+                    // the clock makes each PIN different.
+                    std::random_device device;
+                    std::seed_seq seed{
+                        device(),
+                        (unsigned)std::chrono::steady_clock::now()
+                            .time_since_epoch()
+                            .count(),
+                        (unsigned)std::chrono::system_clock::now()
+                            .time_since_epoch()
+                            .count()};
+                    std::mt19937 random(seed);
                     const auto pin = fmt::format(
                         "{:04d}",
                         std::uniform_int_distribution<int>(0, 9999)(random));
