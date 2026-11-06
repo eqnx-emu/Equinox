@@ -41,7 +41,8 @@
         "running_now": "Running now",
         "favorite": "Favorite",
         "ready": "Ready to play",
-        "another_running": "Close the running game to play this one"
+        "another_running": "Close the running game to play this one",
+        "retry": "Try again"
     },
     "common": {
         "cancel": "キャンセル",
@@ -60,12 +61,15 @@
         "host_not_found": "Host PC not found...",
         "ip_not_obtained": "Can't obtain IP address...",
         "stream_start": "Failed to start stream...",
-        "unknown_error": "Unknown problem has been occured..."
+        "unknown_error": "Unknown problem has been occured...",
+        "stream_start_stage": "Could not start the stream: {} failed (error {})",
+        "stream_start_ports": "Check that the PC firewall allows: {}"
     },
     "forwarder": {
         "install_failed": "フォワーダーのインストールに失敗しました\n0x{:X}",
         "installed": "フォワーダーをインストールしました",
-        "make": "フォワーダーを作成"
+        "make": "フォワーダーを作成",
+        "making": "Creating forwarder…"
     },
     "hints": {
         "back": "戻る",
@@ -85,7 +89,8 @@
         "unable": "できません",
         "wake_up": "起動",
         "wake_up_error": "ホストを起動することができませんでしたt",
-        "wake_up_message": "起を送信する"
+        "wake_up_message": "起を送信する",
+        "wake_up_waiting": "Waiting for the PC to wake up ({}/{})"
     },
     "mapping_layout_editor": {
         "remove": "Remove layout",

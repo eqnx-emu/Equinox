@@ -6,9 +6,10 @@
 //
 
 #include "add_host_tab.hpp"
-#include "DiscoverManager.hpp"
 #include "helper.hpp"
 #include "main_tabs_view.hpp"
+#include <memory>
+#include <random>
 
 #if defined(_WIN32)
 #include <winsock2.h>
@@ -93,20 +94,6 @@ AddHostTab::AddHostTab() {
     setActionAvailable(BUTTON_X, GameStreamClient::can_find_host());
 }
 
-void AddHostTab::fillSearchBox(const GSResult<std::vector<Host>>& hostsRes) {
-    loader->setVisibility(DiscoverManager::instance().isPaused()
-                              ? brls::Visibility::GONE
-                              : brls::Visibility::VISIBLE);
-
-    if (hostsRes.isSuccess()) {
-        appendSearchHosts(hostsRes.value());
-    } else {
-        loader->setVisibility(brls::Visibility::GONE);
-        searchHeader->setTitle("add_host/search"_i18n + " - " +
-                               hostsRes.error());
-    }
-}
-
 void AddHostTab::appendSearchHosts(const std::vector<Host>& hosts) {
     for (const Host& host : hosts) {
         const auto displayAddress = host.preferred_address();
@@ -168,8 +155,10 @@ void AddHostTab::connectHost(const Host& host) {
     Dialog* loaderView = createLoadingDialog("add_host/try_connect"_i18n);
     loaderView->open();
 
+    ASYNC_RETAIN
     GameStreamClient::instance().connect(
-        host, [this, loaderView, host](const GSResult<SERVER_DATA>& result) {
+        host, [ASYNC_TOKEN, loaderView, host](const GSResult<SERVER_DATA>& result) {
+            ASYNC_RELEASE
             loaderView->close([this, result, host] {
                 if (result.isSuccess()) {
                     Host pairedHost = host;
@@ -185,20 +174,31 @@ void AddHostTab::connectHost(const Host& host) {
                         return;
                     }
 
-                    auto pin = fmt::format("{}{}{}{}", (int)rand() % 10, (int)rand() % 10,
-                            (int)rand() % 10, (int)rand() % 10);
+                    std::random_device random;
+                    const auto pin = fmt::format(
+                        "{:04d}",
+                        std::uniform_int_distribution<int>(0, 9999)(random));
 
+                    // Cancel closes the dialog right away; the pending
+                    // request is ignored when it ends.
+                    auto cancelled = std::make_shared<bool>(false);
                     brls::Dialog* dialog = createLoadingDialog(
                         "add_host/pair_prefix"_i18n + pin +
-                        "add_host/pair_postfix"_i18n);
-                    dialog->setCancelable(false);
+                            "add_host/pair_postfix"_i18n,
+                        [cancelled] {
+                            *cancelled = true;
+                            AddHostTab::startSearching();
+                        });
                     dialog->open();
 
                     ASYNC_RETAIN
                     GameStreamClient::instance().pair(
                         pairedHost, pin,
-                        [ASYNC_TOKEN, pairedHost, dialog](const GSResult<bool>& result) {
+                        [ASYNC_TOKEN, pairedHost, dialog,
+                         cancelled](const GSResult<bool>& result) {
                             ASYNC_RELEASE
+                            if (*cancelled || isDialogClosing(dialog))
+                                return;
                             dialog->dismiss([result, pairedHost] {
                                 if (result.isSuccess()) {
                                     Settings::instance().add_host(pairedHost);

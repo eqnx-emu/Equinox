@@ -114,14 +114,34 @@ void CoverCarousel::draw(NVGcontext* vg, float x, float y, float width,
     const float glow = focusGlow.getValue();
     const NVGcolor accent = Application::getTheme()["brls/accent"];
 
+    // Covers more than ~4 steps away are fully faded out. Only the visible
+    // window is sorted and drawn; the others just follow along, so a large
+    // library costs nothing extra per frame.
+    constexpr int kVisibleRange = 5;
+    const int count = (int)children.size();
+    const int lo = std::max(0, (int)std::floor(pos) - kVisibleRange);
+    const int hi = std::min(count - 1, (int)std::ceil(pos) + kVisibleRange);
+    for (int i = 0; i < count; i++) {
+        if (i >= lo && i <= hi)
+            continue;
+        const float d = (float)i - pos;
+        const float a = std::fabs(d);
+        View* cell = children[i];
+        cell->setTranslationX(width / 2 - cell->getWidth() / 2 +
+                              (d < 0 ? -1.0f : 1.0f) *
+                                  (kFirstStep + (a - 1) * kStep));
+        cell->setTranslationY(0);
+    }
+
     // Far covers first, the focused one last (on top).
-    std::vector<size_t> order(children.size());
-    std::iota(order.begin(), order.end(), 0);
-    std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
-        return std::fabs(a - pos) > std::fabs(b - pos);
+    drawOrder.clear();
+    for (int i = lo; i <= hi; i++)
+        drawOrder.push_back((size_t)i);
+    std::sort(drawOrder.begin(), drawOrder.end(), [&](size_t a, size_t b) {
+        return std::fabs((float)a - pos) > std::fabs((float)b - pos);
     });
 
-    for (size_t i : order) {
+    for (size_t i : drawOrder) {
         View* cell = children[i];
         const float cw = cell->getWidth();
         const float ch = cell->getHeight();

@@ -172,6 +172,10 @@ void AppListView::updateAppList() {
 
     loading = true;
 
+    const int sel = carousel->selectedIndex();
+    if (sel >= 0 && sel < (int)apps.size())
+        restoreAppId = apps[sel].app_id;
+
     carousel->clearViews();
     apps.clear();
     titleLabel->setText("");
@@ -248,17 +252,42 @@ void AppListView::updateAppList() {
                                 carousel->addView(cell);
                                 this->updateFavoriteAction(cell, host, app);
                             }
-                            Application::giveFocus(this);
+
+                            // Back on the cover that was selected before.
+                            const auto kept = std::find_if(
+                                apps.begin(), apps.end(),
+                                [this](const AppInfo& a) {
+                                    return a.app_id == restoreAppId;
+                                });
+                            if (kept != apps.end()) {
+                                const int index = (int)(kept - apps.begin());
+                                carousel->jumpTo(index);
+                                Application::giveFocus(
+                                    carousel->getChildren()[index]);
+                            } else {
+                                Application::giveFocus(this);
+                            }
                         } else {
-                            showError(result.error(),
-                                      [this] { this->dismiss(); });
+                            showLoadError(result.error());
                         }
                     });
             } else {
+                loading = false;
+                loader->setHidden(true);
                 blockInput(false);
-                showError(result.error(), [this] { this->dismiss(); });
+                showLoadError(result.error());
             }
         });
+}
+
+void AppListView::showLoadError(const std::string& error) {
+    // Offer another try: a PC that is still waking up often answers on the
+    // second attempt.
+    auto* dialog = new Dialog(error);
+    dialog->addButton("hints/back"_i18n, [this] { this->dismiss(); });
+    dialog->addButton("app_list/retry"_i18n, [this] { updateAppList(); });
+    dialog->setCancelable(false);
+    dialog->open();
 }
 
 void AppListView::setCurrentApp(const AppInfo& app) {
@@ -327,9 +356,9 @@ void AppListView::onAppSelected(int index) {
         return;
     }
     showAmbient(Ambient{});
-    if (!BoxArtManager::instance().has_boxart(appId))
+    if (!BoxArtManager::instance().has_boxart(host, appId))
         return;
-    const std::string path = BoxArtManager::get_texture_path(appId);
+    const std::string path = BoxArtManager::get_texture_path(host, appId);
     ASYNC_RETAIN
     brls::async([ASYNC_TOKEN, path, appId]() {
         Ambient ambient;

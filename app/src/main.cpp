@@ -29,7 +29,6 @@
 #include "settings_tab.hpp"
 #include "views/boolean_slider_cell.hpp"
 
-#include "DiscoverManager.hpp"
 #include "MoonlightSession.hpp"
 #include "SwitchMoonlightSessionDecoderAndRenderProvider.hpp"
 

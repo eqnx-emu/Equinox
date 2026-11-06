@@ -22,8 +22,15 @@ void showError(const std::string& message, const std::function<void(void)>& cb) 
     showAlert("error/dialog_header"_i18n + "\n\n" + message, cb);
 }
 
+bool isDialogClosing(brls::Dialog* dialog) {
+    // Focus leaves the dialog as soon as its activity starts to pop.
+    View* focus = Application::getCurrentFocus();
+    return !focus || focus->getParentActivity() != dialog->getParentActivity();
+}
+
 brls::Dialog* createLoadingDialog(
-    const std::string& text, const std::function<void(void)>& onCancel) {
+    const std::string& text, const std::function<void(void)>& onCancel,
+    brls::Label** textLabel) {
     Style style = Application::getStyle();
     Box* holder = new Box(Axis::COLUMN);
 
@@ -32,6 +39,8 @@ brls::Dialog* createLoadingDialog(
     label->setFontSize(style["brls/dialog/fontSize"]);
     label->setHorizontalAlign(HorizontalAlign::CENTER);
     label->setMarginBottom(21);
+    if (textLabel)
+        *textLabel = label;
 
     auto* spinner = new ProgressSpinner(ProgressSpinnerSize::LARGE);
     spinner->View::setSize(Size(92, 92));

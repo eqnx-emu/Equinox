@@ -41,7 +41,8 @@
         "running_now": "Running now",
         "favorite": "Favorite",
         "ready": "Ready to play",
-        "another_running": "Close the running game to play this one"
+        "another_running": "Close the running game to play this one",
+        "retry": "Try again"
     },
     "capacity": {
         "action": "Connection test",
@@ -113,12 +114,15 @@
         "host_not_found": "Host PC not found...",
         "ip_not_obtained": "Can't obtain IP address...",
         "stream_start": "Failed to start stream...",
-        "unknown_error": "Unknown problem has been occured..."
+        "unknown_error": "Unknown problem has been occured...",
+        "stream_start_stage": "Could not start the stream: {} failed (error {})",
+        "stream_start_ports": "Check that the PC firewall allows: {}"
     },
     "forwarder": {
         "install_failed": "Forwarder install failed\n0x{:X}",
         "installed": "Forwarder installed",
-        "make": "Make forwarder"
+        "make": "Make forwarder",
+        "making": "Creating forwarder…"
     },
     "hints": {
         "back": "Back",
@@ -138,7 +142,8 @@
         "unable": "Unable",
         "wake_up": "Wake up",
         "wake_up_error": "Could not wake up the host",
-        "wake_up_message": "Sending Wake Up"
+        "wake_up_message": "Sending Wake Up",
+        "wake_up_waiting": "Waiting for the PC to wake up ({}/{})"
     },
     "mapping_layout_editor": {
         "remove": "Remove layout",

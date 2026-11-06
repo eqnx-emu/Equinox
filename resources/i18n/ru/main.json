@@ -41,7 +41,8 @@
         "running_now": "Running now",
         "favorite": "Favorite",
         "ready": "Ready to play",
-        "another_running": "Close the running game to play this one"
+        "another_running": "Close the running game to play this one",
+        "retry": "Try again"
     },
     "common": {
         "cancel": "Отмена",
@@ -60,12 +61,15 @@
         "host_not_found": "Хост не найден...",
         "ip_not_obtained": "Не удалось получить IP-адрес...",
         "stream_start": "Не удалось запустить трансляцию...",
-        "unknown_error": "Произошла неизвестная проблема..."
+        "unknown_error": "Произошла неизвестная проблема...",
+        "stream_start_stage": "Could not start the stream: {} failed (error {})",
+        "stream_start_ports": "Check that the PC firewall allows: {}"
     },
     "forwarder": {
         "install_failed": "Не удалось установить форвардер\n0x{:X}",
         "installed": "Форвардер установлен",
-        "make": "Создать форвардер"
+        "make": "Создать форвардер",
+        "making": "Creating forwarder…"
     },
     "hints": {
         "back": "Назад",
@@ -85,7 +89,8 @@
         "unable": "Не доступен",
         "wake_up": "Разбудить",
         "wake_up_error": "Не удалось разбудить хост",
-        "wake_up_message": "Пытаемся разбудить"
+        "wake_up_message": "Пытаемся разбудить",
+        "wake_up_waiting": "Waiting for the PC to wake up ({}/{})"
     },
     "mapping_layout_editor": {
         "remove": "Удалить схему",

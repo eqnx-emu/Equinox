@@ -25,4 +25,5 @@ class FavoriteTab : public brls::Box {
     bool isDirty = false;
 
     void updateAppList();
+    void rebuildAfterUnstar(int section, int index);
 };

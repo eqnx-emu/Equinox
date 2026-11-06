@@ -11,6 +11,7 @@
 #include <borealis.hpp>
 
 #include <functional>
+#include <vector>
 
 class CoverCarousel : public brls::Box {
   public:
@@ -26,6 +27,8 @@ class CoverCarousel : public brls::Box {
               brls::Style style, brls::FrameContext* ctx) override;
 
     int selectedIndex() const { return selected; }
+    // Moves the shelf to a cover without the slide; focus it afterwards.
+    void jumpTo(int index) { position.reset((float)index); }
     size_t count() { return getChildren().size(); }
     // Time of the last selection change, to tell a deliberate tap on the
     // focused cover from the tap that just focused it.
@@ -42,6 +45,8 @@ class CoverCarousel : public brls::Box {
     brls::Animatable position = 0.0f;
     brls::Animatable focusGlow = 0.0f;
     brls::Time selectionTime = 0;
+    // Reused every frame for the visible covers, far to near.
+    std::vector<size_t> drawOrder;
 };
 
 // Row of small dots showing the position in the shelf.
