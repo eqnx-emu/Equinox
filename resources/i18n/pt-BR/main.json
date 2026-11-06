@@ -1,19 +1,20 @@
 {
     "about": {
-        "about": "Equinox é um aplicativo terceiro para streaming de jogos baseado no Moonlight-Common-C para Nintendo Switch",
-        "link_gbatemp": "Página do GbaTemp",
-        "link_github": "Página do GitHub",
-        "link_patreon": "Página do Patreon",
+        "about": "Equinox é um cliente de streaming de jogos para Nintendo Switch, feito para funcionar com o host Solstice. Também funciona com Sunshine.",
+        "link_github": "Equinox no GitHub",
         "links": "Links",
         "thanks": "Agradecimentos Especiais",
-        "thanks_1": "Rock88 e seu Moonlight-NX, muitos códigos foram reutilizados nesse aplicativo",
+        "thanks_1": " Rock88 e seu Moonlight-NX, muitos códigos foram reutilizados nesse aplicativo",
         "thanks_2": " Natinusala por ter criado Borealis",
         "thanks_3": " Time do Moonlight, sem eles isso não seria possível",
         "thanks_4": " Cameron Gutman por ajudar a resolver um problema com LibNX",
         "thanks_5": " Todos envolvidos com o desenvolvimento do aplicativo",
         "thanks_6": " Você, por usar meu homebrew!",
         "title": "Sobre",
-        "version": "Equinox v{}, baseado no Moonlight-Switch de XITRIX"
+        "version": "Equinox v{}",
+        "fork_title": "Baseado no Moonlight-Switch",
+        "fork_text": "Equinox é um fork não oficial do Moonlight-Switch, de XITRIX. A maior parte do cliente de streaming vem desse projeto e do Moonlight. O Equinox não tem vínculo com os autores originais nem é endossado por eles.",
+        "link_original": "Projeto original: Moonlight-Switch"
     },
     "add_host": {
         "connect": "Conectar",
@@ -36,7 +37,11 @@
         "terminate_current_app": "Encerrar aplicativo atual",
         "terminate_postfix": "\n\nTodo progresso não salvo será perdido",
         "terminate_prefix": "Encerrar ",
-        "unstar": "Desfavoritar"
+        "unstar": "Desfavoritar",
+        "running_now": "Rodando agora",
+        "favorite": "Favorito",
+        "ready": "Pronto para jogar",
+        "another_running": "Feche o jogo aberto para jogar este"
     },
     "capacity": {
         "action": "Teste de conexão",
@@ -52,11 +57,16 @@
         "cancel": "Cancelar",
         "cancelling": "Cancelando...",
         "close": "Fechar",
-        "apply": "Aplicar {} Mbps",
-        "apply_at": "Aplicar {} Mbps em {}p",
         "too_slow": "Conexão lenta demais para fazer stream",
         "start_failed": "O host recusou iniciar o stream de teste",
-        "applied": "Bitrate definido em {} Mbps",
+        "apply_all": "Aplicar configuração recomendada",
+        "applied_all": "Configuração recomendada aplicada",
+        "reco_title": "Configuração recomendada",
+        "reco_bitrate": "Bitrate",
+        "reco_resolution": "Resolução",
+        "reco_pacing": "Ritmo de quadros",
+        "reco_change": "{} → {}",
+        "reco_keep": "{} · já está ideal",
         "latency_progress": "Latência {}/{}",
         "speed_progress": "Velocidade {} s — {} Mbps",
         "stage_progress": "Etapa {}/{} — {} Mbps",
@@ -108,9 +118,7 @@
     "forwarder": {
         "install_failed": "Falha ao instalar o forwarder\n0x{:X}",
         "installed": "Forwarder instalado",
-        "make": "Criar forwarder",
-        "open_shortcuts": "Abrir Atalhos",
-        "shortcuts_message": "Este app pode usar o app Atalhos para criar ações de inicialização."
+        "make": "Criar forwarder"
     },
     "hints": {
         "back": "Voltar",
@@ -128,7 +136,6 @@
         "remove_message": "Tem certeza que deseja remover esse host?",
         "status": "Status",
         "unable": "Impossível",
-        "wait": "Aguarde...",
         "wake_up": "Despertar",
         "wake_up_error": "Não foi possível despertar o host",
         "wake_up_message": "Despertando"
@@ -221,7 +228,7 @@
         "swap_mouse_keys": "Mudar mouse  e   botões",
         "swap_mouse_scroll": "Mudar direção do scroll vertical do mouse",
         "swap_stick_to_dpad": "Use Stick as D-Pad",
-        "swap_ui": "Mudar / e / para UI",
+        "swap_ui": "Trocar / e / nos jogos",
         "system_button_duplication_error": "Another action already use this system button.",
         "touchscreen_mouse_mode": "Touchscreen mode",
         "use_hw_decoding": "Enable hardware acceleration",
@@ -312,7 +319,6 @@
         "status_online": "Online",
         "status_asleep": "Desligado ou dormindo",
         "status_unreachable": "Fora de alcance",
-        "address": "Endereço",
         "running_caption": "Rodando agora",
         "running_loading": "Carregando...",
         "running_unknown": "Jogo desconhecido",
@@ -326,6 +332,10 @@
         "add_title": "Novo PC",
         "add_body": "Encontre na rede ou digite o endereço IP.",
         "add_action": "Adicionar PC",
-        "add_screen": "Adicionar PC"
+        "add_screen": "Adicionar PC",
+        "games_count": "{} jogos",
+        "games_one": "1 jogo",
+        "favorites_count": "{} favoritos",
+        "favorites_one": "1 favorito"
     }
 }

@@ -1,9 +1,7 @@
 {
     "about": {
         "about": "Moonlight-Switch es un cliente de streaming de juegos third-party basado en Moonlight-Common-C para Nintendo Switch",
-        "link_gbatemp": "Página de GbaTemp",
         "link_github": "Página de GitHub",
-        "link_patreon": "Página de Patreon",
         "links": "Enlaces",
         "thanks": "Agradecimientos especiales",
         "thanks_1": " Rock88 y su Moonlight-NX, mucho código fue re-usado en esta app",
@@ -13,7 +11,10 @@
         "thanks_5": " A cada uno involucrado en el desarrollo de la app",
         "thanks_6": " A ti, por usar mi homebrew!",
         "title": "Acerca de",
-        "version": "Moonlight-Switch v{} by XITRIX"
+        "version": "Equinox v{}",
+        "fork_title": "Based on Moonlight-Switch",
+        "fork_text": "Equinox is an unofficial fork of Moonlight-Switch by XITRIX. Most of the streaming client comes from that project and from Moonlight. Equinox is not affiliated with or endorsed by their authors.",
+        "link_original": "Original project: Moonlight-Switch"
     },
     "add_host": {
         "connect": "Añadir",
@@ -36,7 +37,11 @@
         "terminate_current_app": "Cerrar la aplicación actual",
         "terminate_postfix": "\n\nTodo el progreso no guardado puede perderse",
         "terminate_prefix": "Cerrar ",
-        "unstar": "Quitar de favoritos"
+        "unstar": "Quitar de favoritos",
+        "running_now": "Running now",
+        "favorite": "Favorite",
+        "ready": "Ready to play",
+        "another_running": "Close the running game to play this one"
     },
     "common": {
         "cancel": "Cancelar",
@@ -60,9 +65,7 @@
     "forwarder": {
         "install_failed": "Error al instalar el forwarder\n0x{:X}",
         "installed": "Forwarder instalado",
-        "make": "Crear forwarder",
-        "open_shortcuts": "Abrir Atajos",
-        "shortcuts_message": "Esta app puede usar la app Atajos para crear acciones de inicio."
+        "make": "Crear forwarder"
     },
     "hints": {
         "back": "Atrás",
@@ -80,7 +83,6 @@
         "remove_message": "¿Estás seguro de eliminar este servidor?",
         "status": "Estado",
         "unable": "No disponible",
-        "wait": "Espera...",
         "wake_up": "Reanudar",
         "wake_up_error": "No se pudo reanudar el servidor",
         "wake_up_message": "Reanudando"
@@ -206,5 +208,11 @@
         "favorites": "Favoritos",
         "settings": "Ajustes"
     },
-    "title": "Equinox"
+    "title": "Equinox",
+    "hosts": {
+        "games_count": "{} games",
+        "games_one": "1 game",
+        "favorites_count": "{} favorites",
+        "favorites_one": "1 favorite"
+    }
 }

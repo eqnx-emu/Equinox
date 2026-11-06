@@ -10,6 +10,9 @@
 #include "helper.hpp"
 #include "main_tabs_view.hpp"
 #include "streaming_view.hpp"
+#include <algorithm>
+#include <cmath>
+#include <utility>
 
 using namespace brls;
 using namespace brls::literals;
@@ -24,98 +27,139 @@ bool isOnline(HostCardState state) {
 }
 } // namespace
 
-// MARK: - HorizonView
+// MARK: - MonitorView
 
-void HorizonView::draw(NVGcontext* vg, float x, float y, float width,
+namespace {
+NVGcolor statusColor(HostCardState state) {
+    switch (state) {
+    case HostCardState::ONLINE:
+    case HostCardState::RUNNING:
+        return themeColor("equinox/online");
+    case HostCardState::ASLEEP:
+        return themeColor("equinox/status_moon");
+    default:
+        return themeColor("equinox/muted");
+    }
+}
+} // namespace
+
+void MonitorView::draw(NVGcontext* vg, float x, float y, float width,
                        float height, Style style, FrameContext* ctx) {
-    const float radius = 16;
-    const float horizonY = y + height * 0.74f;
-    const float skyHeight = horizonY - y;
     const float cx = x + width / 2;
-    const bool day = isOnline(state);
+    const NVGcolor sun = themeColor("equinox/sun");
 
+    // Stage behind the monitor.
     nvgBeginPath(vg);
-    nvgRoundedRectVarying(vg, x, y, width, skyHeight, radius, radius, 0, 0);
-    nvgFillColor(vg, a(themeColor(day ? "equinox/sky_day" : "equinox/sky_night")));
+    nvgRoundedRect(vg, x, y, width, height, 12);
+    nvgFillColor(vg, a(themeColor("equinox/card_inner")));
     nvgFill(vg);
 
-    // Everything below is clipped to the sky, so a body sitting on the
-    // horizon is cut by it like a rising sun.
+    if (add) {
+        const float cy = y + height / 2, r = 28, arm = 11;
+        nvgBeginPath(vg);
+        nvgCircle(vg, cx, cy, r);
+        if (primary) {
+            nvgFillColor(vg, a(sun));
+            nvgFill(vg);
+        } else {
+            nvgStrokeColor(vg, a(themeColor("equinox/horizon_off")));
+            nvgStrokeWidth(vg, 2);
+            nvgStroke(vg);
+        }
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, cx - arm, cy);
+        nvgLineTo(vg, cx + arm, cy);
+        nvgMoveTo(vg, cx, cy - arm);
+        nvgLineTo(vg, cx, cy + arm);
+        nvgLineCap(vg, NVG_ROUND);
+        nvgStrokeColor(vg, a(primary ? themeColor("equinox/pill_text")
+                                     : themeColor("brls/text")));
+        nvgStrokeWidth(vg, 3);
+        nvgStroke(vg);
+        nvgLineCap(vg, NVG_BUTT);
+        return;
+    }
+
+    const bool on = isOnline(state);
+    const float sw = 104, sh = 64, neck = 12, baseH = 5;
+    const float sx = cx - sw / 2;
+    const float sy = y + (height - (sh + neck + baseH)) / 2;
+
+    // Stand.
+    nvgBeginPath(vg);
+    nvgRect(vg, cx - 6, sy + sh, 12, neck);
+    nvgRoundedRect(vg, cx - 24, sy + sh + neck, 48, baseH, baseH / 2);
+    nvgFillColor(vg, a(themeColor("equinox/horizon_off")));
+    nvgFill(vg);
+
+    // Screen.
+    nvgBeginPath(vg);
+    nvgRoundedRect(vg, sx, sy, sw, sh, 8);
+    nvgFillColor(vg, a(themeColor(on ? "equinox/sky_day" : "equinox/sky_night")));
+    nvgFill(vg);
+
     nvgSave(vg);
-    nvgIntersectScissor(vg, x, y, width, skyHeight);
-
-    const NVGcolor sun = themeColor("equinox/sun");
-    const NVGcolor moon = themeColor("equinox/moon");
-
+    nvgIntersectScissor(vg, sx, sy, sw, sh);
+    const float scy = sy + sh / 2;
     switch (state) {
     case HostCardState::ONLINE:
     case HostCardState::RUNNING: {
-        const float cy = horizonY - 16;
-        const float r = 24;
-        NVGcolor glowInner = sun;
-        glowInner.a = 0.35f;
-        NVGcolor glowOuter = sun;
-        glowOuter.a = 0;
+        const float r = 13;
+        NVGcolor glowIn = sun, glowOut = sun;
+        glowIn.a = 0.35f;
+        glowOut.a = 0;
         nvgBeginPath(vg);
-        nvgCircle(vg, cx, cy, r * 2.6f);
-        nvgFillPaint(vg, nvgRadialGradient(vg, cx, cy, r, r * 2.6f,
-                                           a(glowInner), a(glowOuter)));
+        nvgCircle(vg, cx, scy, r * 2.6f);
+        nvgFillPaint(vg, nvgRadialGradient(vg, cx, scy, r, r * 2.6f, a(glowIn),
+                                           a(glowOut)));
         nvgFill(vg);
-
         nvgBeginPath(vg);
-        nvgCircle(vg, cx, cy, r);
+        nvgCircle(vg, cx, scy, r);
         nvgFillColor(vg, a(sun));
         nvgFill(vg);
         break;
     }
     case HostCardState::ASLEEP: {
-        const float cy = y + skyHeight * 0.48f;
         nvgBeginPath(vg);
-        nvgCircle(vg, cx, cy, 18);
-        nvgFillColor(vg, a(moon));
+        nvgCircle(vg, cx, scy, 13);
+        nvgFillColor(vg, a(themeColor("equinox/moon")));
         nvgFill(vg);
-
-        // Bite out of the moon in the sky color makes the crescent.
+        // Bite out of the moon in the screen color makes the crescent.
         nvgBeginPath(vg);
-        nvgCircle(vg, cx + 9, cy - 6, 16);
+        nvgCircle(vg, cx + 7, scy - 5, 11);
         nvgFillColor(vg, a(themeColor("equinox/sky_night")));
-        nvgFill(vg);
-
-        nvgFillColor(vg, a(moon));
-        nvgBeginPath(vg);
-        nvgCircle(vg, x + width * 0.22f, y + skyHeight * 0.3f, 1.6f);
-        nvgFill(vg);
-        nvgBeginPath(vg);
-        nvgCircle(vg, x + width * 0.78f, y + skyHeight * 0.62f, 1.6f);
         nvgFill(vg);
         break;
     }
     case HostCardState::FETCHING: {
         NVGcolor dim = sun;
-        dim.a = 0.35f;
+        dim.a = 0.3f;
         nvgBeginPath(vg);
-        nvgCircle(vg, cx, horizonY + 6, 22);
+        nvgCircle(vg, cx, scy, 12);
         nvgFillColor(vg, a(dim));
         nvgFill(vg);
         break;
     }
     case HostCardState::UNREACHABLE:
-        nvgBeginPath(vg);
-        nvgCircle(vg, cx, horizonY + 2, 20);
-        nvgStrokeColor(vg, a(themeColor("equinox/horizon_off")));
-        nvgStrokeWidth(vg, 2);
-        nvgStroke(vg);
         break;
     }
-
     nvgRestore(vg);
 
     nvgBeginPath(vg);
-    nvgMoveTo(vg, x, horizonY);
-    nvgLineTo(vg, x + width, horizonY);
-    nvgStrokeColor(vg, a(themeColor(day ? "equinox/horizon_on" : "equinox/horizon_off")));
-    nvgStrokeWidth(vg, 1.5f);
+    nvgRoundedRect(vg, sx, sy, sw, sh, 8);
+    nvgStrokeColor(vg, a(themeColor(on ? "equinox/horizon_on" : "equinox/horizon_off")));
+    nvgStrokeWidth(vg, 2.5f);
     nvgStroke(vg);
+
+    // Status light on the screen corner, ringed in the stage color.
+    nvgBeginPath(vg);
+    nvgCircle(vg, sx + sw - 2, sy + 2, 8);
+    nvgFillColor(vg, a(themeColor("equinox/card_inner")));
+    nvgFill(vg);
+    nvgBeginPath(vg);
+    nvgCircle(vg, sx + sw - 2, sy + 2, 5);
+    nvgFillColor(vg, a(statusColor(state)));
+    nvgFill(vg);
 }
 
 // MARK: - HostCard
@@ -124,10 +168,11 @@ HostCard::HostCard(const Host& host) : host(host) {
     this->inflateFromXMLRes("xml/cells/host_card.xml");
 
     name->setText(host.hostname);
+    info->setText(" ");
 
     this->addGestureRecognizer(new TapGestureRecognizer(this));
     this->registerClickAction([this](View* view) {
-        activate();
+        press([this] { activate(); });
         return true;
     });
 
@@ -185,22 +230,35 @@ void HostCard::refresh() {
             }
 
             const int currentGame = result.value().currentGame;
+            supports4K = result.value().supports4K;
             if (currentGame == 0) {
                 applyState(HostCardState::ONLINE);
-                return;
+            } else {
+                runningApp = AppInfo{"", currentGame};
+                applyState(HostCardState::RUNNING);
             }
 
-            runningApp = AppInfo{"", currentGame};
-            applyState(HostCardState::RUNNING);
-
+            // The app list gives the game count, and the running game's name.
             ASYNC_RETAIN
             GameStreamClient::instance().applist(
                 this->host, [ASYNC_TOKEN, generation, currentGame](
                                 const GSResult<AppInfoList>& apps) {
                     ASYNC_RELEASE
 
-                    if (generation != this->refreshGeneration ||
-                        state != HostCardState::RUNNING)
+                    if (generation != this->refreshGeneration)
+                        return;
+
+                    if (apps.isSuccess()) {
+                        gameCount = (int)apps.value().size();
+                        favoriteCount = 0;
+                        for (const AppInfo& app : apps.value())
+                            if (Settings::instance().is_favorite(this->host,
+                                                                 app.app_id))
+                                favoriteCount++;
+                        updateInfo();
+                    }
+
+                    if (currentGame == 0 || state != HostCardState::RUNNING)
                         return;
 
                     std::string appName = "hosts/running_unknown"_i18n;
@@ -213,70 +271,63 @@ void HostCard::refresh() {
                         }
                     }
                     runningApp.name = appName;
-                    infoValue->setText(appName);
+                    detail->setText(appName);
                 });
         });
 }
 
+void HostCard::updateInfo() {
+    if (gameCount < 0) {
+        info->setText(" ");
+        return;
+    }
+    std::string text = gameCount == 1
+                           ? "hosts/games_one"_i18n
+                           : brls::getStr("hosts/games_count", gameCount);
+    if (favoriteCount > 0)
+        text += "  \u00b7  " +
+                (favoriteCount == 1
+                     ? "hosts/favorites_one"_i18n
+                     : brls::getStr("hosts/favorites_count", favoriteCount));
+    if (supports4K)
+        text += "  \u00b7  4K";
+    info->setText(text);
+}
+
 void HostCard::applyState(HostCardState newState) {
     state = newState;
-    horizon->setState(newState);
+    monitor->setState(newState);
 
-    const NVGcolor sun = Application::getTheme().getColor("equinox/status_on");
-    const NVGcolor moon = Application::getTheme().getColor("equinox/status_moon");
-    const NVGcolor muted = Application::getTheme().getColor("equinox/muted");
-    const NVGcolor text = Application::getTheme().getColor("brls/text");
-    const NVGcolor pillText = Application::getTheme().getColor("equinox/pill_text");
+    const NVGcolor color = statusColor(newState);
+    statusDot->setBackgroundColor(color);
+    status->setTextColor(color);
+    detail->setText(GameStreamClient::instance().active_address(host));
 
-    // Primary pill: filled with the sun color. Secondary: outlined.
-    auto primaryPill = [&](const std::string& label) {
-        actionPill->setBackgroundColor(themeColor("equinox/sun"));
-        actionPill->setBorderThickness(0);
-        actionLabel->setTextColor(pillText);
-        actionLabel->setText(label);
-    };
-    auto outlinePill = [&](const std::string& label, NVGcolor border) {
-        actionPill->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
-        actionPill->setBorderColor(border);
-        actionPill->setBorderThickness(1.5f);
-        actionLabel->setTextColor(text);
-        actionLabel->setText(label);
-    };
-
-    infoBox->setVisibility(Visibility::VISIBLE);
-    infoCaption->setText("hosts/address"_i18n);
-    infoValue->setText(GameStreamClient::instance().active_address(host));
-
+    std::string action = "hints/ok"_i18n;
     switch (newState) {
     case HostCardState::FETCHING:
         status->setText("hosts/status_fetching"_i18n);
-        status->setTextColor(muted);
-        outlinePill("host/wait"_i18n, muted);
         break;
     case HostCardState::ONLINE:
         status->setText("hosts/status_online"_i18n);
-        status->setTextColor(sun);
-        primaryPill("hosts/action_open"_i18n);
+        action = "hosts/action_open"_i18n;
         break;
     case HostCardState::RUNNING:
-        status->setText("hosts/status_online"_i18n);
-        status->setTextColor(sun);
-        infoCaption->setText("hosts/running_caption"_i18n);
-        infoValue->setText(runningApp.name.empty() ? "hosts/running_loading"_i18n
-                                                   : runningApp.name);
-        primaryPill("hosts/action_resume"_i18n);
+        status->setText("hosts/running_caption"_i18n);
+        detail->setText(runningApp.name.empty() ? "hosts/running_loading"_i18n
+                                                : runningApp.name);
+        action = "hosts/action_resume"_i18n;
         break;
     case HostCardState::ASLEEP:
         status->setText("hosts/status_asleep"_i18n);
-        status->setTextColor(moon);
-        outlinePill("hosts/action_wake"_i18n, moon);
+        action = "hosts/action_wake"_i18n;
         break;
     case HostCardState::UNREACHABLE:
         status->setText("hosts/status_unreachable"_i18n);
-        status->setTextColor(muted);
-        outlinePill("hosts/action_retry"_i18n, muted);
+        action = "hosts/action_retry"_i18n;
         break;
     }
+    updateActionHint(ControllerButton::BUTTON_A, action);
 
     setActionAvailable(ControllerButton::BUTTON_X, isOnline(newState));
     setActionAvailable(ControllerButton::BUTTON_Y,
@@ -391,30 +442,86 @@ void HostCard::openOptions() {
 AddHostCard::AddHostCard(bool primary) {
     this->inflateFromXMLRes("xml/cells/host_card.xml");
 
-    // A sun still under the horizon: the next PC to come up.
-    horizon->setState(HostCardState::FETCHING);
+    // An open slot: no fill, dashed outline drawn in draw().
+    this->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
+    monitor->setAddMode(primary);
     name->setText("hosts/add_title"_i18n);
+    statusDot->setVisibility(Visibility::GONE);
     status->setSingleLine(false);
+    status->setFontSize(14);
     status->setTextColor(themeColor("equinox/muted"));
     status->setText("hosts/add_body"_i18n);
-    infoBox->setVisibility(Visibility::GONE);
-
-    if (primary) {
-        actionPill->setBackgroundColor(themeColor("equinox/sun"));
-        actionLabel->setTextColor(themeColor("equinox/pill_text"));
-    } else {
-        actionPill->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
-        actionPill->setBorderColor(themeColor("equinox/horizon_off"));
-        actionPill->setBorderThickness(1.5f);
-        actionLabel->setTextColor(themeColor("brls/text"));
-    }
-    actionLabel->setText("hosts/add_action"_i18n);
+    detail->setVisibility(Visibility::GONE);
+    info->setVisibility(Visibility::GONE);
 
     this->addGestureRecognizer(new TapGestureRecognizer(this));
     this->registerClickAction([this](View* view) {
-        auto* screen = new AddHostTab();
-        screen->getAppletFrameItem()->title = "hosts/add_screen"_i18n;
-        MainTabs::presentWithHeader(this, screen);
+        press([this] {
+            auto* screen = new AddHostTab();
+            screen->getAppletFrameItem()->title = "hosts/add_screen"_i18n;
+            MainTabs::presentWithHeader(this, screen);
+        });
         return true;
     });
+    updateActionHint(ControllerButton::BUTTON_A, "hosts/add_action"_i18n);
+}
+
+void AddHostCard::draw(NVGcontext* vg, float x, float y, float width,
+                       float height, Style style, FrameContext* ctx) {
+    PressableBox::draw(vg, x, y, width, height, style, ctx);
+
+    // Walk the rounded outline and stroke every other stretch of it.
+    const float r = 16, inset = 1;
+    const float x0 = x + inset, y0 = y + inset;
+    const float w = width - 2 * inset, h = height - 2 * inset;
+    const float horizontal = w - 2 * r, vertical = h - 2 * r;
+    const float arc = NVG_PI * r / 2;
+    const float perimeter = 2 * horizontal + 2 * vertical + 4 * arc;
+    // top, top-right corner, right, bottom-right corner, bottom, ...
+    const float lengths[] = {horizontal, arc, vertical, arc,
+                             horizontal, arc, vertical, arc};
+
+    auto point = [&](float t) -> std::pair<float, float> {
+        t = std::fmod(t, perimeter);
+        int i = 0;
+        while (i < 7 && t > lengths[i]) {
+            t -= lengths[i];
+            i++;
+        }
+        const float f = lengths[i] > 0 ? t / lengths[i] : 0;
+        auto corner = [&](float ccx, float ccy, float start) {
+            const float angle = start + f * NVG_PI / 2;
+            return std::pair<float, float>(ccx + std::cos(angle) * r,
+                                           ccy + std::sin(angle) * r);
+        };
+        switch (i) {
+        case 0: return {x0 + r + t, y0};
+        case 1: return corner(x0 + w - r, y0 + r, -NVG_PI / 2);
+        case 2: return {x0 + w, y0 + r + t};
+        case 3: return corner(x0 + w - r, y0 + h - r, 0);
+        case 4: return {x0 + w - r - t, y0 + h};
+        case 5: return corner(x0 + r, y0 + h - r, NVG_PI / 2);
+        case 6: return {x0, y0 + h - r - t};
+        default: return corner(x0 + r, y0 + r, NVG_PI);
+        }
+    };
+
+    const float dash = 9, gap = 7, step = 3;
+    const int dashes = std::max(1, (int)std::round(perimeter / (dash + gap)));
+    const float period = perimeter / dashes;
+    const float onLength = period * dash / (dash + gap);
+
+    nvgBeginPath(vg);
+    for (int d = 0; d < dashes; d++) {
+        const float start = d * period;
+        auto [px, py] = point(start);
+        nvgMoveTo(vg, px, py);
+        for (float t = step; t < onLength + step; t += step) {
+            auto [qx, qy] = point(start + std::min(t, onLength));
+            nvgLineTo(vg, qx, qy);
+        }
+    }
+    nvgStrokeColor(vg, a(themeColor("equinox/horizon_off")));
+    nvgStrokeWidth(vg, 1.6f);
+    nvgStroke(vg);
 }

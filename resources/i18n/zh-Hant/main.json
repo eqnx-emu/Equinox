@@ -1,9 +1,7 @@
 {
     "about": {
         "about": "Moonlight-Switch是Nintendo Switch平台的一個基於Moonlight-Common-C的第三方遊戲串流用戶端",
-        "link_gbatemp": "GbaTemp頁面",
         "link_github": "GitHub頁面",
-        "link_patreon": "Patreon頁面",
         "links": "連結",
         "thanks": "特別感謝",
         "thanks_1": " Rock88和他的Moonlight-NX，很多程式碼在這個應用程式中被重用",
@@ -13,7 +11,10 @@
         "thanks_5": " 參與應用程式開發的每個人",
         "thanks_6": " 你，感謝使用我的自製軟體！",
         "title": "關於",
-        "version": "Moonlight-Switch v{} by XITRIX"
+        "version": "Equinox v{}",
+        "fork_title": "Based on Moonlight-Switch",
+        "fork_text": "Equinox is an unofficial fork of Moonlight-Switch by XITRIX. Most of the streaming client comes from that project and from Moonlight. Equinox is not affiliated with or endorsed by their authors.",
+        "link_original": "Original project: Moonlight-Switch"
     },
     "add_host": {
         "connect": "連接",
@@ -36,7 +37,11 @@
         "terminate_current_app": "終止目前應用程式",
         "terminate_postfix": "\n\n所有未儲存的進度都有可能遺失",
         "terminate_prefix": "終止 ",
-        "unstar": "取消收藏"
+        "unstar": "取消收藏",
+        "running_now": "Running now",
+        "favorite": "Favorite",
+        "ready": "Ready to play",
+        "another_running": "Close the running game to play this one"
     },
     "common": {
         "cancel": "取消",
@@ -60,9 +65,7 @@
     "forwarder": {
         "install_failed": "轉發器安裝失敗\n0x{:X}",
         "installed": "轉發器已安裝",
-        "make": "建立轉發器",
-        "open_shortcuts": "打開捷徑",
-        "shortcuts_message": "此 App 可使用「捷徑」App 建立啟動動作。"
+        "make": "建立轉發器"
     },
     "hints": {
         "back": "返回",
@@ -80,7 +83,6 @@
         "remove_message": "確定想要移除目前主機嗎？",
         "status": "狀態",
         "unable": "不可用",
-        "wait": "等待中……",
         "wake_up": "喚醒",
         "wake_up_error": "無法喚醒主機",
         "wake_up_message": "發送喚醒請求"
@@ -206,5 +208,11 @@
         "favorites": "最愛",
         "settings": "設定"
     },
-    "title": "Equinox"
+    "title": "Equinox",
+    "hosts": {
+        "games_count": "{} games",
+        "games_one": "1 game",
+        "favorites_count": "{} favorites",
+        "favorites_one": "1 favorite"
+    }
 }

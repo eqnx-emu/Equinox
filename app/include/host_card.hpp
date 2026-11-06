@@ -2,50 +2,63 @@
 //  host_card.hpp
 //  Equinox
 //
-//  One paired PC on the home screen: a horizon illustration that shows the
-//  host state at a glance (sun = online, moon = off or asleep, empty outline
-//  = out of reach), the running game, and the main action for that state.
+//  One paired PC on the home screen: a monitor that shows the host state at
+//  a glance, the name, the status and the address (or the running game).
+//  The whole card is the action; the footer hint names it.
 //
 
 #pragma once
 
 #include "GameStreamClient.hpp"
+#include "pressable_box.hpp"
 #include <Settings.hpp>
 #include <borealis.hpp>
 #include <cstdint>
 
 enum class HostCardState { FETCHING, ONLINE, RUNNING, ASLEEP, UNREACHABLE };
 
-class HorizonView : public brls::View {
+// A small monitor that shows the host state on its screen (sun = online,
+// moon = off or asleep, dark = out of reach), with a status light. In "add"
+// mode it draws a plus instead.
+class MonitorView : public brls::View {
   public:
     void setState(HostCardState state) { this->state = state; }
+    void setAddMode(bool primary) {
+        this->add = true;
+        this->primary = primary;
+    }
     void draw(NVGcontext* vg, float x, float y, float width, float height,
               brls::Style style, brls::FrameContext* ctx) override;
 
-    static brls::View* create() { return new HorizonView(); }
+    static brls::View* create() { return new MonitorView(); }
 
   private:
     HostCardState state = HostCardState::FETCHING;
+    bool add = false;
+    bool primary = false;
 };
 
-class HostCard : public brls::Box {
+class HostCard : public PressableBox {
   public:
     explicit HostCard(const Host& host);
 
     // Re-queries the host and updates the card.
     void refresh();
 
-    BRLS_BIND(HorizonView, horizon, "horizon");
+    BRLS_BIND(MonitorView, monitor, "monitor");
     BRLS_BIND(brls::Label, name, "name");
+    BRLS_BIND(brls::Box, statusDot, "status_dot");
     BRLS_BIND(brls::Label, status, "status");
-    BRLS_BIND(brls::Box, infoBox, "info_box");
-    BRLS_BIND(brls::Label, infoCaption, "info_caption");
-    BRLS_BIND(brls::Label, infoValue, "info_value");
-    BRLS_BIND(brls::Box, actionPill, "action_pill");
-    BRLS_BIND(brls::Label, actionLabel, "action_label");
+    BRLS_BIND(brls::Label, detail, "detail");
+    BRLS_BIND(brls::Label, info, "info");
 
   private:
     Host host;
+    // Last known library facts; kept while the PC is asleep or away.
+    int gameCount = -1;
+    int favoriteCount = 0;
+    bool supports4K = false;
+    void updateInfo();
     HostCardState state = HostCardState::FETCHING;
     AppInfo runningApp{"", 0};
     uint64_t refreshGeneration = 0;
@@ -62,15 +75,18 @@ class HostCard : public brls::Box {
 };
 
 // Last card of the grid: opens the screen that finds or adds a PC.
-class AddHostCard : public brls::Box {
+class AddHostCard : public PressableBox {
   public:
     // primary: no PC is paired yet, so this is the main action on screen.
     explicit AddHostCard(bool primary);
 
-    BRLS_BIND(HorizonView, horizon, "horizon");
+    void draw(NVGcontext* vg, float x, float y, float width, float height,
+              brls::Style style, brls::FrameContext* ctx) override;
+
+    BRLS_BIND(MonitorView, monitor, "monitor");
     BRLS_BIND(brls::Label, name, "name");
+    BRLS_BIND(brls::Box, statusDot, "status_dot");
     BRLS_BIND(brls::Label, status, "status");
-    BRLS_BIND(brls::Box, infoBox, "info_box");
-    BRLS_BIND(brls::Box, actionPill, "action_pill");
-    BRLS_BIND(brls::Label, actionLabel, "action_label");
+    BRLS_BIND(brls::Label, detail, "detail");
+    BRLS_BIND(brls::Label, info, "info");
 };

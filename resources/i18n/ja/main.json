@@ -1,9 +1,7 @@
 {
     "about": {
         "about": "Moonlight-Switch is a third-party game streaming client based on Moonlight-Common-C for the Nintendo Switch",
-        "link_gbatemp": "GbaTemp Page",
         "link_github": "GitHub Page",
-        "link_patreon": "Patreon Page",
         "links": "Links",
         "thanks": "Special Thanks",
         "thanks_1": " Rock88 and his Moonlight-NX, lots of code was reused in this app",
@@ -13,7 +11,10 @@
         "thanks_5": " Everyone involved into app development",
         "thanks_6": " You, for using my homebrew!",
         "title": "About",
-        "version": "Moonlight-Switch v{} by XITRIX"
+        "version": "Equinox v{}",
+        "fork_title": "Based on Moonlight-Switch",
+        "fork_text": "Equinox is an unofficial fork of Moonlight-Switch by XITRIX. Most of the streaming client comes from that project and from Moonlight. Equinox is not affiliated with or endorsed by their authors.",
+        "link_original": "Original project: Moonlight-Switch"
     },
     "add_host": {
         "connect": "接続",
@@ -36,7 +37,11 @@
         "terminate_current_app": "現在のアプリを終了します",
         "terminate_postfix": "\n\n保存されていない進行状況はすべて失われる可能性があります",
         "terminate_prefix": "終了する ",
-        "unstar": "Unstar"
+        "unstar": "Unstar",
+        "running_now": "Running now",
+        "favorite": "Favorite",
+        "ready": "Ready to play",
+        "another_running": "Close the running game to play this one"
     },
     "common": {
         "cancel": "キャンセル",
@@ -60,9 +65,7 @@
     "forwarder": {
         "install_failed": "フォワーダーのインストールに失敗しました\n0x{:X}",
         "installed": "フォワーダーをインストールしました",
-        "make": "フォワーダーを作成",
-        "open_shortcuts": "ショートカットを開く",
-        "shortcuts_message": "このアプリはショートカットアプリを使用して起動アクションを作成できます。"
+        "make": "フォワーダーを作成"
     },
     "hints": {
         "back": "戻る",
@@ -80,7 +83,6 @@
         "remove_message": "このホストを削除してもよろしいですか?",
         "status": "状態",
         "unable": "できません",
-        "wait": "待機中...",
         "wake_up": "起動",
         "wake_up_error": "ホストを起動することができませんでしたt",
         "wake_up_message": "起を送信する"
@@ -206,5 +208,11 @@
         "favorites": "Favorites",
         "settings": "設定"
     },
-    "title": "Equinox"
+    "title": "Equinox",
+    "hosts": {
+        "games_count": "{} games",
+        "games_one": "1 game",
+        "favorites_count": "{} favorites",
+        "favorites_one": "1 favorite"
+    }
 }
