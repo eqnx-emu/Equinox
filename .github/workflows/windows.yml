@@ -2,6 +2,11 @@ name: Windows Builds
 
 on:
   workflow_call:
+  workflow_dispatch:
+  # Desktop preview builds of feature branches.
+  push:
+    branches:
+      - 'feat/**'
 
 jobs:
   build:
