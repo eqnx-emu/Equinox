@@ -1,201 +1,127 @@
-# Equinox
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="resources/img/equinox_logo_dark.png">
+    <img alt="Equinox" src="resources/img/equinox_logo_light.png" width="420">
+  </picture>
+</p>
 
-Equinox is a Nintendo Switch streaming client for [Solstice](https://github.com/luizfbalves/Solstice) and Sunshine hosts, adding a connection capacity test and minimum bitrate hints. It is based on [Moonlight-Switch](https://github.com/XITRIX/Moonlight-Switch) by XITRIX, a port of [Moonlight Game Streaming Project](https://github.com/moonlight-stream "Moonlight Game Streaming Project") for Nintendo Switch.
+Equinox is a game streaming client for the Nintendo Switch. It is built to pair with
+[Solstice](https://github.com/luizfbalves/Solstice), and it also works with
+[Sunshine](https://github.com/LizardByte/Sunshine).
 
-## Screenshots
-<details>
-  <summary>Preview</summary>
-  <p float="left">
-  <img width="500" src="https://user-images.githubusercontent.com/9553519/135712658-20382345-2da5-4968-9f57-f9f4470ae819.jpg" />
-  <img width="500" src="https://user-images.githubusercontent.com/9553519/135712664-bf2481b2-2791-490d-99a9-2f968682db76.jpg" />
-  <img width="500" src="https://user-images.githubusercontent.com/9553519/135712669-fd8b2495-e1ea-4357-949f-7fa7312da46f.jpg" />
-  <img width="500" src="https://user-images.githubusercontent.com/9553519/135712672-b9ac3785-bd1c-4948-82b2-9b353019feba.jpg" />
-  <img width="500" src="https://user-images.githubusercontent.com/9553519/135712676-aaa85bb7-9517-4a6d-bc35-070df092383c.jpg" />
-  </p>
-</details>
+> [!NOTE]
+> Equinox is an unofficial fork of [Moonlight-Switch](https://github.com/XITRIX/Moonlight-Switch)
+> by XITRIX, itself a port of the [Moonlight Game Streaming Project](https://github.com/moonlight-stream).
+> Most of the streaming client comes from those projects. Equinox is not affiliated with or
+> endorsed by their authors. See [Credits](#credits).
+
+## What Equinox adds
+
+- **Connection test.** Measures latency and download speed to the host, then streams at
+  increasing bitrates to find the highest one your network and console sustain. The stream
+  is shown in a preview while the test runs.
+- **Recommended settings in one click.** After the test, Equinox suggests a bitrate,
+  resolution and frame pacing based on the results and applies them to the profile you
+  tested (docked or handheld).
+- **Home screen of your PCs.** Each paired host shows as a card with its status (online,
+  asleep, out of reach) and the game running on it, so you can resume straight away.
+- **Solstice support.** Uses Solstice's speed test endpoint when the host offers it, and
+  falls back cleanly on Sunshine.
+- **In-app updates.** Checks for new releases and installs them when Equinox runs as an NRO
+  from the SD card.
+- **New look.** Dusk blue theme, sun amber accents and the Onest typeface.
 
 # Installing
-### Switch
+
 1. Download the latest Equinox [release](https://github.com/luizfbalves/Equinox/releases).
-2. Put Equinox.nro to sdcard:/switch/Equinox;
-3. Launch hbmenu over *Title Redirection* (for FULL RAM access);
+2. Copy `Equinox.nro` to `sdmc:/switch/Equinox/`.
+3. Open the Homebrew Menu through *title redirection* (hold R while launching a game), so
+   Equinox gets full RAM access.
 4. Launch Equinox.
 
+Settings are stored in `sdmc:/switch/Moonlight-Switch/settings.json`, the same place
+Moonlight-Switch uses, so existing pairings and favorites carry over.
+
 > [!TIP]
-> To be able to use high bitrate setting especially with 1080p - resolution, you need to overclock CPU/GPU of your console.
->
-> To learn more about that you can take a look at [Sys-Clk homebrew](https://github.com/retronx-team/sys-clk) or entire [Atmosphere build - 4IFIR](https://github.com/rashevskyv/4IFIR/blob/main/README_ENG.md) which includes everything you need to overclock your console
-
-> [!WARNING]
-> I DO NOT RESPOSIBLE FOR ANY DAMAGE TO YOUR CONSOLE IF SOMETHING WILL GO WRONG!
->
-> I am using 4IFIR by myself and not find any issue, but everything is possible. So think by you own head and be responsible for what you do with your devices!
-
-### iOS, tvOS and macOS
-Accept [invite for TestFlight](https://testflight.apple.com/join/P9EX5vQ5) and download app from there
-
-## Discord
-Feel free to join [Moonlight discord server](https://discord.gg/fmtcVPzaG4), you will find me there in "switch-help" channel 
+> High bitrates, especially at 1080p, may need the console's CPU/GPU overclocked. See
+> [sys-clk](https://github.com/retronx-team/sys-clk). Overclocking is at your own risk.
 
 ## Controls
-### Mouse
-With touch screen you can move your coursor, tap to left click, scroll 2 fingers to scroll.
 
-While touching screen ZR and ZL buttons will work like left and right mouse buttons.
-
-Also while touching screen L and R sticks will work like scrolling wheel.
-
-USB mouse working as well.
+### Touch and mouse
+- Touch the screen to move the cursor, tap to left click, scroll with two fingers.
+- While touching the screen, ZR and ZL act as left and right mouse buttons, and the sticks
+  act as a scroll wheel.
+- USB mice work too.
 
 ### Keyboard
-You can use onscreen keyboard, tap 3 fingers on screen to show it.
-
-USB keyboard working as well.
+Tap the screen with three fingers to open the on-screen keyboard. USB keyboards work too.
 
 ### Gamepad
-By default, Switch gamepad configured as X360 gamepad (A/B and X/Y swapped). Key mapping available in application settings.
+By default the Switch controller is mapped as an Xbox 360 controller (A/B and X/Y swapped).
+The mapping can be changed in Settings.
 
-Up to 5 gamepads (includes handheld mode) supported. Half of joycons are also supported.
+Up to 5 controllers are supported, including handheld mode and single Joy-Cons.
 
-### SixAxis
-You should configure your Sunshine server to recognise controller as DS4 one to be able to use Gyro and Accelerometer. Only works for player 1 controller.
+### Motion controls
+Configure the host to see the controller as a DualShock 4 to use the gyroscope and
+accelerometer. Only player 1 is supported.
 
-### Ingame overlay
-To open overlay, press - and + key simultaneously by default or Hold ESC on keyboard.
+### In-game overlay
+Press − and + together, or hold Esc on a keyboard. The combination and hold time can be
+changed in Settings.
 
-Key combination and holding time are configurable in settings.
+## Forwarders
 
-## NSP forwarder
-App supports NSP forwarders to start stream immediately with predefined configuration. Add app you want to launch in Favorites list first. You can generate forwarder using [NSP Forwarder Generator](https://nsp-forwarder.vercel.app/moonlight)
+Equinox can install a forwarder on the HOME Menu that starts a stream straight away. Add the
+game to Favorites, select it and press X (*Make forwarder*).
 
-### Manually
-If you'd like to create it manually, without help of generator, you'll need to create forwarder which will pass thees arguments to the application:
-- `--ip` - IP address of your PC
-- `--appid` - ID of the app to launch, it has to be added into "Favorites list" (you could find it in /switch/Moonlight-Switch/settings.json)
-- `--appname` - The name of the app without any spacings
+A forwarder passes these arguments to Equinox:
+- `--ip`: IP address of the host
+- `--appid`: ID of the game, which must be in Favorites (listed in `settings.json`)
+- `--appname`: the game's name, without spaces
 
-example:
-`--ip=192.168.1.101 --appid=1233211234 --appname=Steam`
+Example: `--ip=192.168.1.101 --appid=1233211234 --appname=Steam`
 
-## iOS / visionOS forwarder / deep link
-iOS and visionOS builds register the `moonlightswitch://` URL scheme. The supported deep link
-uses the same parameters as the Switch forwarder:
+## Languages
 
-`moonlightswitch://launch?ip=192.168.1.101&appid=1233211234&appname=Steam`
+Equinox follows the console's system language. English and Brazilian Portuguese are
+complete. German, Spanish, French, Italian, Japanese, Korean, Russian and Chinese
+(Simplified and Traditional) come from Moonlight-Switch and miss the strings Equinox added,
+which show in English.
 
-`host` can be used instead of `ip` when launching by host MAC address.
+Translations live in `resources/i18n/<language>/main.json`. Pull requests are welcome.
 
-iOS 16+ and visionOS builds also expose Shortcuts actions. `Launch Game` accepts a Moonlight
-`Game` value. Use `Get Favorite Games` to pick from saved favorites, or
-`Create Game` to build a game manually from `Host`, `App ID`, and `App Name`,
-then pass the result to `Launch Game`. Use `Get Game Detail` to extract a
-selected game's `App ID`, `Host`, `App Name`, or `Display Host`, and `Get Game
-Deep Link` to create a `moonlightswitch://` URL from a `Game`. Favorite game rows
-use cached box art when available. `Host` accepts either a paired PC IP address
-or MAC address.
-
-Favorite apps can generate an Apple Shortcut forwarder. The forwarder action opens
-the Shortcuts editor and copies the generated deep link to the clipboard as a
-fallback. Prefer the Moonlight `Launch Game` action on iOS 16+ or visionOS, or
-add an `Open URLs` action and paste the copied `moonlightswitch://` URL on older
-iOS versions. Use Shortcuts' `Add to Home Screen` option to create the icon.
-
-## Localization
-- English (100%)
-- Russian (100%)
-- German (86%)
-- Spanish (72%)
-- Japanese (70%)
-- Chinese (simplified) (86%)
-- Czech (70%) - unsupported yet, as HOS has no such system language
-
-### Contribution
-If you'd like to improve existing language, or add a new one, follow the instruction:
-1. Ask a permission to modify language [here](https://poeditor.com/join/project?hash=9kiCIvN0dc)
-2. Notify me by [creating an issue](https://github.com/XITRIX/Moonlight-Switch/issues/new) with title "[Localization] - {Name of language}", in description write your nickname on POEditor
-3. After translation is done, notify me in issue created earlier
-
-You have 2 options to add that translation:
-1. If you'd like your profile in "contributors" section, you could add that localization by creating a PR
-2. If you don't care, I could do that by myself
-
-If you'd like to test your translation, you could follow build instructions, or ask me to create a build with your localization, I'll attach that build in issue.
-
-> [!WARNING]
-> Currently there is no way to select language inside of app, it takes from system settings, so it is impossible to add locatization, that HOS doesn't support (that happend with Czech language).
-
-## Build Moonlight-Switch
+## Build
 
 ```bash
-cd 'folder/to/store/the/sources'
-
-# Clone this repo with submodules
-git clone https://github.com/XITRIX/Moonlight-Switch.git --recursive
-cd Moonlight-Switch
+git clone https://github.com/luizfbalves/Equinox.git --recursive
+cd Equinox
 ```
 
 ### Switch
 
-To build for Switch, a standard development environment must first be set up. In order to do so, [refer to the Getting Started guide](https://devkitpro.org/wiki/Getting_Started).
+With Docker (no local devkitPro needed):
 
 ```bash
-cmake -B build/switch -DPLATFORM_SWITCH=ON
+docker compose run --rm switch
+```
+
+The `.nro` is written to `build/docker/Equinox.nro`.
+
+Or with a local [devkitPro](https://devkitpro.org/wiki/Getting_Started) setup:
+
+```bash
+cmake -B build/switch -DPLATFORM_SWITCH=ON -DUSE_DEKO3D=ON
 make -C build/switch Moonlight.nro -j$(nproc)
 ```
 
-### PS Vita
+### Windows (development only)
 
-To build for PS Vita, install [VitaSDK](https://vitasdk.org/) and the Vita dependencies described in the [Borealis PS Vita guide](https://github.com/xfangfang/borealis/wiki/PS-Vita). The SDK must include FFmpeg and SDL2 built with `VIDEO_VITA_PVR` support. Set `VITASDK` to the SDK installation directory, then run:
+The Windows build exists to test the interface without a console; it is not a release
+target. It uses MSYS2 under `C:\msys64` and DirectX 11.
 
-```bash
-export VITASDK=/opt/vitasdk
-scripts/psv-dev.sh build
-```
-
-The resulting package is written to `build/psvita/Moonlight.vpk`. For installing the first VPK, deploying later builds, capturing PrincessLog output, and checking crash dumps, see the [PS Vita development guide](docs/psv-development.md).
-
-### PC (Windows/Linux/MacOS)
-
-To build for PC, the following components are required:
-
-- cmake/make build system
-- A C++ compiler supporting the C++17 standard
-
-Please refer to the usual sources of information for your particular operating system. Usually the commands needed to build this project will look like this:
-
-```bash
-cmake -B build/pc -DPLATFORM_DESKTOP=ON -DCMAKE_BUILD_TYPE=Release
-make -C build/pc -j$(nproc)
-```
-
-Also, please note that the `resources` folder must be available in the working directory, otherwise the program will fail to find the shaders.
-
-On Linux, enabling **Use hardware decoding** makes the FFmpeg decoder try
-VA-API, CUDA, and VDPAU in that order. The selected backend decodes into GPU
-surfaces and copies NV12, P010, or YUV420P frames back for the OpenGL renderer.
-If no compatible device or driver is available, Moonlight automatically falls
-back to software decoding.
-
-#### Linux and SteamOS releases
-
-Linux release builds are available for x86_64 and ARM64 as AppImage, portable
-tar, DEB, and RPM packages. SteamOS builds target Valve's Steam Linux Runtime 4.
-The Linux release configuration embeds resources and requires a VA-API-enabled
-FFmpeg with H.264 and HEVC hardware configurations.
-
-See the [Linux and SteamOS build and installation guide](docs/linux-distribution.md)
-for package selection, Steam Deck setup, local build commands, and the GitHub
-Actions matrix.
-
-#### Windows (MSYS2)
-
-Windows desktop builds are supported through MSYS2 system packages for both x64 and ARM64.
-
-MSYS2 is recommended under `C:\msys64`.
-
-##### x64 (UCRT64)
-
-Install the required packages:
+Install the packages from a UCRT64 shell:
 
 ```bash
 pacman -S --needed --noconfirm \
@@ -203,7 +129,6 @@ pacman -S --needed --noconfirm \
   mingw-w64-ucrt-x86_64-cmake \
   mingw-w64-ucrt-x86_64-ninja \
   mingw-w64-ucrt-x86_64-pkgconf \
-  mingw-w64-ucrt-x86_64-SDL2 \
   mingw-w64-ucrt-x86_64-ffmpeg \
   mingw-w64-ucrt-x86_64-curl \
   mingw-w64-ucrt-x86_64-mbedtls \
@@ -214,88 +139,50 @@ pacman -S --needed --noconfirm \
   mingw-w64-ucrt-x86_64-zstd
 ```
 
-Build with the bundled preset:
-
-These Windows presets default to native D3D11 (DirectX 11). Pass `-DUSE_D3D11=OFF` when configuring only if you want to force the legacy OpenGL path.
+Then build (add `--run` to start the app):
 
 ```bash
-cmake --preset windows-ucrt64-release
-cmake --build --preset windows-ucrt64-release
+scripts/windows-dev.sh
 ```
 
-The resulting executable is placed in `build/windows-ucrt64`. The build stages the required MSYS2 UCRT64 DLLs beside `Moonlight.exe`; keep the generated `resources` directory there as well, because the UCRT64 build uses external resources instead of `libromfs`.
+The executable, its DLLs and the `resources` folder end up in `build/windows-ucrt64`.
 
-##### ARM64 (CLANGARM64)
+### Tests
 
-To build a native Windows ARM64 executable, install the CLANGARM64 packages:
+Unit tests use doctest and build on the host (UCRT64 shell on Windows):
 
 ```bash
-pacman -S --needed --noconfirm \
-  mingw-w64-clang-aarch64-clang \
-  mingw-w64-clang-aarch64-cmake \
-  mingw-w64-clang-aarch64-ninja \
-  mingw-w64-clang-aarch64-pkgconf \
-  mingw-w64-clang-aarch64-SDL2 \
-  mingw-w64-clang-aarch64-ffmpeg \
-  mingw-w64-clang-aarch64-curl \
-  mingw-w64-clang-aarch64-mbedtls \
-  mingw-w64-clang-aarch64-jansson \
-  mingw-w64-clang-aarch64-libpng \
-  mingw-w64-clang-aarch64-opus \
-  mingw-w64-clang-aarch64-expat \
-  mingw-w64-clang-aarch64-zstd
+cmake -S tests -B build/tests -G Ninja
+cmake --build build/tests
 ```
 
-Build with the ARM64 preset:
+### Logo
 
-```bash
-cmake --preset windows-clangarm64-release
-cmake --build --preset windows-clangarm64-release
-```
-
-The resulting executable is placed in `build/windows-clangarm64`. The build stages the required MSYS2 CLANGARM64 DLLs beside `Moonlight.exe`; keep the generated `resources` directory there as well, because the desktop ARM64 build also uses external resources instead of `libromfs`.
-
-### iOS / tvOS:
-
-```shell
-# build libromfs generator
-./build_libromfs_generator.sh
-
-# prepare vcpkg
-./extern/vcpkg/bootstrap-vcpkg.sh
-```
-
-#### 1. Build for arm64 iphoneOS
-
-```shell
-# 1. Generate a Xcode project
-cmake -B build/ios -G Xcode -DPLATFORM_IOS=ON
-
-# 2. open project in Xcode
-open build/ios/*.xcodeproj
-
-# 3. Set up Team and Bundle Identifiers in Xcode, then connect devices to run.
-```
-
-#### 2. Build for arm64 tvOS
-
-```shell
-# 1. Generate a Xcode project
-cmake -B build/tvos -G Xcode -DPLATFORM_TVOS=ON
-
-# 2. open project in Xcode
-open build/tvos/*.xcodeproj
-
-# 3. Set up Team and Bundle Identifiers in Xcode, then connect devices to run.
-```
+The logo source is `art/logo/equinox.svg`. `python art/logo/render_logo.py` (needs Pillow)
+regenerates the console icon and the PNGs in `resources/img`.
 
 ## Credits
-Thanks a lot to [Rock88](https://github.com/rock88) and his [Moonlight-NX](https://github.com/rock88/moonlight-nx), lots of streaming code has been lend from it 👍.
 
-[Xfangfang](https://github.com/xfangfang) for maintaining [Borealis](https://github.com/xfangfang/borealis) library. iOS port would not be possible without it. 
+Equinox exists thanks to:
 
-[Averne](https://github.com/averne) for NVDEC implementation into [FFmpeg](https://github.com/averne/FFmpeg) and useful guidance of how to enable it 
+- [XITRIX](https://github.com/XITRIX) and [Moonlight-Switch](https://github.com/XITRIX/Moonlight-Switch),
+  the app Equinox is forked from.
+- The [Moonlight](https://github.com/moonlight-stream) team and
+  [moonlight-common-c](https://github.com/moonlight-stream/moonlight-common-c).
+- [Rock88](https://github.com/rock88) and [Moonlight-NX](https://github.com/rock88/moonlight-nx),
+  where much of the original streaming code came from.
+- [Xfangfang](https://github.com/xfangfang) for maintaining the
+  [Borealis](https://github.com/xfangfang/borealis) UI library, created by Natinusala.
+- [Averne](https://github.com/averne) for the NVDEC implementation in
+  [FFmpeg](https://github.com/averne/FFmpeg).
+- [Cooler3D](https://github.com/Cooler3Ds) for help with the deko3d renderer and performance.
+- The forwarder installer is adapted from [sphaira](https://github.com/ITotalJustice/sphaira).
 
-Also huge thanks to [Cooler3D](https://github.com/Cooler3Ds) for help with Deko3D implementation and solving performance issues
+The Switch deko3d upscaling path includes AMD FidelityFX Super Resolution 1.0 EASU and RCAS
+code translated from the MIT-licensed
+[GPUOpen FidelityFX-FSR](https://github.com/GPUOpen-Effects/FidelityFX-FSR) reference
+implementation. Copyright (c) Advanced Micro Devices, Inc. All rights reserved.
 
-The Switch deko3d upscaling path includes AMD FidelityFX Super Resolution 1.0 EASU and RCAS code translated from the MIT-licensed [GPUOpen FidelityFX-FSR](https://github.com/GPUOpen-Effects/FidelityFX-FSR) reference implementation. Copyright (c) Advanced Micro Devices, Inc. All rights reserved.
+## License
+
+See [LICENSE](LICENSE).
