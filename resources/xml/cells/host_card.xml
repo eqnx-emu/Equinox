@@ -1,0 +1,77 @@
+<brls:Box
+    width="230"
+    height="150"
+    axis="column"
+    alignItems="stretch"
+    focusable="true"
+    padding="16"
+    cornerRadius="16"
+    highlightCornerRadius="18"
+    hideHighlightBackground="true"
+    backgroundColor="@theme/equinox/card">
+
+    <MonitorView
+        id="monitor"
+        visibility="gone"
+        width="auto"
+        height="132"/>
+
+    <BoldLabel
+        id="name"
+        width="auto"
+        height="auto"
+        marginLeft="6"
+        marginRight="6"
+        fontSize="21"
+        singleLine="true"/>
+
+    <brls:Box
+        id="status_row"
+        width="auto"
+        height="auto"
+        axis="row"
+        alignItems="center"
+        marginTop="4"
+        marginLeft="6"
+        marginRight="6">
+
+        <brls:Box
+            id="status_dot"
+            width="9"
+            height="9"
+            cornerRadius="4.5"
+            marginRight="8"/>
+
+        <brls:Label
+            id="status"
+            width="auto"
+            height="auto"
+            grow="1"
+            fontSize="15"
+            singleLine="true"/>
+
+    </brls:Box>
+
+    <brls:Label
+        id="detail"
+        width="auto"
+        height="auto"
+        marginTop="2"
+        marginLeft="6"
+        marginRight="6"
+        fontSize="14"
+        singleLine="true"
+        textColor="@theme/equinox/muted"/>
+
+    <brls:Label
+        id="info"
+        width="auto"
+        height="auto"
+        marginTop="10"
+        marginLeft="6"
+        marginRight="6"
+        fontSize="13"
+        singleLine="true"
+        textColor="@theme/brls/text_disabled"/>
+
+</brls:Box>

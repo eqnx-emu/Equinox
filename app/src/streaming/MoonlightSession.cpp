@@ -7,9 +7,6 @@
 #include "borealis.hpp"
 #include <string.h>
 
-#if defined(PLATFORM_IOS) || defined(PLATFORM_VISIONOS)
-extern void getWindowSize(int* w, int* h);
-#endif
 
 using namespace brls;
 
@@ -293,12 +290,8 @@ void MoonlightSession::start(ServerCallback<bool> callback, bool is_sunshine) {
                          : Settings::instance().resolution();
     int nativeW = 0, nativeH = 0;
     if (resolution == -1) {
-#if defined(PLATFORM_IOS) || defined(PLATFORM_VISIONOS)
-        getWindowSize(&nativeW, &nativeH);
-#else
         nativeH = Application::windowHeight;
         nativeW = Application::windowWidth;
-#endif
     }
     auto [w, h] = stream_size_for(resolution, nativeW, nativeH,
                                   Settings::instance().native_resolution_scale());
@@ -478,6 +471,8 @@ void MoonlightSession::draw(NVGcontext* vg, int width, int height) {
 
         AVFrameHolder::instance().get(
             [this, vg, width, height](AVFrame* frame) {
+                m_video_renderer->setTargetRect(m_video_rect[0], m_video_rect[1],
+                                                m_video_rect[2], m_video_rect[3]);
                 m_video_renderer->draw(vg, width, height, frame, m_video_format);
             });
 

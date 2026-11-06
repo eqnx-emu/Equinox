@@ -1,7 +1,12 @@
-name: Windows Builds
+name: Windows Dev Build
 
 on:
   workflow_call:
+  workflow_dispatch:
+  # Windows test build of feature branches (Equinox ships for the Switch).
+  push:
+    branches:
+      - 'feat/**'
 
 jobs:
   build:
@@ -36,30 +41,6 @@ jobs:
               mingw-w64-ucrt-x86_64-zstd
               mingw-w64-ucrt-x86_64-ntldd-git
 
-          - name: CLANGARM64
-            runner: windows-11-arm
-            msystem: CLANGARM64
-            cmake: 'C:\msys64\clangarm64\bin\cmake.exe'
-            preset: windows-clangarm64-release
-            build_dir: build/windows-clangarm64
-            msys2_bin: /clangarm64/bin/
-            artifact: Moonlight-windows-clangarm64
-            packages: >-
-              mingw-w64-clang-aarch64-clang
-              mingw-w64-clang-aarch64-cmake
-              mingw-w64-clang-aarch64-ninja
-              mingw-w64-clang-aarch64-pkgconf
-              mingw-w64-clang-aarch64-SDL2
-              mingw-w64-clang-aarch64-ffmpeg
-              mingw-w64-clang-aarch64-curl
-              mingw-w64-clang-aarch64-mbedtls
-              mingw-w64-clang-aarch64-jansson
-              mingw-w64-clang-aarch64-libpng
-              mingw-w64-clang-aarch64-opus
-              mingw-w64-clang-aarch64-expat
-              mingw-w64-clang-aarch64-zstd
-              mingw-w64-clang-aarch64-ntldd-git
-
     steps:
     - name: Check out repository
       uses: actions/checkout@v4
@@ -72,15 +53,6 @@ jobs:
       with:
         msystem: ${{ matrix.msystem }}
         release: false
-        update: true
-        install: ${{ matrix.packages }}
-
-    - name: Set up MSYS2 CLANGARM64
-      if: matrix.msystem == 'CLANGARM64'
-      uses: msys2/setup-msys2@v2
-      with:
-        location: 'C:\'
-        msystem: ${{ matrix.msystem }}
         update: true
         install: ${{ matrix.packages }}
 

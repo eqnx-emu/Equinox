@@ -18,10 +18,6 @@
 #include <sys/socket.h>
 #endif
 
-#if defined(PLATFORM_IOS) || defined(PLATFORM_TVOS) || defined(PLATFORM_VISIONOS)
-extern void darwin_mdns_start(ServerCallback<std::vector<Host>>& callback);
-extern void darwin_mdns_stop();
-#endif
 
 namespace {
 std::string strip_ipv4_port(const std::string& address) {
@@ -91,9 +87,6 @@ AddHostTab::AddHostTab() {
 
     registerAction("add_host/search_refresh"_i18n, ControllerButton::BUTTON_X,
                    [this](View* view) {
-#ifdef MULTICAST_DISABLED
-                       DiscoverManager::instance().reset();
-#endif
                        findHost();
                        return true;
                    });
@@ -141,26 +134,13 @@ bool AddHostTab::searchBoxIpExists(const std::string& ip) {
 }
 
 void AddHostTab::findHost() {
-#ifdef MULTICAST_DISABLED
-    DiscoverManager::instance().start();
-    fillSearchBox(DiscoverManager::instance().getHosts());
-    DiscoverManager::instance().getHostsUpdateEvent()->unsubscribe(
-        searchSubscription);
-    searchSubscription =
-        DiscoverManager::instance().getHostsUpdateEvent()->subscribe(
-            [this](auto result) { fillSearchBox(result); });
-#else
     stopSearchHost();
     const uint64_t generation = searchGeneration;
     searchBox->clearViews();
     searchHeader->setTitle("add_host/search"_i18n);
     loader->setVisibility(brls::Visibility::VISIBLE);
     ASYNC_RETAIN
-#if defined(PLATFORM_IOS) || defined(PLATFORM_TVOS) || defined(PLATFORM_VISIONOS)
-    darwin_mdns_start(
-#else
     GameStreamClient::find_hosts(
-#endif
         [ASYNC_TOKEN, generation](const GSResult<std::vector<Host>>& result) {
             ASYNC_RELEASE
 
@@ -175,18 +155,11 @@ void AddHostTab::findHost() {
                 showError(result.error(), [] {});
             }
         });
-#endif
 }
 
 void AddHostTab::stopSearchHost() {
     searchGeneration++;
-#ifdef MULTICAST_DISABLED
-    DiscoverManager::instance().pause();
-#elif defined(PLATFORM_IOS)
-#elif defined(PLATFORM_TVOS) || defined(PLATFORM_VISIONOS)
-#else
     GameStreamClient::cancel_find_hosts();
-#endif
 }
 
 void AddHostTab::connectHost(const Host& host) {
@@ -206,7 +179,7 @@ void AddHostTab::connectHost(const Host& host) {
                     if (result.value().paired) {
                         showAlert("add_host/paired_error"_i18n, [pairedHost] {
                             Settings::instance().add_host(pairedHost);
-                            MainTabs::getInstanse()->refillTabs();
+                            MainTabs::getInstanse()->onHostAdded();
                         });
 
                         return;
@@ -229,7 +202,7 @@ void AddHostTab::connectHost(const Host& host) {
                             dialog->dismiss([result, pairedHost] {
                                 if (result.isSuccess()) {
                                     Settings::instance().add_host(pairedHost);
-                                    MainTabs::getInstanse()->refillTabs();
+                                    MainTabs::getInstanse()->onHostAdded();
                                     AddHostTab::startSearching();
                                 } else {
                                     showError(result.error(), [] {
@@ -247,26 +220,13 @@ void AddHostTab::connectHost(const Host& host) {
 }
 
 void AddHostTab::pauseSearching() {
-#ifdef MULTICAST_DISABLED
-    DiscoverManager::instance().pause();
-#endif
 }
 
 void AddHostTab::startSearching() {
-#ifdef MULTICAST_DISABLED
-    DiscoverManager::instance().start();
-#endif
 }
 
 AddHostTab::~AddHostTab() {
     stopSearchHost();
-#ifdef MULTICAST_DISABLED
-    DiscoverManager::instance().pause();
-    DiscoverManager::instance().getHostsUpdateEvent()->unsubscribe(
-        searchSubscription);
-#elif defined(PLATFORM_IOS) || defined(PLATFORM_TVOS) || defined(PLATFORM_VISIONOS)
-    darwin_mdns_stop();
-#endif
 }
 
 brls::View* AddHostTab::create() {

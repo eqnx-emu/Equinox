@@ -63,20 +63,6 @@ std::string buildForwarderArgs(const Host& host, const App& app) {
 } // namespace
 #endif
 
-#if defined(PLATFORM_IOS)
-namespace {
-
-void showShortcutsAlert() {
-    auto* dialog = new brls::Dialog("forwarder/shortcuts_message"_i18n);
-    dialog->addButton("common/close"_i18n, [] {});
-    dialog->addButton("forwarder/open_shortcuts"_i18n, [] {
-        brls::Application::getPlatform()->openBrowser("shortcuts://create-shortcut");
-    });
-    dialog->open();
-}
-
-} // namespace
-#endif
 
 #ifdef __SWITCH__
 
@@ -1622,16 +1608,6 @@ Result installForwarder(const Host& host, const App& app, bool add_moonlight_log
 
 int makeForwarder(const Host& host, const App& app, bool add_moonlight_logo) {
     return static_cast<int>(installForwarder(host, app, add_moonlight_logo));
-}
-
-#elif defined(PLATFORM_IOS)
-
-int makeForwarder(const Host& host, const App& app, bool add_moonlight_logo) {
-    (void)host;
-    (void)app;
-    (void)add_moonlight_logo;
-    showShortcutsAlert();
-    return EXIT_SUCCESS;
 }
 
 #else

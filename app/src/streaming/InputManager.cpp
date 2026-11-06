@@ -217,13 +217,10 @@ uint8_t MoonlightInputManager::controllerType() {
 void MoonlightInputManager::reloadButtonMappingLayout() {
     KeyMappingLayout layout = (*Settings::instance().get_mapping_laouts())
         [Settings::instance().get_current_mapping_layout()];
-    for (int i = 0; i < _BUTTON_MAX; i++) {
-        if (layout.mapping.count(i) == 1) {
-            mappingButtons[i] = (brls::ControllerButton)layout.mapping.at(i);
-        } else {
-            mappingButtons[i] = (brls::ControllerButton)i;
-        }
-    }
+    const bool swapFaceButtons = Settings::instance().swap_game_face_buttons();
+    for (int i = 0; i < _BUTTON_MAX; i++)
+        mappingButtons[i] = mapped_game_button(layout, swapFaceButtons,
+                                               (brls::ControllerButton)i);
 }
 
 void MoonlightInputManager::updateTouchScreenPanDelta(

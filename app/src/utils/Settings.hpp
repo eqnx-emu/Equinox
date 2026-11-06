@@ -12,7 +12,8 @@
 
 std::string getVideoCodecName(VideoCodec codec);
 
-enum UpscalingMode : int { UPSCALING_OFF, UPSCALING_METALFX, UPSCALING_FSR1 };
+// Values are stored in settings; 1 was MetalFX (Apple only, removed).
+enum UpscalingMode : int { UPSCALING_OFF = 0, UPSCALING_FSR1 = 2 };
 
 enum AudioBackend : int {
     SDL,
@@ -32,6 +33,26 @@ struct KeyMappingLayout {
     // Report the controller to the host as a Nintendo controller instead of an Xbox one
     bool nintendoController = false;
 };
+
+// Button the game receives when physical button `button` is pressed: the
+// layout's remap, then the optional A/B and X/Y swap.
+inline brls::ControllerButton mapped_game_button(const KeyMappingLayout& layout,
+                                                 bool swapFaceButtons,
+                                                 brls::ControllerButton button) {
+    auto it = layout.mapping.find(button);
+    auto out = it != layout.mapping.end() ? (brls::ControllerButton)it->second
+                                          : button;
+    if (swapFaceButtons) {
+        switch (out) {
+            case brls::BUTTON_A: return brls::BUTTON_B;
+            case brls::BUTTON_B: return brls::BUTTON_A;
+            case brls::BUTTON_X: return brls::BUTTON_Y;
+            case brls::BUTTON_Y: return brls::BUTTON_X;
+            default: break;
+        }
+    }
+    return out;
+}
 
 // Number of built-in layouts that precede the user-created ones
 constexpr int BASE_MAPPING_LAYOUTS_COUNT = 3;
@@ -171,11 +192,7 @@ class Settings : public Singleton<Settings> {
     }
 
     [[nodiscard]] bool request_hdr() const { 
-#ifdef SUPPORT_HDR
-        return m_enable_hdr; 
-#else
         return false; 
-#endif
     }
     void set_request_hdr(bool request_hdr) { m_enable_hdr = request_hdr; }
 
@@ -187,32 +204,17 @@ class Settings : public Singleton<Settings> {
 #endif
     }
     void set_upscaling(bool upscaling) {
-#if defined(PLATFORM_APPLE) && !defined(PLATFORM_TVOS)
-        m_upscaling_mode = upscaling ? UPSCALING_METALFX : UPSCALING_OFF;
-#else
         m_upscaling_mode = upscaling ? UPSCALING_FSR1 : UPSCALING_OFF;
-#endif
     }
     [[nodiscard]] UpscalingMode upscaling_mode() const {
 #ifdef SUPPORT_UPSCALING
-#if defined(PLATFORM_TVOS)
-        return m_upscaling_mode == UPSCALING_OFF ? UPSCALING_OFF : UPSCALING_FSR1;
-#else
         return m_upscaling_mode;
-#endif
 #else
         return UPSCALING_OFF;
 #endif
     }
     void set_upscaling_mode(UpscalingMode mode) {
-#if defined(PLATFORM_APPLE) && !defined(PLATFORM_TVOS)
-        if (mode == UPSCALING_METALFX || mode == UPSCALING_FSR1)
-            m_upscaling_mode = mode;
-        else
-            m_upscaling_mode = UPSCALING_OFF;
-#else
         m_upscaling_mode = mode == UPSCALING_OFF ? UPSCALING_OFF : UPSCALING_FSR1;
-#endif
     }
 
         [[nodiscard]] bool dithering() const {
@@ -283,8 +285,10 @@ class Settings : public Singleton<Settings> {
     void set_write_log(bool write_log) { m_write_log = write_log; }
     [[nodiscard]] bool write_log() const { return m_write_log; }
 
-    void set_swap_ui_keys(bool swap_ui_keys) { m_swap_ui_keys = swap_ui_keys; }
-    [[nodiscard]] bool swap_ui_keys() const { return m_swap_ui_keys; }
+    // Swaps A/B and X/Y for the game only; Equinox's own menus never swap.
+    // Stored under the old "swap_ui_keys" name to keep existing settings.
+    void set_swap_game_face_buttons(bool swap) { m_swap_ui_keys = swap; }
+    [[nodiscard]] bool swap_game_face_buttons() const { return m_swap_ui_keys; }
 
     void set_swap_joycon_stick_to_dpad(bool value) { m_swap_joycon_stick_to_dpad = value; }
     [[nodiscard]] bool swap_joycon_stick_to_dpad() const { return m_swap_joycon_stick_to_dpad; }
@@ -315,11 +319,7 @@ class Settings : public Singleton<Settings> {
 
     void set_use_hw_decoding(bool hw_decoding) { m_use_hw_decoding = hw_decoding; }
     [[nodiscard]] bool use_hw_decoding() const {
-#if defined(__linux__) && defined(PLATFORM_DESKTOP)
-        return m_use_hw_decoding;
-#else
         return true;
-#endif
     }
 
     void set_keyboard_type(KeyboardType type) { m_keyboard_type = type; }
@@ -369,11 +369,7 @@ class Settings : public Singleton<Settings> {
     int m_resolution = 720;
     int m_native_resolution_scale = 100;
     int m_fps = 60;
-#ifdef __PSV__
-    VideoCodec m_video_codec = H264;
-#else
     VideoCodec m_video_codec = H265;
-#endif
 #ifdef __SWITCH__
     AudioBackend m_audio_backend = AUDREN;
 #else

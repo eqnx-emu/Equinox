@@ -35,11 +35,26 @@ struct VideoRenderStats {
 };
 
 class IVideoRenderer {
+  protected:
+    int m_target_x = 0;
+    int m_target_y = 0;
+    int m_target_w = 0;
+    int m_target_h = 0;
+
   public:
     virtual ~IVideoRenderer(){};
     virtual void draw(NVGcontext* vg, int width, int height,
                       AVFrame* frame, int imageFormat) = 0;
     virtual VideoRenderStats* video_render_stats() = 0;
+
+    // Where on the render target the video goes, in pixels. A zero size
+    // means the whole target (the default, used by the stream screen).
+    void setTargetRect(int x, int y, int w, int h) {
+        m_target_x = x;
+        m_target_y = y;
+        m_target_w = w;
+        m_target_h = h;
+    }
 
     // Called on the render thread after the app was out of focus. A console
     // sleep can reinitialise the decoder and graphics services, so renderers

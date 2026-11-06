@@ -6,8 +6,43 @@
 //
 
 #include "app_list_view.hpp"
+#include "BoxArtManager.hpp"
 #include "helper.hpp"
 #include "main_tabs_view.hpp"
+
+#include <borealis/extern/nanovg/stb_image.h>
+
+namespace {
+// Average colour of the top and bottom halves of a cover image. Runs off
+// the main thread.
+bool coverColors(const std::string& path, NVGcolor& top, NVGcolor& bottom) {
+    int w = 0, h = 0, n = 0;
+    unsigned char* px = stbi_load(path.c_str(), &w, &h, &n, 4);
+    if (!px)
+        return false;
+    double sum[2][3] = {};
+    long count[2] = {};
+    const int step = std::max(1, std::min(w, h) / 48);
+    for (int yy = 0; yy < h; yy += step) {
+        const int half = yy < h / 2 ? 0 : 1;
+        for (int xx = 0; xx < w; xx += step) {
+            const unsigned char* p = px + 4 * (yy * w + xx);
+            for (int c = 0; c < 3; c++)
+                sum[half][c] += p[c];
+            count[half]++;
+        }
+    }
+    stbi_image_free(px);
+    auto avg = [&](int half) {
+        const double k = count[half] ? 1.0 / (255.0 * count[half]) : 0;
+        return nvgRGBf((float)(sum[half][0] * k), (float)(sum[half][1] * k),
+                       (float)(sum[half][2] * k));
+    };
+    top = avg(0);
+    bottom = avg(1);
+    return true;
+}
+} // namespace
 
 AppListView::AppListView(const Host& host) : host(host) {
     this->inflateFromXMLRes("xml/views/app_list_view.xml");
@@ -29,8 +64,28 @@ AppListView::AppListView(const Host& host) : host(host) {
     getAppletFrameItem()->setHintView(hintView);
 
     container->setHideHighlight(true);
-    gridView = new GridView();
-    container->addView(gridView);
+    carousel = new CoverCarousel();
+    carousel->onSelect = [this](int index) { onAppSelected(index); };
+    container->addView(carousel);
+
+    titleLabel = new Label();
+    titleLabel->setFontSize(26);
+    titleLabel->setHorizontalAlign(HorizontalAlign::CENTER);
+    titleLabel->setSingleLine(true);
+    titleLabel->setMarginTop(18);
+    container->addView(titleLabel);
+
+    metaLabel = new Label();
+    metaLabel->setFontSize(17);
+    metaLabel->setHorizontalAlign(HorizontalAlign::CENTER);
+    metaLabel->setTextColor(Application::getTheme()["brls/header/subtitle"]);
+    metaLabel->setMarginTop(6);
+    container->addView(metaLabel);
+
+    dots = new CarouselDots();
+    dots->setMarginTop(18);
+    container->addView(dots);
+
     loader = new LoadingOverlay(this);
 
     auto closeCurrentAction = [this, host](View* view) {
@@ -87,7 +142,8 @@ void AppListView::terninateApp() {
             return;
 
         loading = true;
-        gridView->clearViews();
+        carousel->clearViews();
+        apps.clear();
         Application::giveFocus(this);
         loader->setHidden(false);
         blockInput(true);
@@ -116,7 +172,11 @@ void AppListView::updateAppList() {
 
     loading = true;
 
-    gridView->clearViews();
+    carousel->clearViews();
+    apps.clear();
+    titleLabel->setText("");
+    metaLabel->setText("");
+    dots->setState(0, 0);
     Application::giveFocus(this);
     loader->setHidden(false);
     currentApp = std::nullopt;
@@ -161,6 +221,7 @@ void AppListView::updateAppList() {
                                     return lScore > rScore;
                                 });
 
+                            currentGameId = currentGame;
                             for (const AppInfo& app : sortedApps) {
                                 if (app.app_id == currentGame)
                                     setCurrentApp(app);
@@ -170,7 +231,21 @@ void AppListView::updateAppList() {
                                 cell->setFavorite(
                                     Settings::instance().is_favorite(
                                         host, app.app_id));
-                                gridView->addView(cell);
+                                cell->setCaptionVisible(false);
+                                const int index = (int)apps.size();
+                                // A tap on a side cover brings it to the
+                                // centre; a tap on the centre one plays.
+                                cell->beforeLaunch = [this, index]() {
+                                    if (carousel->selectedIndex() != index)
+                                        return false;
+                                    return Application::getInputType() !=
+                                               InputType::TOUCH ||
+                                           getCPUTimeUsec() -
+                                                   carousel->selectedAt() >
+                                               350000;
+                                };
+                                apps.push_back(app);
+                                carousel->addView(cell);
                                 this->updateFavoriteAction(cell, host, app);
                             }
                             Application::giveFocus(this);
@@ -194,8 +269,26 @@ void AppListView::setCurrentApp(const AppInfo& app) {
     updateAppletFrameItem();
 }
 
+AppListView::~AppListView() {
+    if (backdropHost)
+        backdropHost->setBackdrop(nullptr);
+}
+
+void AppListView::willDisappear(bool resetState) {
+    Box::willDisappear(resetState);
+    if (backdropHost)
+        backdropHost->setBackdrop(nullptr);
+    backdropHost = nullptr;
+}
+
 void AppListView::willAppear(bool resetState) {
     Box::willAppear(resetState);
+    backdropHost = dynamic_cast<BackdropFrame*>(getAppletFrame());
+    if (backdropHost)
+        backdropHost->setBackdrop(
+            [this](NVGcontext* vg, float x, float y, float w, float h) {
+                paintAmbient(vg, x, y, w, h);
+            });
     updateAppList();
 }
 
@@ -204,6 +297,102 @@ void AppListView::onLayout() {
 
     if (loader)
         loader->layout();
+}
+
+void AppListView::onAppSelected(int index) {
+    if (index < 0 || index >= (int)apps.size())
+        return;
+    const AppInfo& app = apps[index];
+
+    titleLabel->setText(app.name);
+    std::string meta;
+    if (app.app_id == currentGameId)
+        meta = "app_list/running_now"_i18n;
+    if (Settings::instance().is_favorite(host, app.app_id))
+        meta += (meta.empty() ? "" : "  ·  ") + "app_list/favorite"_i18n;
+    if (meta.empty())
+        meta = currentGameId != 0 ? "app_list/another_running"_i18n
+                                  : "app_list/ready"_i18n;
+    metaLabel->setText(meta);
+    detailsFade.reset(0.0f);
+    detailsFade.addStep(1.0f, 260, EasingFunction::quadraticOut);
+    detailsFade.start();
+    dots->setState(apps.size(), index);
+
+    // Glow from the cover colours; computed once per game, off the UI thread.
+    const int appId = app.app_id;
+    auto cached = ambientCache.find(appId);
+    if (cached != ambientCache.end()) {
+        showAmbient(cached->second);
+        return;
+    }
+    showAmbient(Ambient{});
+    if (!BoxArtManager::instance().has_boxart(appId))
+        return;
+    const std::string path = BoxArtManager::get_texture_path(appId);
+    ASYNC_RETAIN
+    brls::async([ASYNC_TOKEN, path, appId]() {
+        Ambient ambient;
+        ambient.valid = coverColors(path, ambient.top, ambient.bottom);
+        brls::sync([ASYNC_TOKEN, appId, ambient]() {
+            ASYNC_RELEASE
+            ambientCache[appId] = ambient;
+            const int sel = carousel->selectedIndex();
+            if (sel >= 0 && sel < (int)apps.size() &&
+                apps[sel].app_id == appId)
+                showAmbient(ambient);
+        });
+    });
+}
+
+void AppListView::showAmbient(const Ambient& ambient) {
+    if (!ambient.valid && !ambientShown.valid)
+        return;
+    ambientPrevious = ambientShown;
+    ambientShown = ambient;
+    ambientFade.reset(0.0f);
+    ambientFade.addStep(1.0f, 650, EasingFunction::quadraticInOut);
+    ambientFade.start();
+}
+
+void AppListView::drawAmbient(NVGcontext* vg, const Ambient& ambient,
+                              float alpha, float x, float y, float width,
+                              float height) {
+    if (!ambient.valid || alpha <= 0.01f)
+        return;
+    auto glow = [&](float cx, float cy, float r, NVGcolor c, float a) {
+        nvgBeginPath(vg);
+        nvgRect(vg, x, y, width, height);
+        nvgFillPaint(vg, nvgRadialGradient(vg, cx, cy, 0, r,
+                                           nvgRGBAf(c.r, c.g, c.b, a * alpha),
+                                           nvgRGBAf(c.r, c.g, c.b, 0)));
+        nvgFill(vg);
+    };
+    glow(x + width * 0.5f, y + height * 0.32f, width * 0.42f, ambient.top, 0.28f);
+    glow(x + width * 0.36f, y + height * 0.62f, width * 0.36f, ambient.bottom, 0.2f);
+    glow(x + width * 0.66f, y + height * 0.58f, width * 0.3f, ambient.bottom, 0.14f);
+}
+
+void AppListView::paintAmbient(NVGcontext* vg, float x, float y,
+                               float width, float height) {
+    const float fade = ambientFade.getValue();
+    drawAmbient(vg, ambientPrevious, 1.0f - fade, x, y, width, height);
+    drawAmbient(vg, ambientShown, fade, x, y, width, height);
+}
+
+void AppListView::draw(NVGcontext* vg, float x, float y, float width,
+                       float height, Style style, FrameContext* ctx) {
+    // Without a BackdropFrame the glow stays inside the content area.
+    if (!backdropHost)
+        paintAmbient(vg, x, y, width, height);
+
+    const float details = detailsFade.getValue();
+    titleLabel->setAlpha(details);
+    metaLabel->setAlpha(details);
+    titleLabel->setTranslationY(6 * (1 - details));
+    metaLabel->setTranslationY(6 * (1 - details));
+
+    Box::draw(vg, x, y, width, height, style, ctx);
 }
 
 void AppListView::updateFavoriteAction(AppCell* cell, Host host, const AppInfo& app) {

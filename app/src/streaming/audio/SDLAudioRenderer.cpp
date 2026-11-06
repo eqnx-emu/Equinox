@@ -96,11 +96,6 @@ int SDLAudioRenderer::init(int audio_configuration,
 
     #if defined(PLATFORM_SWITCH)
         audioOverflowBytes = 24000;
-    #elif defined(PLATFORM_APPLE)
-        // CoreAudio backends can batch callbacks enough that a fixed 16 KB
-        // threshold is only a tiny latency window.
-        audioOverflowBytes =
-            std::max(48000, audioBytesForDurationMs(have.freq, have.channels, 250));
     #else
         audioOverflowBytes = 16000;
     #endif

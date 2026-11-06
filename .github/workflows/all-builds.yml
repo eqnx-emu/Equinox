@@ -1,7 +1,7 @@
 name: All Builds
 
-# This fork only ships the Nintendo Switch build. The other platform
-# workflows are kept (workflow_call only) so upstream merges stay simple.
+# Equinox ships only the Nintendo Switch build. windows.yml builds the
+# Windows development target on feature branches.
 # Pushes to master are built by fork-switch-release.yml, which also
 # publishes the release, so they are not built twice.
 on:

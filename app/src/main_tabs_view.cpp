@@ -9,7 +9,7 @@
 #include "Settings.hpp"
 #include "about_tab.hpp"
 #include "add_host_tab.hpp"
-#include "host_tab.hpp"
+#include "hosts_tab.hpp"
 #include "settings_tab.hpp"
 
 MainTabs::MainTabs() {
@@ -23,6 +23,11 @@ MainTabs::MainTabs() {
 
 void MainTabs::willAppear(bool resetState) {
     Box::willAppear(resetState);
+    presenting = false;
+    if (auto* applet = getAppletFrame()) {
+        frame = applet;
+        frame->setHeaderVisibility(brls::Visibility::GONE);
+    }
     updateFavoritesIfNeeded();
     favoriteTab->refreshIfNeeded();
 }
@@ -46,26 +51,37 @@ void MainTabs::refillTabs(bool keepFocus) {
 
     clearTabs();
 
+    addTab("tabs/hosts"_i18n, HostsTab::create);
+
     bool hasAnyFavorite = Settings::instance().has_any_favorite();
-    if (hasAnyFavorite) {
+    if (hasAnyFavorite)
         addTab("tabs/favorites"_i18n, [this] { return this->favoriteTab; });
-        addSeparator();
-    }
     lastHasAnyFavorites = hasAnyFavorite;
+    addSeparator();
 
-    auto hosts = Settings::instance().hosts();
-    for (const Host& host : hosts) {
-        addTab(host.hostname, [host] { return new HostTab(host); });
-    }
-    if (!hosts.empty())
-        addSeparator();
-
-    addTab("tabs/add_host"_i18n, AddHostTab::create);
     addTab("tabs/settings"_i18n, SettingsTab::create);
     addSeparator();
     addTab("tabs/about"_i18n, AboutTab::create);
     sidebar->setContentOffsetY(-40, false);
     focusTab(newFocus);
+}
+
+void MainTabs::presentWithHeader(brls::View* from, brls::View* view) {
+    brls::AppletFrame* applet = from->getAppletFrame();
+    if (!applet)
+        return;
+    if (instanse && instanse->frame == applet)
+        instanse->presenting = true;
+    applet->setHeaderVisibility(brls::Visibility::VISIBLE);
+    applet->pushContentView(view);
+}
+
+void MainTabs::onHostAdded() {
+    if (presenting && frame) {
+        frame->popContentView([this] { refillTabs(false); });
+        return;
+    }
+    refillTabs();
 }
 
 View* MainTabs::create() { return new MainTabs(); }

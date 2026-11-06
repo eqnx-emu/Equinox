@@ -19,9 +19,6 @@
 #include <algorithm>
 #include <cmath>
 
-#if defined(PLATFORM_IOS) || defined(PLATFORM_VISIONOS)
-extern void getWindowSize(int* w, int* h);
-#endif
 
 using namespace brls;
 using namespace brls::literals;
@@ -37,7 +34,9 @@ constexpr double kStageMeasureS = 8.0;
 constexpr auto kSampleInterval = std::chrono::milliseconds(250);
 // No new frame for this long during the measured window = connection lost.
 constexpr auto kStallLimit = std::chrono::seconds(2);
-constexpr float kColumnWidth = 170;
+constexpr float kColumnWidth = 104;
+// Left column of the body (progress and results); the preview takes the rest.
+constexpr float kLogColumnWidth = 540;
 
 const char* codec_name(VideoCodec codec) {
     switch (codec) {
@@ -76,9 +75,44 @@ Label* makeLabel(float fontSize, NVGcolor color, bool singleLine = true) {
 }
 } // namespace
 
+namespace {
+// While a stage streams, the frame paints the theme background itself with
+// a hole at the preview rectangle, so only that rectangle shows the video
+// (drawn under the UI layer) and the rest of the screen keeps its colour.
+class PreviewFrame : public AppletFrame {
+  public:
+    PreviewFrame(CapacityTestView* view) : AppletFrame(view), view(view) {}
+
+    void draw(NVGcontext* vg, float x, float y, float width, float height,
+              Style style, FrameContext* ctx) override {
+        float px = 0, py = 0, pw = 0, ph = 0;
+        if (view->streamingHole(px, py, pw, ph)) {
+            nvgBeginPath(vg);
+            nvgRect(vg, x, y, width, height);
+            nvgRoundedRect(vg, px, py, pw, ph, 6);
+            nvgPathWinding(vg, NVG_HOLE);
+            nvgFillColor(vg, Application::getTheme()["brls/background"]);
+            nvgFill(vg);
+        }
+        AppletFrame::draw(vg, x, y, width, height, style, ctx);
+    }
+
+  private:
+    CapacityTestView* view;
+};
+} // namespace
+
+bool CapacityTestView::streamingHole(float& x, float& y, float& w,
+                                     float& h) const {
+    if (!streamingBackdrop)
+        return false;
+    previewRect(x, y, w, h);
+    return w >= 32 && h >= 18;
+}
+
 void CapacityTestView::open(const Host& host) {
     auto* view = new CapacityTestView(host);
-    auto* frame = new AppletFrame(view);
+    auto* frame = new PreviewFrame(view);
     view->frame = frame;
     Application::pushActivity(new Activity(frame));
 }
@@ -191,28 +225,54 @@ void CapacityTestView::buildLayout() {
     cards->addView(bitrateCard);
     addView(cards);
 
+    // Body: test log on the left, stream preview (then the recommended
+    // settings) on the right.
+    auto* body = new Box(Axis::ROW);
+    body->setGrow(1);
+    body->setMarginTop(14);
+    addView(body);
+
+    auto* log = new Box(Axis::COLUMN);
+    log->setWidth(kLogColumnWidth);
+    log->setShrink(0);
+    body->addView(log);
+
     statusLabel = makeLabel(22, Application::getTheme()["brls/accent"]);
     statusLabel->setText(" ");
-    statusLabel->setMarginTop(14);
-    addView(statusLabel);
+    log->addView(statusLabel);
 
     table = new Box(Axis::COLUMN);
     table->setMarginTop(6);
-    addView(table);
+    log->addView(table);
 
-    verdictLabel = makeLabel(22, text, false);
+    verdictLabel = makeLabel(20, text, false);
     verdictLabel->setMarginTop(10);
     verdictLabel->setVisibility(Visibility::GONE);
-    addView(verdictLabel);
+    log->addView(verdictLabel);
 
     warningLabel = makeLabel(18, nvgRGB(255, 167, 38), false);
     warningLabel->setMarginTop(4);
     warningLabel->setVisibility(Visibility::GONE);
-    addView(warningLabel);
+    log->addView(warningLabel);
 
-    auto* spacer = new Box();
-    spacer->setGrow(1);
-    addView(spacer);
+    preview = new Box(Axis::COLUMN);
+    preview->setGrow(1);
+    preview->setMarginLeft(24);
+    preview->setAlignItems(AlignItems::STRETCH);
+    body->addView(preview);
+
+    recoBox = new Box(Axis::COLUMN);
+    recoBox->setPadding(14, 18, 14, 18);
+    recoBox->setCornerRadius(8);
+    recoBox->setBackgroundColor(nvgRGBA(128, 128, 128, 40));
+    recoBox->setVisibility(Visibility::GONE);
+    auto* recoTitle = makeLabel(18, Application::getTheme()["brls/text_disabled"]);
+    recoTitle->setText("capacity/reco_title"_i18n);
+    recoBox->addView(recoTitle);
+    recoRows = new Box(Axis::COLUMN);
+    recoRows->setMarginTop(4);
+    recoBox->addView(recoRows);
+    preview->addView(recoBox);
 
     auto* buttons = new Box(Axis::ROW);
     buttons->setJustifyContent(JustifyContent::FLEX_END);
@@ -255,8 +315,9 @@ void CapacityTestView::buildLayout() {
 }
 
 void CapacityTestView::setStreamingBackdrop(bool streaming) {
-    // Video is drawn under the UI layer: drop the opaque frame background
-    // while streaming so the stream shows behind a dimmed panel.
+    // Video is drawn under the UI layer, into the preview rectangle only.
+    // While streaming, PreviewFrame paints the background around it.
+    streamingBackdrop = streaming;
     if (frame) {
         if (streaming)
             frame->setBackground(ViewBackground::NONE);
@@ -264,10 +325,19 @@ void CapacityTestView::setStreamingBackdrop(bool streaming) {
             frame->setBackgroundColor(
                 Application::getTheme()["brls/background"]);
     }
-    if (streaming)
-        setBackgroundColor(nvgRGBA(0, 0, 0, 150));
-    else
-        setBackground(ViewBackground::NONE);
+}
+
+void CapacityTestView::previewRect(float& x, float& y, float& w,
+                                   float& h) const {
+    const float boxX = preview->getX();
+    const float boxY = preview->getY();
+    const float boxW = preview->getWidth();
+    const float boxH = preview->getHeight();
+    // Largest 16:9 rectangle that fits, top-aligned with the log column.
+    w = std::min(boxW, boxH * 16.0f / 9.0f);
+    h = w * 9.0f / 16.0f;
+    x = boxX + (boxW - w) / 2.0f;
+    y = boxY;
 }
 
 std::string CapacityTestView::dec(double value, int decimals) const {
@@ -350,12 +420,8 @@ void CapacityTestView::computeRequestedConfig() {
                                               : settings.resolution();
     int nativeW = 0, nativeH = 0;
     if (resolution == -1) {
-#if defined(PLATFORM_IOS) || defined(PLATFORM_VISIONOS)
-        getWindowSize(&nativeW, &nativeH);
-#else
         nativeW = Application::windowWidth;
         nativeH = Application::windowHeight;
-#endif
     }
     auto [w, h] = stream_size_for(resolution, nativeW, nativeH,
                                   settings.native_resolution_scale());
@@ -772,13 +838,35 @@ void CapacityTestView::onStageStarted(bool ok, const std::string& error) {
 
 void CapacityTestView::draw(NVGcontext* vg, float x, float y, float width,
                             float height, Style style, FrameContext* ctx) {
+    float px = 0, py = 0, pw = 0, ph = 0;
+    if (streamingBackdrop)
+        previewRect(px, py, pw, ph);
+    const bool showVideo = pw >= 32 && ph >= 18;
+
     if (session && sessionStreaming && !stageEnding) {
+        // The renderer works in window pixels, the layout in UI units.
+        const float scale = Application::windowScale;
+        session->set_video_rect((int)(px * scale), (int)(py * scale),
+                                showVideo ? (int)(pw * scale) : 0,
+                                showVideo ? (int)(ph * scale) : 0);
         // Also refreshes session_stats() (every 250 ms).
-        session->draw(vg, (int)Application::contentWidth,
-                      (int)Application::contentHeight);
+        if (showVideo)
+            session->draw(vg, (int)(pw * scale), (int)(ph * scale));
+        else
+            session->draw(vg, (int)Application::contentWidth,
+                          (int)Application::contentHeight);
         tickStage();
     }
     Box::draw(vg, x, y, width, height, style, ctx);
+
+    if (streamingBackdrop && showVideo) {
+        // Frame around the preview (NanoVG draws after the video).
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, px - 1, py - 1, pw + 2, ph + 2, 6);
+        nvgStrokeColor(vg, Application::getTheme()["brls/text_disabled"]);
+        nvgStrokeWidth(vg, 2);
+        nvgStroke(vg);
+    }
 }
 
 void CapacityTestView::tickStage() {
@@ -972,41 +1060,110 @@ void CapacityTestView::finish() {
     }
 
     closeButton->setText("capacity/close"_i18n);
-    applyResolution = downgradedFrom ? std::optional<int>(requested.height)
-                                     : std::nullopt;
-    if (verdict->recommended_kbps > 0) {
-        applyButton->setText(
-            applyResolution
-                ? brls::getStr("capacity/apply_at",
-                               mbps(verdict->recommended_kbps),
-                               *applyResolution)
-                : brls::getStr("capacity/apply",
-                               mbps(verdict->recommended_kbps)));
+    // A test that already ran at a lower resolution recommends that one.
+    const auto rec = recommend_settings(
+        *verdict, downgradedFrom ? std::optional<int>(requested.height)
+                                 : std::nullopt);
+    if (rec.bitrate_kbps > 0 && !stagesSkipped) {
+        recommendation = rec;
+        showRecommendation();
+        applyButton->setText("capacity/apply_all"_i18n);
         applyButton->setVisibility(Visibility::VISIBLE);
         Application::giveFocus(applyButton);
     } else {
+        recommendation.reset();
         Application::giveFocus(closeButton);
     }
 }
 
+std::string CapacityTestView::resolutionName(int height) const {
+    if (height == -1)
+        return "settings/resolution_native"_i18n;
+    return std::to_string(height) + "p";
+}
+
+std::string CapacityTestView::pacingName(int framesQueue) {
+    switch (std::clamp(framesQueue, 1, 3)) {
+    case 1:
+        return "settings/frame_pacing_latency"_i18n;
+    case 2:
+        return "settings/frame_pacing_balanced"_i18n;
+    default:
+        return "settings/frame_pacing_smooth"_i18n;
+    }
+}
+
+void CapacityTestView::showRecommendation() {
+    recoRows->clearViews();
+    if (!recommendation)
+        return;
+    const auto& rec = *recommendation;
+    auto& settings = Settings::instance();
+    const bool handheld =
+        apply_target(settings.mode_profiles(), handheldWhenTested) ==
+        ProfileTarget::Handheld;
+    const NVGcolor dim = Application::getTheme()["brls/text_disabled"];
+    const NVGcolor text = Application::getTheme()["brls/text"];
+    const NVGcolor accent = Application::getTheme()["brls/accent"];
+
+    // "current -> recommended", or "current (already right)".
+    auto addRow = [&](const std::string& name, const std::string& current,
+                      const std::string& next) {
+        auto* row = new Box(Axis::ROW);
+        row->setMarginTop(6);
+        auto* nameLabel = makeLabel(18, dim);
+        nameLabel->setWidth(220);
+        nameLabel->setText(name);
+        row->addView(nameLabel);
+        const bool same = current == next;
+        auto* value = makeLabel(18, same ? text : accent);
+        value->setText(same ? brls::getStr("capacity/reco_keep", current)
+                            : brls::getStr("capacity/reco_change", current,
+                                           next));
+        row->addView(value);
+        recoRows->addView(row);
+    };
+
+    const int currentKbps =
+        handheld ? settings.handheld_bitrate() : settings.bitrate();
+    addRow("capacity/reco_bitrate"_i18n,
+           brls::getStr("capacity/mbps", mbps(currentKbps)),
+           brls::getStr("capacity/mbps", mbps(rec.bitrate_kbps)));
+
+    const int currentHeight =
+        handheld ? settings.handheld_resolution() : settings.resolution();
+    addRow("capacity/reco_resolution"_i18n, resolutionName(currentHeight),
+           resolutionName(rec.resolution.value_or(currentHeight)));
+
+    const int currentPacing = std::clamp(settings.frames_queue_size(), 1, 3);
+    addRow("capacity/reco_pacing"_i18n, pacingName(currentPacing),
+           pacingName(rec.frame_pacing.value_or(currentPacing)));
+
+    recoBox->setVisibility(Visibility::VISIBLE);
+}
+
 void CapacityTestView::applyRecommendation() {
-    if (phase != Phase::Done || !verdict || verdict->recommended_kbps <= 0)
+    if (phase != Phase::Done || !recommendation ||
+        recommendation->bitrate_kbps <= 0)
         return;
     auto& settings = Settings::instance();
-    const int kbps = verdict->recommended_kbps;
-    // Only the profile the test ran with.
+    const auto& rec = *recommendation;
+    // Bitrate and resolution: only the profile the test ran with.
     if (apply_target(settings.mode_profiles(), handheldWhenTested) ==
         ProfileTarget::Handheld) {
-        settings.set_handheld_bitrate(kbps);
-        if (applyResolution)
-            settings.set_handheld_resolution(*applyResolution);
+        settings.set_handheld_bitrate(rec.bitrate_kbps);
+        if (rec.resolution)
+            settings.set_handheld_resolution(*rec.resolution);
     } else {
-        settings.set_bitrate(kbps);
-        if (applyResolution)
-            settings.set_resolution(*applyResolution);
+        settings.set_bitrate(rec.bitrate_kbps);
+        if (rec.resolution)
+            settings.set_resolution(*rec.resolution);
     }
+    // Frame pacing is a single setting for both profiles.
+    if (rec.frame_pacing)
+        settings.set_frames_queue_size(*rec.frame_pacing);
     settings.save();
-    Application::notify(brls::getStr("capacity/applied", mbps(kbps)));
+    Application::notify("capacity/applied_all"_i18n);
     close();
 }
 

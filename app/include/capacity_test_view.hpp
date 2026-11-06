@@ -105,8 +105,8 @@ class CapacityTestView : public brls::Box {
     bool stagesSkipped = false;
     // No stage fits the measured speed.
     bool tooSlow = false;
-    // Set in finish(): resolution height the Apply button also writes.
-    std::optional<int> applyResolution;
+    // Set in finish(): what the Apply button writes.
+    std::optional<StreamRecommendation> recommendation;
 
     // Widgets
     brls::Label* introLabel = nullptr;
@@ -117,6 +117,11 @@ class CapacityTestView : public brls::Box {
     brls::Label* bitrateValue = nullptr;
     brls::Label* statusLabel = nullptr;
     brls::Box* table = nullptr;
+    // Free space under the results; the stage stream plays centred in it.
+    brls::Box* preview = nullptr;
+    // Recommended settings, shown in the preview space once the test ends.
+    brls::Box* recoBox = nullptr;
+    brls::Box* recoRows = nullptr;
     brls::Label* verdictLabel = nullptr;
     brls::Label* warningLabel = nullptr;
     brls::Button* startButton = nullptr;
@@ -128,6 +133,16 @@ class CapacityTestView : public brls::Box {
     brls::Box* makeCard(const std::string& title, brls::Label** value,
                         brls::Label** detail);
     void setStreamingBackdrop(bool streaming);
+  public:
+    // Preview rectangle the frame leaves unpainted while a stage streams.
+    bool streamingHole(float& x, float& y, float& w, float& h) const;
+  private:
+    void showRecommendation();
+    std::string resolutionName(int height) const;
+    static std::string pacingName(int framesQueue);
+    // The 16:9 rectangle (UI coordinates) the stage stream is drawn into.
+    void previewRect(float& x, float& y, float& w, float& h) const;
+    bool streamingBackdrop = false;
     std::string dec(double value, int decimals = 1) const;
     std::string mbps(int kbps) const;
 

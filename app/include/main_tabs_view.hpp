@@ -25,9 +25,18 @@ class MainTabs : public brls::TabFrame {
 
     static MainTabs* getInstanse() { return instanse; }
 
+    // The home screen has no header; screens opened from it bring it back.
+    static void presentWithHeader(brls::View* from, brls::View* view);
+
+    // Called once a PC is paired from the add PC screen: goes back home and
+    // rebuilds the tabs so the new card shows up.
+    void onHostAdded();
+
   private:
     bool lastHasAnyFavorites = false;
     inline static MainTabs* instanse;
 
     FavoriteTab* favoriteTab;
+    brls::AppletFrame* frame = nullptr;
+    bool presenting = false;
 };

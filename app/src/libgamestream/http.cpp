@@ -24,9 +24,11 @@
 #include <borealis/core/logger.hpp>
 
 #include <curl/curl.h>
+#include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <mutex>
+#include <string>
 
 static bool curlGlobalInit = false;
 static std::string certificateFilePath;
@@ -58,11 +60,7 @@ static size_t _write_curl(void* contents, size_t size, size_t nmemb,
 int http_init(const std::string& key_directory) {
     if (!curlGlobalInit) {
 #if LIBCURL_VERSION_NUM >= 0x075600
-#ifdef USE_OPENSSL_CRYPTO
-        curl_global_sslset(CURLSSLBACKEND_OPENSSL, NULL, NULL);
-#elif USE_MBEDTLS_CRYPTO
         curl_global_sslset(CURLSSLBACKEND_MBEDTLS, NULL, NULL);
-#endif
 #endif
         curl_global_init(CURL_GLOBAL_ALL);
         brls::Logger::info("Curl: {}", curl_version());
@@ -208,14 +206,31 @@ struct SpeedState {
     std::chrono::steady_clock::time_point start;
     std::chrono::steady_clock::time_point lastReport;
     uint64_t bytes = 0;
+    // Start of the body: a host without the endpoint answers HTTP 200 with
+    // a short GameStream XML error instead of the data stream.
+    std::string head;
 };
+
+// status_code from a GameStream XML reply (<root status_code="404" ...>),
+// or 0 when the body is not one.
+long xml_status_code(const std::string& body) {
+    if (body.find("<root") == std::string::npos)
+        return 0;
+    const std::string key = "status_code=\"";
+    const size_t at = body.find(key);
+    if (at == std::string::npos)
+        return 0;
+    return std::strtol(body.c_str() + at + key.size(), nullptr, 10);
+}
 } // namespace
 
 static size_t _write_count(void* contents, size_t size, size_t nmemb,
                            void* userp) {
-    (void)contents;
     auto* state = (SpeedState*)userp;
     size_t n = size * nmemb;
+    if (state->head.size() < 256)
+        state->head.append(static_cast<const char*>(contents),
+                           std::min(n, 256 - state->head.size()));
     state->bytes += n;
 
     auto now = std::chrono::steady_clock::now();
@@ -271,6 +286,17 @@ int http_download_discard(
         ret = GS_IO_ERROR;
     } else {
         ret = status_to_result(curl);
+        const long xmlStatus =
+            state.bytes <= state.head.size() ? xml_status_code(state.head) : 0;
+        if (ret == GS_OK && xmlStatus == 404) {
+            gs_set_error("Host does not support this feature");
+            ret = GS_NOT_SUPPORTED;
+        } else if (ret == GS_OK && xmlStatus != 0 && xmlStatus != 200) {
+            gs_set_error("Host error " + std::to_string(xmlStatus));
+            ret = GS_FAILED;
+        }
+        if (ret != GS_OK)
+            brls::Logger::warning("Curl: speedtest refused: {}", gs_error());
     }
     freeCurl(curl);
 

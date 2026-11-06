@@ -20,7 +20,8 @@ jobs:
         submodules: recursive
 
     - name: Remove useless fonts
-      run: rm -rf ./resources/font
+      # The Switch uses its system fonts; only Onest (the UI font) is bundled.
+      run: find ./resources/font -type f ! -name 'onest_*' -delete
 
     - name: Remove enet
       run: dkp-pacman --noconfirm -R switch-enet

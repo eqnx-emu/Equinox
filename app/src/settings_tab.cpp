@@ -15,6 +15,10 @@
 #include "helper.hpp"
 #include "button_selecting_dialog.hpp"
 #include "mapping_layout_editor.hpp"
+#include "main_tabs_view.hpp"
+#include "grid_view.hpp"
+#include "pressable_box.hpp"
+#include "bold_label.hpp"
 #include "UpscalingSupport.hpp"
 #include "StreamCapacity.hpp"
 #include <fmt/core.h>
@@ -39,9 +43,6 @@
 
 using namespace brls::literals;
 
-#if defined(PLATFORM_IOS) || defined(PLATFORM_VISIONOS)
-extern void getWindowSize(int* w, int* h);
-#endif
 
 namespace {
 void updateStrengthControl(BooleanSliderCell* cell,
@@ -82,12 +83,8 @@ std::string formatMbps(int kbps) {
 int minRecommendedFor(int resolution) {
     int nativeW = 0, nativeH = 0;
     if (resolution == -1) {
-#if defined(PLATFORM_IOS) || defined(PLATFORM_VISIONOS)
-        getWindowSize(&nativeW, &nativeH);
-#else
         nativeH = brls::Application::windowHeight;
         nativeW = brls::Application::windowWidth;
-#endif
     }
     auto [w, h] = stream_size_for(resolution, nativeW, nativeH,
                                   Settings::instance().native_resolution_scale());
@@ -144,9 +141,7 @@ SettingsTab::SettingsTab() {
 
     std::vector<std::string> resolutions = {
         "settings/resolution_native"_i18n, "360p", "480p", "540p", "720p", "1080p",
-#if !defined(__PSV__)
         "1440p",
-#endif
     };
     resolution->setText("settings/resolution"_i18n);
     resolution->setData(resolutions);
@@ -157,17 +152,13 @@ SettingsTab::SettingsTab() {
         GET_SETTINGS(resolution, 540, 3);
         GET_SETTINGS(resolution, 720, 4);
         GET_SETTINGS(resolution, 1080, 5);
-#if !defined(__PSV__)
         GET_SETTINGS(resolution, 1440, 6);
-#endif
         DEFAULT;
     }
 
     std::vector<std::string> nativeResolutionScales = {
         "0.5x", "0.75x", "1.0x",
-#if !defined(__PSV__)
         "2.0x",
-#endif
     };
     resolutionScale->setText("settings/resolution_scale"_i18n);
     resolutionScale->setData(nativeResolutionScales);
@@ -175,9 +166,7 @@ SettingsTab::SettingsTab() {
         GET_SETTINGS(resolutionScale, 50, 0);
         GET_SETTINGS(resolutionScale, 75, 1);
         GET_SETTINGS(resolutionScale, 100, 2);
-#if !defined(__PSV__)
         GET_SETTINGS(resolutionScale, 200, 3);
-#endif
         default:
             resolutionScale->setSelection(2);
             break;
@@ -187,9 +176,7 @@ SettingsTab::SettingsTab() {
             SET_SETTING(0, set_native_resolution_scale(50));
             SET_SETTING(1, set_native_resolution_scale(75));
             SET_SETTING(2, set_native_resolution_scale(100));
-#if !defined(__PSV__)
             SET_SETTING(3, set_native_resolution_scale(200));
-#endif
             DEFAULT;
         }
         updateBitrateHints();
@@ -231,18 +218,9 @@ SettingsTab::SettingsTab() {
             ditheringStrengthToSliderProgress(ditheringStrength));
         updateDitheringControls(Settings::instance().dithering());
 
-#if defined(PLATFORM_APPLE) && !defined(PLATFORM_TVOS)
-        upscaling->removeFromSuperView(true);
-        upscalingMode->init(
-            "settings/upscaling"_i18n,
-            {"hints/off"_i18n, "MetalFX", "FSR1"},
-            (int)Settings::instance().upscaling_mode(),
-            [](int value) { Settings::instance().set_upscaling_mode((UpscalingMode)value); });
-#else
         upscalingMode->removeFromSuperView(true);
         upscaling->init("settings/upscaling"_i18n, Settings::instance().upscaling(),
                         [](bool value) { Settings::instance().set_upscaling(value); });
-#endif
         rcas->init("settings/rcas_sharpening"_i18n, Settings::instance().rcas(),
                    [updateRcasControls](bool value) {
                        Settings::instance().set_rcas(value);
@@ -282,62 +260,34 @@ SettingsTab::SettingsTab() {
             SET_SETTING(3, set_resolution(540));
             SET_SETTING(4, set_resolution(720));
             SET_SETTING(5, set_resolution(1080));
-#if !defined(__PSV__)
             SET_SETTING(6, set_resolution(1440));
-#endif
             DEFAULT;
         }
         updateNativeResolutionScaleVisibility();
         updateBitrateHints();
     });
 
-#if defined(__PSV__)
-    std::vector<std::string> fpss = {
-        "24",
-        "30",
-        "40",
-        "50",
-        "60",
-    };
-#else
     std::vector<std::string> fpss = {
         "30",
         "40",
         "60",
         "120",
     };
-#endif
     fps->setText("settings/fps"_i18n);
     fps->setData(fpss);
     switch (Settings::instance().fps()) {
-#if defined(__PSV__)
-        GET_SETTINGS(fps, 24, 0);
-        GET_SETTINGS(fps, 30, 1);
-        GET_SETTINGS(fps, 40, 2);
-        GET_SETTINGS(fps, 50, 3);
-        GET_SETTINGS(fps, 60, 4);
-#else
         GET_SETTINGS(fps, 30, 0);
         GET_SETTINGS(fps, 40, 1);
         GET_SETTINGS(fps, 60, 2);
         GET_SETTINGS(fps, 120, 3);
-#endif
         DEFAULT;
     }
     fps->getEvent()->subscribe([this](int selected) {
         switch (selected) {
-#if defined(__PSV__)
-            SET_SETTING(0, set_fps(24));
-            SET_SETTING(1, set_fps(30));
-            SET_SETTING(2, set_fps(40));
-            SET_SETTING(3, set_fps(50));
-            SET_SETTING(4, set_fps(60));
-#else
             SET_SETTING(0, set_fps(30));
             SET_SETTING(1, set_fps(40));
             SET_SETTING(2, set_fps(60));
             SET_SETTING(3, set_fps(120));
-#endif
             DEFAULT;
         }
         updateBitrateHints();
@@ -378,9 +328,7 @@ SettingsTab::SettingsTab() {
 
     std::vector<VideoCodec> supportedCodecs = {
         H264,
-#if !defined(__PSV__)
         H265,
-#endif
     };
 
     std::vector<std::string> supportedCodecNames;
@@ -405,22 +353,14 @@ SettingsTab::SettingsTab() {
     requestHdr->init("settings/request_hdr"_i18n, Settings::instance().request_hdr(),
                      [](bool value) { Settings::instance().set_request_hdr(value); });
 
- #ifndef SUPPORT_HDR
     requestHdr->removeFromSuperView(true);
- #endif
 
     hwDecoding->init("settings/use_hw_decoding"_i18n, Settings::instance().use_hw_decoding(),
                      [](bool value) { Settings::instance().set_use_hw_decoding(value); });
 
-#if defined(__linux__) && defined(PLATFORM_DESKTOP)
-    hwDecoding->setEnabled(true);
-#else
     hwDecoding->setEnabled(false);
-#endif
 
-#if defined(__PSV__)
-    const float mbpsMaxLimit = 20000;
-#elif defined(PLATFORM_SWITCH)
+#if   defined(PLATFORM_SWITCH)
     const float mbpsMaxLimit = 100000;
 #else
     const float mbpsMaxLimit = 150000;
@@ -513,14 +453,10 @@ SettingsTab::SettingsTab() {
         "settings/paop"_i18n, Settings::instance().play_audio(),
         [](bool value) { Settings::instance().set_play_audio(value); });
 
-    swapUi->init("settings/swap_ui"_i18n, Settings::instance().swap_ui_keys(),
+    swapUi->init("settings/swap_ui"_i18n,
+                 Settings::instance().swap_game_face_buttons(),
                  [](bool value) {
-                     Settings::instance().set_swap_ui_keys(value);
-                     brls::async([value] {
-                         brls::sync([value] {
-                             brls::Application::setSwapInputKeys(value);
-                         });
-                     });
+                     Settings::instance().set_swap_game_face_buttons(value);
                  });
 
     std::vector<std::string> layouts;
@@ -573,7 +509,7 @@ SettingsTab::SettingsTab() {
                                         .get_current_mapping_layout());
                             this->swapGame->setDetailText(currentLayout.title);
                         });
-                    this->present(editor);
+                    MainTabs::presentWithHeader(this, editor);
                 }
             });
 
@@ -597,7 +533,7 @@ SettingsTab::SettingsTab() {
                                     this->swapGame->setDetailText(
                                         currentLayout.title);
                                 });
-                            this->present(editor);
+                            MainTabs::presentWithHeader(this, editor);
                         }
                     });
                 return true;
@@ -880,6 +816,129 @@ SettingsTab::SettingsTab() {
         Updater::checkAndPrompt(false);
         return true;
     });
+
+    setupGroups();
+}
+
+namespace {
+// Menu card for a settings group: Material icon, name and what it covers.
+PressableBox* makeGroupCard(const std::string& icon, const std::string& title,
+                   const std::string& summary) {
+    Theme theme = Application::getTheme();
+
+    auto* card = new PressableBox(Axis::COLUMN);
+    card->setWidth(200);
+    card->setHeight(184);
+    card->setPadding(18, 18, 18, 18);
+    card->setCornerRadius(16);
+    card->setHighlightCornerRadius(18);
+    card->setHideHighlightBackground(true);
+    card->setBackgroundColor(theme.getColor("equinox/card"));
+    card->setFocusable(true);
+    card->addGestureRecognizer(new TapGestureRecognizer(card));
+
+    auto* badge = new Box(Axis::ROW);
+    badge->setWidth(48);
+    badge->setHeight(48);
+    badge->setCornerRadius(24);
+    badge->setJustifyContent(JustifyContent::CENTER);
+    badge->setAlignItems(AlignItems::CENTER);
+    badge->setBackgroundColor(theme.getColor("equinox/sky_night"));
+
+    auto* glyph = new IconLabel();
+    glyph->setFontSize(26);
+    glyph->setTextColor(theme.getColor("equinox/sun"));
+    glyph->setText(icon);
+    badge->addView(glyph);
+    card->addView(badge);
+
+    auto* name = new BoldLabel();
+    name->setFontSize(19);
+    name->setMarginTop(14);
+    name->setSingleLine(true);
+    name->setText(title);
+    card->addView(name);
+
+    auto* text = new Label();
+    text->setFontSize(14);
+    text->setMarginTop(4);
+    text->setTextColor(theme.getColor("equinox/muted"));
+    text->setText(summary);
+    card->addView(text);
+
+    return card;
+}
+} // namespace
+
+void SettingsTab::setupGroups() {
+    // Material Icons code points.
+    static const std::pair<const char*, const char*> ids[] = {
+        {"video", "\ue04b"},     // videocam
+        {"handheld", "\ue0d3"},  // stay_current_landscape
+        {"image", "\ue429"},     // tune
+        {"audio", "\ue050"},     // volume_up
+        {"controls", "\ue338"},  // videogame_asset
+        {"shortcuts", "\ue3e7"}, // flash_on
+        {"input", "\ue312"},     // keyboard
+        {"system", "\ue8b8"},    // settings
+    };
+
+    pageTitle->setText("tabs/settings"_i18n);
+
+    auto* grid = new GridView(4);
+    for (const auto& [id, icon] : ids) {
+        const std::string key = std::string("settings/groups/") + id;
+        auto* content = dynamic_cast<Box*>(getView(std::string("group_") + id));
+        if (!content)
+            continue;
+
+        // Skip groups whose settings do not apply to this platform.
+        bool hasVisibleSetting = false;
+        for (View* child : content->getChildren()) {
+            if (child->getVisibility() != Visibility::GONE &&
+                !dynamic_cast<Header*>(child)) {
+                hasVisibleSetting = true;
+                break;
+            }
+        }
+        if (!hasVisibleSetting)
+            continue;
+
+        const size_t index = groups.size();
+        const std::string title = brls::getStr(key + "/title");
+        PressableBox* card = makeGroupCard(icon, title, brls::getStr(key + "/summary"));
+        groups.push_back({card, content, title});
+        grid->addView(card);
+
+        card->registerClickAction([this, card, index](View* view) {
+            card->press([this, index] { openGroup(index); });
+            return true;
+        });
+        content->registerAction("hints/back"_i18n, BUTTON_B,
+                                [this, index](View* view) {
+                                    closeGroup(index);
+                                    return true;
+                                });
+    }
+    menu->addView(grid);
+}
+
+void SettingsTab::openGroup(size_t index) {
+    menu->setVisibility(Visibility::GONE);
+    for (size_t i = 0; i < groups.size(); i++)
+        groups[i].content->setVisibility(i == index ? Visibility::VISIBLE
+                                                    : Visibility::GONE);
+    pageTitle->setText(groups[index].title);
+    scroll->setContentOffsetY(0, false);
+    Application::giveFocus(groups[index].content);
+}
+
+void SettingsTab::closeGroup(size_t index) {
+    groups[index].content->setVisibility(Visibility::GONE);
+    menu->setVisibility(Visibility::VISIBLE);
+    pageTitle->setText("tabs/settings"_i18n);
+    scroll->setContentOffsetY(0, false);
+    Application::giveFocus(groups[index].entry);
 }
 
 void SettingsTab::updateDeadZoneItems() {

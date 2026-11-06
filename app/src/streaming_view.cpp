@@ -32,9 +32,6 @@
 using namespace brls;
 using namespace brls::literals;
 
-#ifdef PLATFORM_TVOS
-extern void updatePreferredDisplayMode(bool streamActive);
-#endif
 
 void setBottomBarStatus(const char *value) {
 #if defined(__SDL2__) || defined(__SDL3__)
@@ -86,9 +83,6 @@ StreamingView::StreamingView(const Host& host, const AppInfo& app) : host(host),
 
     session = new MoonlightSession(host.preferred_address(), app.app_id);
 
-#ifdef PLATFORM_TVOS
-        updatePreferredDisplayMode(true);
-#endif
 
     ASYNC_RETAIN
     GameStreamClient::instance().connect(
@@ -382,9 +376,6 @@ void StreamingView::draw(NVGcontext* vg, float x, float y, float width,
     if (session->use_hdr() != m_use_hdr) {
         m_use_hdr = session->use_hdr();
 
-#ifdef PLATFORM_TVOS
-        updatePreferredDisplayMode(true);
-#endif
     }
 
     if (draw_stats) {
@@ -748,9 +739,6 @@ void StreamingView::onLayout() {
 }
 
 StreamingView::~StreamingView() {
-#ifdef PLATFORM_TVOS
-    updatePreferredDisplayMode(false);
-#endif
     
     MoonlightInputManager::instance().stopControllerPolling();
     Application::getPlatform()->disableScreenDimming(false);

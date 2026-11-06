@@ -8,6 +8,8 @@
 #pragma once
 
 #include <borealis.hpp>
+#include <string>
+#include <vector>
 
 #include "views/boolean_slider_cell.hpp"
 
@@ -66,9 +68,26 @@ class SettingsTab : public brls::Box {
     BRLS_BIND(brls::BooleanCell, writeLog, "writeLog");
     BRLS_BIND(brls::DetailCell, checkUpdate, "check_update");
 
+    BRLS_BIND(brls::ScrollingFrame, scroll, "scroll");
+    BRLS_BIND(brls::Label, pageTitle, "page_title");
+    BRLS_BIND(brls::Box, menu, "menu");
+
     static brls::View* create();
 
   private:
+    // Settings are split into groups: the tab opens on a menu with one entry
+    // per group, and B goes back to it from inside a group.
+    struct Group {
+        brls::Box* entry;
+        brls::Box* content;
+        std::string title;
+    };
+    std::vector<Group> groups;
+
+    void setupGroups();
+    void openGroup(size_t index);
+    void closeGroup(size_t index);
+
     void setupButtonsSelectorCell(brls::DetailCell* cell,
                                   std::vector<brls::ControllerButton> buttons);
     std::string getTextFromButtons(std::vector<brls::ControllerButton> buttons);

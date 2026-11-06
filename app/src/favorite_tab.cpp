@@ -53,13 +53,10 @@ void FavoriteTab::updateAppList() {
             auto* cell = new AppCell(host, info, 0);
             gridView->addView(cell);
 
-#if defined(PLATFORM_SWITCH) || defined(PLATFORM_IOS)
+#if defined(PLATFORM_SWITCH)
             cell->registerAction(
                 "forwarder/make"_i18n, BUTTON_X,
                 [host, app](View* view) {
-#ifdef PLATFORM_IOS
-                    makeForwarder(host, app, false);
-#else
                     const int rc = makeForwarder(host, app, false);
                     const std::string message =
                         rc == EXIT_SUCCESS
@@ -69,7 +66,6 @@ void FavoriteTab::updateAppList() {
                     auto dialog = new Dialog(message);
                     dialog->addButton("common/cancel"_i18n, [](){});
                     dialog->open();
-#endif
                     return true;
             });
 #endif

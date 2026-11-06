@@ -63,6 +63,7 @@
         justifyContent="flexEnd">
 
         <brls:Box
+            id="caption"
             width="auto"
             height="auto"
             minHeight="34"

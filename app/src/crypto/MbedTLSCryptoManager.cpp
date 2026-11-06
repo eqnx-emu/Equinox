@@ -1,4 +1,3 @@
-#ifdef USE_MBEDTLS_CRYPTO
 
 #include "MbedTLSCryptoManager.hpp"
 #include "Settings.hpp"
@@ -320,4 +319,3 @@ static bool _generate_new_cert_key_pair() {
     return true;
 }
 
-#endif

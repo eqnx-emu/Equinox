@@ -89,66 +89,20 @@ void prepareD3D11Setup(D3D11State& state, int video_format) {
 }
 
 int initializeD3D11HardwareDevice(D3D11State& state, AVBufferRef*& hw_device_ctx) {
+    // Decode on a device of its own and copy frames to system memory for the
+    // renderer. Sharing the renderer's immediate context with the decoder
+    // thread made decodes wait on the UI thread (tens of ms per frame) and,
+    // without multithread protection, hang inside the driver when the stream
+    // was stopped. This build is for local testing, so simple beats zero-copy.
     state.deviceSharedWithRenderer = false;
     state.unavailableReason = nullptr;
 
-    auto* videoContext = static_cast<brls::SDLVideoContext*>(brls::Application::getPlatform()->getVideoContext());
-    if (videoContext == nullptr) {
-        brls::Logger::error("FFmpeg: SDL video context is unavailable for D3D11 decoding");
-        return AVERROR(EINVAL);
-    }
-
-    auto* d3d11Context = videoContext->getD3D11Context();
-    if (d3d11Context == nullptr) {
-        brls::Logger::error("FFmpeg: Borealis D3D11 context is unavailable for hardware decoding");
-        return AVERROR(EINVAL);
-    }
-
-    ID3D11Device* device = d3d11Context->getDevice();
-    ID3D11DeviceContext* deviceContext = d3d11Context->getDeviceContext();
-    if (device == nullptr || deviceContext == nullptr) {
-        brls::Logger::error("FFmpeg: Failed to acquire shared D3D11 device for decoding");
-        return AVERROR(EINVAL);
-    }
-
-    hw_device_ctx = av_hwdevice_ctx_alloc(AV_HWDEVICE_TYPE_D3D11VA);
-    if (hw_device_ctx == nullptr) {
-        brls::Logger::error("FFmpeg: Couldn't allocate D3D11 hardware device context");
-        return AVERROR(ENOMEM);
-    }
-
-    auto* deviceContextRef = reinterpret_cast<AVHWDeviceContext*>(hw_device_ctx->data);
-    auto* d3d11DeviceContext = reinterpret_cast<AVD3D11VADeviceContext*>(deviceContextRef->hwctx);
-
-    device->AddRef();
-    deviceContext->AddRef();
-    d3d11DeviceContext->device = device;
-    d3d11DeviceContext->device_context = deviceContext;
-
-    ID3D11VideoDevice* videoDevice = nullptr;
-    const HRESULT videoHr = device->QueryInterface(IID_PPV_ARGS(&videoDevice));
-    if (FAILED(videoHr) || videoDevice == nullptr) {
-        av_buffer_unref(&hw_device_ctx);
-        state.unavailableReason = "shared renderer device does not expose D3D11 video decode support";
-        return AVERROR(ENOSYS);
-    }
-
-    const UINT decoderProfileCount = videoDevice->GetVideoDecoderProfileCount();
-    videoDevice->Release();
-
-    if (decoderProfileCount == 0) {
-        av_buffer_unref(&hw_device_ctx);
-        state.unavailableReason = "shared renderer device reports no video decoder profiles";
-        return AVERROR(ENOSYS);
-    }
-
-    const int err = av_hwdevice_ctx_init(hw_device_ctx);
+    const int err = av_hwdevice_ctx_create(&hw_device_ctx, AV_HWDEVICE_TYPE_D3D11VA,
+                                           nullptr, nullptr, 0);
     if (err < 0) {
-        av_buffer_unref(&hw_device_ctx);
-    } else {
-        state.deviceSharedWithRenderer = true;
+        hw_device_ctx = nullptr;
+        state.unavailableReason = "no D3D11 video decode device";
     }
-
     return err;
 }
 

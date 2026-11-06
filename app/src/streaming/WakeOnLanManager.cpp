@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#if defined(__linux) || defined(__APPLE__) || defined(__SWITCH__) || defined(__vita__)
+#if defined(__SWITCH__)
 #define UNIX_SOCKS
 #include <arpa/inet.h>
 #include <netdb.h>

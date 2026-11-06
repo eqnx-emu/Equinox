@@ -834,7 +834,29 @@ void D3D11VideoRenderer::draw(NVGcontext* vg, int width, int height, AVFrame* fr
     m_deviceContext->RSSetState(m_rasterizerState);
     m_deviceContext->OMSetDepthStencilState(m_depthStencilState, 0);
     m_deviceContext->OMSetBlendState(m_blendState, nullptr, FullBlendMask);
+
+    // A target rect draws into part of the window; NanoVG relies on the
+    // full-window viewport, so put it back afterwards.
+    const bool useTargetRect = m_target_w > 0 && m_target_h > 0;
+    D3D11_VIEWPORT previousViewport = {};
+    UINT viewportCount = 1;
+    if (useTargetRect) {
+        m_deviceContext->RSGetViewports(&viewportCount, &previousViewport);
+        D3D11_VIEWPORT target = {};
+        target.TopLeftX = static_cast<float>(m_target_x);
+        target.TopLeftY = static_cast<float>(m_target_y);
+        target.Width = static_cast<float>(m_target_w);
+        target.Height = static_cast<float>(m_target_h);
+        target.MinDepth = 0.0f;
+        target.MaxDepth = 1.0f;
+        m_deviceContext->RSSetViewports(1, &target);
+    }
+
     m_deviceContext->Draw(4, 0);
+
+    if (useTargetRect && viewportCount == 1) {
+        m_deviceContext->RSSetViewports(1, &previousViewport);
+    }
 
     ID3D11ShaderResourceView* nullShaderResourceViews[MAX_VIDEO_PLANES] = {nullptr, nullptr, nullptr};
     m_deviceContext->PSSetShaderResources(0, MAX_VIDEO_PLANES, nullShaderResourceViews);

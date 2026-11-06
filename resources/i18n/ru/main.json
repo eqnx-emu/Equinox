@@ -1,9 +1,7 @@
 {
     "about": {
         "about": "Moonlight-Switch - это сторонний клиент потоковой передачи игр для Nintendo Switch основанный на Moonlight-Common-C",
-        "link_gbatemp": "Страница на GbaTemp",
         "link_github": "Страница на GitHub",
-        "link_patreon": "Страница на Patreon",
         "links": "Ссылки",
         "thanks": "Отдельное спасибо",
         "thanks_1": " Rock88 и Moonlight-NX, много кода было переиспользовано в этом приложении",
@@ -13,7 +11,10 @@
         "thanks_5": " Всем, кто принимал участие в разработке данного приложения",
         "thanks_6": " Вам, за то что используете моё Homebrew",
         "title": "О программе",
-        "version": "Moonlight-Switch v{} от XITRIX"
+        "version": "Equinox v{}",
+        "fork_title": "Based on Moonlight-Switch",
+        "fork_text": "Equinox is an unofficial fork of Moonlight-Switch by XITRIX. Most of the streaming client comes from that project and from Moonlight. Equinox is not affiliated with or endorsed by their authors.",
+        "link_original": "Original project: Moonlight-Switch"
     },
     "add_host": {
         "connect": "Подключиться",
@@ -36,7 +37,11 @@
         "terminate_current_app": "Завершить текущее приложение",
         "terminate_postfix": "\n\nВесь несохранённый прогресс будет утерян",
         "terminate_prefix": "Закрыть ",
-        "unstar": "Убрать из избранного"
+        "unstar": "Убрать из избранного",
+        "running_now": "Running now",
+        "favorite": "Favorite",
+        "ready": "Ready to play",
+        "another_running": "Close the running game to play this one"
     },
     "common": {
         "cancel": "Отмена",
@@ -60,9 +65,7 @@
     "forwarder": {
         "install_failed": "Не удалось установить форвардер\n0x{:X}",
         "installed": "Форвардер установлен",
-        "make": "Создать форвардер",
-        "open_shortcuts": "Открыть Команды",
-        "shortcuts_message": "Приложение может использовать Команды для создания действий запуска."
+        "make": "Создать форвардер"
     },
     "hints": {
         "back": "Назад",
@@ -80,7 +83,6 @@
         "remove_message": "Вы уверены что хотите удалить этот хост?",
         "status": "Статус",
         "unable": "Не доступен",
-        "wait": "Ожидайте...",
         "wake_up": "Разбудить",
         "wake_up_error": "Не удалось разбудить хост",
         "wake_up_message": "Пытаемся разбудить"
@@ -206,5 +208,11 @@
         "favorites": "Избранные",
         "settings": "Настройки"
     },
-    "title": "Equinox"
+    "title": "Equinox",
+    "hosts": {
+        "games_count": "{} games",
+        "games_one": "1 game",
+        "favorites_count": "{} favorites",
+        "favorites_one": "1 favorite"
+    }
 }

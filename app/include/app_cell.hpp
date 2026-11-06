@@ -10,6 +10,8 @@
 #include <borealis.hpp>
 #include "GameStreamClient.hpp"
 
+#include <functional>
+
 using namespace brls;
 
 class AppCell : public Box {
@@ -21,8 +23,14 @@ class AppCell : public Box {
     BRLS_BIND(Image, currentAppImage, "current_app_image");
     BRLS_BIND(Image, favoriteAppImage, "favorite_app_image");
     BRLS_BIND(Rectangle, unactiveLayer, "unactive_layer");
+    BRLS_BIND(Box, caption, "caption");
 
     void setFavorite(bool favorite);
+    // Hide the name bar on the cover (the library shows the name below).
+    void setCaptionVisible(bool visible);
+
+    // Asked before starting the stream; return false to only select.
+    std::function<bool()> beforeLaunch;
 
   private:
     void updateFavoriteAction(Host host, AppInfo app);

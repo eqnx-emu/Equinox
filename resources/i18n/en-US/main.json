@@ -1,9 +1,7 @@
 {
     "about": {
-        "about": "Equinox is a third-party game streaming client based on Moonlight-Common-C for the Nintendo Switch",
-        "link_gbatemp": "GbaTemp Page",
-        "link_github": "GitHub Page",
-        "link_patreon": "Patreon Page",
+        "about": "Equinox is a game streaming client for the Nintendo Switch, built to pair with the Solstice host. It also works with Sunshine.",
+        "link_github": "Equinox on GitHub",
         "links": "Links",
         "thanks": "Special Thanks",
         "thanks_1": " Rock88 and his Moonlight-NX, lots of code was reused in this app",
@@ -13,7 +11,10 @@
         "thanks_5": " Everyone involved into app development",
         "thanks_6": " You, for using my homebrew!",
         "title": "About",
-        "version": "Equinox v{}, based on Moonlight-Switch by XITRIX"
+        "version": "Equinox v{}",
+        "fork_title": "Based on Moonlight-Switch",
+        "fork_text": "Equinox is an unofficial fork of Moonlight-Switch by XITRIX. Most of the streaming client comes from that project and from Moonlight. Equinox is not affiliated with or endorsed by their authors.",
+        "link_original": "Original project: Moonlight-Switch"
     },
     "add_host": {
         "connect": "Connect",
@@ -36,7 +37,11 @@
         "terminate_current_app": "Terminate current app",
         "terminate_postfix": "\n\nAll unsaved progress could be lost",
         "terminate_prefix": "Terminate ",
-        "unstar": "Unstar"
+        "unstar": "Unstar",
+        "running_now": "Running now",
+        "favorite": "Favorite",
+        "ready": "Ready to play",
+        "another_running": "Close the running game to play this one"
     },
     "capacity": {
         "action": "Connection test",
@@ -52,11 +57,16 @@
         "cancel": "Cancel",
         "cancelling": "Cancelling...",
         "close": "Close",
-        "apply": "Apply {} Mbps",
-        "apply_at": "Apply {} Mbps at {}p",
         "too_slow": "Connection too slow to stream",
         "start_failed": "The host refused to start the test stream",
-        "applied": "Bitrate set to {} Mbps",
+        "apply_all": "Apply recommended settings",
+        "applied_all": "Recommended settings applied",
+        "reco_title": "Recommended settings",
+        "reco_bitrate": "Bitrate",
+        "reco_resolution": "Resolution",
+        "reco_pacing": "Frame pacing",
+        "reco_change": "{} → {}",
+        "reco_keep": "{} · already right",
         "latency_progress": "Latency {}/{}",
         "speed_progress": "Speed {} s — {} Mbps",
         "stage_progress": "Stage {}/{} — {} Mbps",
@@ -108,9 +118,7 @@
     "forwarder": {
         "install_failed": "Forwarder install failed\n0x{:X}",
         "installed": "Forwarder installed",
-        "make": "Make forwarder",
-        "open_shortcuts": "Open Shortcuts",
-        "shortcuts_message": "This app can use the Shortcuts app to create launch actions."
+        "make": "Make forwarder"
     },
     "hints": {
         "back": "Back",
@@ -128,7 +136,6 @@
         "remove_message": "Are you sure you want to remove this host?",
         "status": "Status",
         "unable": "Unable",
-        "wait": "Wait...",
         "wake_up": "Wake up",
         "wake_up_error": "Could not wake up the host",
         "wake_up_message": "Sending Wake Up"
@@ -221,7 +228,7 @@
         "swap_mouse_keys": "Swap mouse  and  buttons",
         "swap_mouse_scroll": "Swap mouse vertical scrolling direction",
         "swap_stick_to_dpad": "Use Stick as D-Pad",
-        "swap_ui": "Swap / and / for UI",
+        "swap_ui": "Swap / and / in games",
         "system_button_duplication_error": "Another action already use this system button.",
         "touchscreen_mouse_mode": "Touchscreen mode",
         "use_hw_decoding": "Enable hardware acceleration",
@@ -230,7 +237,41 @@
         "video_bitrate": "Video bitrate",
         "video_codec": "Video codec",
         "volume_amplification": "Allow volume amplification",
-        "zero_threads": "0 (No use threads)"
+        "zero_threads": "0 (No use threads)",
+        "groups": {
+            "video": {
+                "title": "Video",
+                "summary": "Resolution, frame rate, codec and bitrate"
+            },
+            "handheld": {
+                "title": "Handheld mode",
+                "summary": "Separate resolution and bitrate when undocked"
+            },
+            "image": {
+                "title": "Image",
+                "summary": "Upscaling, sharpening and dithering"
+            },
+            "audio": {
+                "title": "Audio",
+                "summary": "Audio driver, PC sound and volume"
+            },
+            "controls": {
+                "title": "Controls",
+                "summary": "Button layout, dead zones and rumble"
+            },
+            "shortcuts": {
+                "title": "Shortcuts",
+                "summary": "Guide button, in-game overlay and mouse mode"
+            },
+            "input": {
+                "title": "Keyboard and mouse",
+                "summary": "Keyboard type, touch mouse and pointer speed"
+            },
+            "system": {
+                "title": "System",
+                "summary": "Debug log and updates"
+            }
+        }
     },
     "streaming": {
         "bad_connection": "Bad connection...",
@@ -254,7 +295,8 @@
         "about": "About",
         "add_host": "Add host",
         "favorites": "Favorites",
-        "settings": "Settings"
+        "settings": "Settings",
+        "hosts": "Your PCs"
     },
     "update": {
         "title": "Updates",
@@ -268,5 +310,32 @@
         "up_to_date": "Equinox is up to date.",
         "unsupported": "Updates only work when Equinox is launched as an NRO from the SD card."
     },
-    "title": "Equinox"
+    "title": "Equinox",
+    "hosts": {
+        "title": "Your PCs",
+        "subtitle": "Pick a PC to see its games.",
+        "empty": "Pair a PC to start streaming.",
+        "status_fetching": "Looking for it...",
+        "status_online": "Online",
+        "status_asleep": "Off or asleep",
+        "status_unreachable": "Out of reach",
+        "running_caption": "Running now",
+        "running_loading": "Loading...",
+        "running_unknown": "Unknown game",
+        "action_open": "Open",
+        "action_resume": "Resume game",
+        "action_wake": "Wake up",
+        "action_retry": "Try again",
+        "wake": "Wake up",
+        "library": "Games",
+        "options": "Options",
+        "add_title": "New PC",
+        "add_body": "Find one on your network or type its IP address.",
+        "add_action": "Add PC",
+        "add_screen": "Add a PC",
+        "games_count": "{} games",
+        "games_one": "1 game",
+        "favorites_count": "{} favorites",
+        "favorites_one": "1 favorite"
+    }
 }
