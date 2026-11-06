@@ -230,7 +230,41 @@
         "video_bitrate": "Bitrate do vídeo",
         "video_codec": "Codec de vídeo",
         "volume_amplification": "Permitir amplificação de volume",
-        "zero_threads": "0 (Não usar threads)"
+        "zero_threads": "0 (Não usar threads)",
+        "groups": {
+            "video": {
+                "title": "Vídeo",
+                "summary": "Resolução, FPS, codec e bitrate"
+            },
+            "handheld": {
+                "title": "Modo portátil",
+                "summary": "Resolução e bitrate próprios fora da base"
+            },
+            "image": {
+                "title": "Imagem",
+                "summary": "Upscaling, nitidez e dithering"
+            },
+            "audio": {
+                "title": "Áudio",
+                "summary": "Driver de áudio, som do PC e volume"
+            },
+            "controls": {
+                "title": "Controles",
+                "summary": "Botões, zonas mortas e vibração"
+            },
+            "shortcuts": {
+                "title": "Atalhos",
+                "summary": "Tecla Guia, sobreposição em jogo e modo mouse"
+            },
+            "input": {
+                "title": "Teclado e mouse",
+                "summary": "Tipo de teclado, mouse por toque e velocidade"
+            },
+            "system": {
+                "title": "Sistema",
+                "summary": "Log de depuração e atualizações"
+            }
+        }
     },
     "streaming": {
         "bad_connection": "Conexão ruim...",

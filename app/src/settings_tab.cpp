@@ -881,6 +881,72 @@ SettingsTab::SettingsTab() {
         Updater::checkAndPrompt(false);
         return true;
     });
+
+    setupGroups();
+}
+
+void SettingsTab::setupGroups() {
+    static const char* const ids[] = {"video",    "handheld",  "image", "audio",
+                                      "controls", "shortcuts", "input", "system"};
+
+    pageTitle->setText("tabs/settings"_i18n);
+
+    for (const char* id : ids) {
+        const std::string key = std::string("settings/groups/") + id;
+        auto* entry = dynamic_cast<DetailCell*>(getView(std::string("menu_") + id));
+        auto* content = dynamic_cast<Box*>(getView(std::string("group_") + id));
+        if (!entry || !content)
+            continue;
+
+        // Hide groups whose settings do not apply to this platform.
+        bool hasVisibleSetting = false;
+        for (View* child : content->getChildren()) {
+            if (child->getVisibility() != Visibility::GONE &&
+                !dynamic_cast<Header*>(child)) {
+                hasVisibleSetting = true;
+                break;
+            }
+        }
+        if (!hasVisibleSetting) {
+            entry->setVisibility(Visibility::GONE);
+            continue;
+        }
+
+        const size_t index = groups.size();
+        groups.push_back({entry, content, brls::getStr(key + "/title")});
+
+        entry->setText(groups.back().title);
+        entry->setDetailText(brls::getStr(key + "/summary"));
+        entry->setDetailTextColor(Application::getTheme()["brls/text_disabled"]);
+        entry->registerClickAction([this, index](View* view) {
+            openGroup(index);
+            return true;
+        });
+
+        content->registerAction("brls/hints/back"_i18n, BUTTON_B,
+                                [this, index](View* view) {
+                                    closeGroup(index);
+                                    return true;
+                                });
+    }
+}
+
+void SettingsTab::openGroup(size_t index) {
+    menu->setVisibility(Visibility::GONE);
+    for (size_t i = 0; i < groups.size(); i++)
+        groups[i].content->setVisibility(i == index ? Visibility::VISIBLE
+                                                    : Visibility::GONE);
+    pageTitle->setText(groups[index].title);
+    scroll->setContentOffsetY(0, false);
+    Application::giveFocus(groups[index].content);
+}
+
+void SettingsTab::closeGroup(size_t index) {
+    groups[index].content->setVisibility(Visibility::GONE);
+    menu->setVisibility(Visibility::VISIBLE);
+    pageTitle->setText("tabs/settings"_i18n);
+    scroll->setContentOffsetY(0, false);
+    Application::giveFocus(groups[index].entry);
 }
 
 void SettingsTab::updateDeadZoneItems() {
