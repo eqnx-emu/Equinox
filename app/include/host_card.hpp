@@ -14,6 +14,9 @@
 #include <Settings.hpp>
 #include <borealis.hpp>
 #include <cstdint>
+#include <map>
+#include <string>
+#include <vector>
 
 enum class HostCardState { FETCHING, ONLINE, RUNNING, ASLEEP, UNREACHABLE };
 
@@ -57,6 +60,8 @@ class HostCard : public PressableBox {
     // Last known library facts; kept while the PC is asleep or away.
     int gameCount = -1;
     int favoriteCount = 0;
+    // Games in the last app list, to count favorites still installed.
+    std::vector<int> appIds;
     bool supports4K = false;
     void updateInfo();
     HostCardState state = HostCardState::FETCHING;
@@ -65,6 +70,22 @@ class HostCard : public PressableBox {
     bool requestInFlight = false;
     uint64_t wakeRequestGeneration = 0;
     uint64_t canceledWakeRequestGeneration = 0;
+
+    // The Hosts tab is rebuilt every time it is shown. Cards remember what
+    // they last saw for a short while, so flipping tabs doesn't query every
+    // PC again.
+    struct Snapshot {
+        HostCardState state;
+        AppInfo runningApp;
+        int gameCount;
+        std::vector<int> appIds;
+        bool supports4K;
+        int64_t takenAt;
+    };
+    static std::map<std::string, Snapshot>& snapshots();
+    std::string snapshotKey() const;
+    void saveSnapshot();
+    bool restoreSnapshot();
 
     void applyState(HostCardState newState);
     void activate();

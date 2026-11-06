@@ -11,7 +11,9 @@
 #include "main_tabs_view.hpp"
 #include "streaming_view.hpp"
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <memory>
 #include <utility>
 
 using namespace brls;
@@ -200,7 +202,49 @@ HostCard::HostCard(const Host& host) : host(host) {
                        return true;
                    });
 
-    refresh();
+    if (!restoreSnapshot())
+        refresh();
+}
+
+namespace {
+constexpr int64_t SNAPSHOT_TTL_US = 15 * 1000 * 1000;
+}
+
+std::map<std::string, HostCard::Snapshot>& HostCard::snapshots() {
+    static std::map<std::string, Snapshot> map;
+    return map;
+}
+
+std::string HostCard::snapshotKey() const {
+    return !host.mac.empty() ? host.mac : host.address + "|" + host.hostname;
+}
+
+void HostCard::saveSnapshot() {
+    snapshots()[snapshotKey()] = Snapshot{state,     runningApp,
+                                          gameCount, appIds,
+                                          supports4K, (int64_t)getCPUTimeUsec()};
+}
+
+bool HostCard::restoreSnapshot() {
+    auto it = snapshots().find(snapshotKey());
+    if (it == snapshots().end() ||
+        (int64_t)getCPUTimeUsec() - it->second.takenAt > SNAPSHOT_TTL_US)
+        return false;
+
+    const Snapshot& snap = it->second;
+    runningApp = snap.runningApp;
+    gameCount = snap.gameCount;
+    appIds = snap.appIds;
+    // Stars may have changed in the library since: count them again, only
+    // for games still installed (as refresh does).
+    favoriteCount = 0;
+    for (int id : appIds)
+        if (Settings::instance().is_favorite(host, id))
+            favoriteCount++;
+    supports4K = snap.supports4K;
+    applyState(snap.state);
+    updateInfo();
+    return true;
 }
 
 void HostCard::refresh() {
@@ -226,6 +270,7 @@ void HostCard::refresh() {
                 applyState(GameStreamClient::can_wake_up_host(this->host)
                                ? HostCardState::ASLEEP
                                : HostCardState::UNREACHABLE);
+                saveSnapshot();
                 return;
             }
 
@@ -251,6 +296,9 @@ void HostCard::refresh() {
                     if (apps.isSuccess()) {
                         gameCount = (int)apps.value().size();
                         favoriteCount = 0;
+                        appIds.clear();
+                        for (const AppInfo& app : apps.value())
+                            appIds.push_back(app.app_id);
                         for (const AppInfo& app : apps.value())
                             if (Settings::instance().is_favorite(this->host,
                                                                  app.app_id))
@@ -258,8 +306,10 @@ void HostCard::refresh() {
                         updateInfo();
                     }
 
-                    if (currentGame == 0 || state != HostCardState::RUNNING)
+                    if (currentGame == 0 || state != HostCardState::RUNNING) {
+                        saveSnapshot();
                         return;
+                    }
 
                     std::string appName = "hosts/running_unknown"_i18n;
                     if (apps.isSuccess()) {
@@ -272,6 +322,7 @@ void HostCard::refresh() {
                     }
                     runningApp.name = appName;
                     detail->setText(appName);
+                    saveSnapshot();
                 });
         });
 }
@@ -379,21 +430,39 @@ void HostCard::wake() {
 
     const auto wakeRequestId = ++wakeRequestGeneration;
     canceledWakeRequestGeneration = 0;
+    auto cancel = std::make_shared<std::atomic<bool>>(false);
 
+    Label* loaderText = nullptr;
     Dialog* loader = createLoadingDialog(
-        "host/wake_up_message"_i18n, [this, wakeRequestId] {
+        "host/wake_up_message"_i18n,
+        [this, wakeRequestId, cancel] {
+            cancel->store(true);
             if (wakeRequestGeneration == wakeRequestId)
                 canceledWakeRequestGeneration = wakeRequestId;
-        });
+        },
+        &loaderText);
     loader->open();
+
+    // Shows how long the PC has had to wake up, so a slow wake doesn't
+    // look like a hang. Progress always arrives before the result, and the
+    // dialog only closes on the result or on cancel.
+    auto onProgress = [cancel, loaderText](int attempt, int total) {
+        if (cancel->load())
+            return;
+        loaderText->setText(
+            brls::getStr("host/wake_up_waiting", attempt, total));
+    };
 
     ASYNC_RETAIN
     GameStreamClient::wake_up_host(
-        host, [ASYNC_TOKEN, loader, wakeRequestId](const GSResult<bool>& result) {
+        host,
+        [ASYNC_TOKEN, cancel, loader, wakeRequestId](
+            const GSResult<bool>& result) {
             ASYNC_RELEASE
 
-            if (wakeRequestId != wakeRequestGeneration ||
-                canceledWakeRequestGeneration == wakeRequestId)
+            if (cancel->load() || wakeRequestId != wakeRequestGeneration ||
+                canceledWakeRequestGeneration == wakeRequestId ||
+                isDialogClosing(loader))
                 return;
 
             loader->close([this, result, wakeRequestId] {
@@ -405,7 +474,8 @@ void HostCard::wake() {
                 else
                     showError("host/wake_up_error"_i18n);
             });
-        });
+        },
+        onProgress, cancel);
 }
 
 void HostCard::openOptions() {

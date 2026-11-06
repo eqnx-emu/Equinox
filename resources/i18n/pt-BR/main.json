@@ -41,7 +41,8 @@
         "running_now": "Rodando agora",
         "favorite": "Favorito",
         "ready": "Pronto para jogar",
-        "another_running": "Feche o jogo aberto para jogar este"
+        "another_running": "Feche o jogo aberto para jogar este",
+        "retry": "Tentar de novo"
     },
     "capacity": {
         "action": "Teste de conexão",
@@ -113,12 +114,15 @@
         "host_not_found": "Host PC não encontrado...",
         "ip_not_obtained": "Não foi possível obter o endereço IP...",
         "stream_start": "Falha ao iniciar stream...",
-        "unknown_error": "Ocorreu um problema desconhecido..."
+        "unknown_error": "Ocorreu um problema desconhecido...",
+        "stream_start_stage": "Não foi possível iniciar o stream: falha em {} (erro {})",
+        "stream_start_ports": "Confira se o firewall do PC libera: {}"
     },
     "forwarder": {
         "install_failed": "Falha ao instalar o forwarder\n0x{:X}",
         "installed": "Forwarder instalado",
-        "make": "Criar forwarder"
+        "make": "Criar forwarder",
+        "making": "Criando forwarder…"
     },
     "hints": {
         "back": "Voltar",
@@ -138,7 +142,8 @@
         "unable": "Impossível",
         "wake_up": "Despertar",
         "wake_up_error": "Não foi possível despertar o host",
-        "wake_up_message": "Despertando"
+        "wake_up_message": "Despertando",
+        "wake_up_waiting": "Esperando o PC acordar ({}/{})"
     },
     "mapping_layout_editor": {
         "remove": "Remover layout",

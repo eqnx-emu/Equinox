@@ -25,7 +25,9 @@
 #include "HostProbe.hpp"
 #include <Limelight.h>
 #include <borealis/core/logger.hpp>
+#include <atomic>
 #include <errno.h>
+#include <mutex>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -58,6 +60,32 @@ int extractVersionQuadFromString(const char* string, int* quad) {
     return 0;
 }
 
+_SERVER_DATA& _SERVER_DATA::operator=(const _SERVER_DATA& other) {
+    if (this == &other)
+        return *this;
+    address = other.address;
+    serverInfoAppVersion = other.serverInfoAppVersion;
+    serverInfoGfeVersion = other.serverInfoGfeVersion;
+    mac = other.mac;
+    gpuType = other.gpuType;
+    paired = other.paired;
+    supports4K = other.supports4K;
+    currentGame = other.currentGame;
+    serverMajorVersion = other.serverMajorVersion;
+    gsVersion = other.gsVersion;
+    hostname = other.hostname;
+    serverInfo = other.serverInfo;
+    httpPort = other.httpPort;
+    httpsPort = other.httpsPort;
+    if (other.serverInfo.address)
+        serverInfo.address = address.c_str();
+    if (other.serverInfo.serverInfoAppVersion)
+        serverInfo.serverInfoAppVersion = serverInfoAppVersion.c_str();
+    if (other.serverInfo.serverInfoGfeVersion)
+        serverInfo.serverInfoGfeVersion = serverInfoGfeVersion.c_str();
+    return *this;
+}
+
 bool _SERVER_DATA::isSunshine() {
     int AppVersionQuad[4];
     extractVersionQuadFromString(serverInfoAppVersion.c_str(), AppVersionQuad);
@@ -84,7 +112,10 @@ static int load_serverinfo(PSERVER_DATA server, bool https) {
 
     Data data;
 
-    if (http_request(url, &data, HTTPRequestTimeoutLow) != GS_OK) {
+    // 5 s total so a PC on slow Wi-Fi or over the internet still answers;
+    // an absent or asleep one fails once connecting takes over 2 s.
+    if (http_request(url, &data, HTTPRequestTimeoutMedium,
+                     HTTPServerInfoConnectTimeout) != GS_OK) {
         ret = GS_IO_ERROR;
         goto cleanup;
     }
@@ -196,7 +227,8 @@ static int load_server_status(PSERVER_DATA server) {
     return ret;
 }
 
-static std::string _gs_error = "";
+// Per thread: requests to several PCs run at once, each sets its own error.
+static thread_local std::string _gs_error;
 
 void gs_set_error(std::string error) { _gs_error = error; }
 
@@ -239,8 +271,13 @@ static int gs_pair_validate(Data& data, std::string* result) {
     return ret;
 }
 
+// Bumped by each pairing. A cancelled one may still be waiting when the user
+// tries again; when it fails it must not unpair the newer one.
+static std::atomic<uint64_t> s_pair_generation{0};
+static thread_local uint64_t t_pair_generation = 0;
+
 static int gs_pair_cleanup(int ret, PSERVER_DATA server, std::string* result) {
-    if (ret != GS_OK) {
+    if (ret != GS_OK && t_pair_generation == s_pair_generation.load()) {
         gs_unpair(server);
     }
     return ret;
@@ -256,6 +293,7 @@ int gs_pair(PSERVER_DATA server, char* pin) {
         gs_set_error("Already paired");
         return GS_WRONG_STATE;
     }
+    t_pair_generation = ++s_pair_generation;
 
     if (server->currentGame != 0) {
         gs_set_error(
@@ -599,16 +637,23 @@ int gs_init(PSERVER_DATA server, const std::string address) {
         httpPort = atoi(seglist[1].c_str());
     }
     
-    if (!CryptoManager::load_cert_key_pair()) {
-        brls::Logger::info("Client: No certs, generate new...");
+    {
+        // Several PCs can be probed at once; only one may create the keys
+        // (or two threads write a cert and a key that don't match) and set
+        // curl up.
+        static std::mutex initMutex;
+        std::lock_guard<std::mutex> lock(initMutex);
+        if (!CryptoManager::load_cert_key_pair()) {
+            brls::Logger::info("Client: No certs, generate new...");
 
-        if (!CryptoManager::generate_new_cert_key_pair()) {
-            brls::Logger::info("Client: Failed to generate certs...");
-            return GS_FAILED;
+            if (!CryptoManager::generate_new_cert_key_pair()) {
+                brls::Logger::info("Client: Failed to generate certs...");
+                return GS_FAILED;
+            }
         }
-    }
 
-    http_init(Settings::instance().key_dir());
+        http_init(Settings::instance().key_dir());
+    }
 
     LiInitializeServerInformation(&server->serverInfo);
     server->address = seglist[0];

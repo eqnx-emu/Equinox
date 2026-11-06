@@ -41,7 +41,8 @@
         "running_now": "Running now",
         "favorite": "Favorite",
         "ready": "Ready to play",
-        "another_running": "Close the running game to play this one"
+        "another_running": "Close the running game to play this one",
+        "retry": "Try again"
     },
     "common": {
         "cancel": "Annuler",
@@ -60,12 +61,15 @@
         "host_not_found": "Machine hôte non trouvée",
         "ip_not_obtained": "Impossible de récupérer l'adresse IP",
         "stream_start": "La diffusion a échoué",
-        "unknown_error": "Une erreur inconnue s'est produite"
+        "unknown_error": "Une erreur inconnue s'est produite",
+        "stream_start_stage": "Could not start the stream: {} failed (error {})",
+        "stream_start_ports": "Check that the PC firewall allows: {}"
     },
     "forwarder": {
         "install_failed": "Échec de l'installation du forwarder\n0x{:X}",
         "installed": "Forwarder installé",
-        "make": "Créer un forwarder"
+        "make": "Créer un forwarder",
+        "making": "Creating forwarder…"
     },
     "hints": {
         "back": "Retour",
@@ -85,7 +89,8 @@
         "unable": "Injoignable",
         "wake_up": "Réveiller",
         "wake_up_error": "L'hôte n'a pas pu être réveillé",
-        "wake_up_message": "Réveil en cours..."
+        "wake_up_message": "Réveil en cours...",
+        "wake_up_waiting": "Waiting for the PC to wake up ({}/{})"
     },
     "mapping_layout_editor": {
         "remove": "Supprimer la configuration",

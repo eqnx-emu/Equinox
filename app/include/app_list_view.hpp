@@ -47,6 +47,9 @@ class AppListView : public Box {
     CarouselDots* dots;
     std::vector<AppInfo> apps;
     int currentGameId = 0;
+    // Cover to land on again after the list reloads (e.g. after a stream).
+    int restoreAppId = -1;
+    void showLoadError(const std::string& error);
     BRLS_BIND(Box, container, "container");
 
     // Colours taken from the focused game's cover, glowing behind the shelf.

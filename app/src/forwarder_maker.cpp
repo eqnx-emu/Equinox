@@ -1398,8 +1398,9 @@ std::vector<u8> normalizeForwarderIcon(std::span<const u8> bytes, bool add_moonl
     return {bytes.begin(), bytes.end()};
 }
 
-std::vector<u8> resolveForwarderIcon(const App& app, bool add_moonlight_logo) {
-    auto icon = readFileBytes(BoxArtManager::get_texture_path(app.app_id));
+std::vector<u8> resolveForwarderIcon(const Host& host, const App& app,
+                                     bool add_moonlight_logo) {
+    auto icon = readFileBytes(BoxArtManager::get_texture_path(host, app.app_id));
     if (!icon.empty()) {
         return normalizeForwarderIcon(icon, add_moonlight_logo);
     }
@@ -1427,7 +1428,7 @@ Result installForwarder(const Host& host, const App& app, bool add_moonlight_log
         return MAKERESULT(Module_Libnx, LibnxError_BadInput);
     }
 
-    const auto icon = resolveForwarderIcon(app, add_moonlight_logo);
+    const auto icon = resolveForwarderIcon(host, app, add_moonlight_logo);
     if (icon.empty()) {
         return MAKERESULT(Module_Libnx, LibnxError_NotFound);
     }

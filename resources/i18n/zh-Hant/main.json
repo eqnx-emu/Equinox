@@ -41,7 +41,8 @@
         "running_now": "Running now",
         "favorite": "Favorite",
         "ready": "Ready to play",
-        "another_running": "Close the running game to play this one"
+        "another_running": "Close the running game to play this one",
+        "retry": "Try again"
     },
     "common": {
         "cancel": "取消",
@@ -60,12 +61,15 @@
         "host_not_found": "沒有找到主機……",
         "ip_not_obtained": "無法獲取IP位址……",
         "stream_start": "開始串流失敗……",
-        "unknown_error": "發生了未知的錯誤……"
+        "unknown_error": "發生了未知的錯誤……",
+        "stream_start_stage": "Could not start the stream: {} failed (error {})",
+        "stream_start_ports": "Check that the PC firewall allows: {}"
     },
     "forwarder": {
         "install_failed": "轉發器安裝失敗\n0x{:X}",
         "installed": "轉發器已安裝",
-        "make": "建立轉發器"
+        "make": "建立轉發器",
+        "making": "Creating forwarder…"
     },
     "hints": {
         "back": "返回",
@@ -85,7 +89,8 @@
         "unable": "不可用",
         "wake_up": "喚醒",
         "wake_up_error": "無法喚醒主機",
-        "wake_up_message": "發送喚醒請求"
+        "wake_up_message": "發送喚醒請求",
+        "wake_up_waiting": "Waiting for the PC to wake up ({}/{})"
     },
     "mapping_layout_editor": {
         "remove": "移除佈局",

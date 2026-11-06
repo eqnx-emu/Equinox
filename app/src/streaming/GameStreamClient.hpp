@@ -6,6 +6,7 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <map>
 #include <string>
 #include <utility>
@@ -55,9 +56,9 @@ using AppInfoList = std::vector<AppInfo>;
 
 class GameStreamClient : public Singleton<GameStreamClient> {
   public:
-    SERVER_DATA server_data(const std::string& address) {
-        return m_server_data[address];
-    }
+    // A copy, safe to use while other threads refresh the cache.
+    SERVER_DATA server_data(const std::string& address);
+    bool has_server_data(const std::string& address) const;
     SERVER_DATA server_data(const Host& host) {
         return server_data(active_address(host));
     }
@@ -77,7 +78,12 @@ class GameStreamClient : public Singleton<GameStreamClient> {
     static void cancel_find_hosts();
 
     static bool can_wake_up_host(const Host& host);
-    static void wake_up_host(const Host& host, ServerCallback<bool>& callback);
+    // on_progress runs on the UI thread before each check; setting cancel
+    // stops the polling and fails the callback with "cancelled".
+    static void wake_up_host(
+        const Host& host, ServerCallback<bool>& callback,
+        std::function<void(int attempt, int total)> on_progress = nullptr,
+        std::shared_ptr<std::atomic<bool>> cancel = nullptr);
 
     void connect(const std::string& address,
                  ServerCallback<SERVER_DATA>& callback);
@@ -115,23 +121,28 @@ class GameStreamClient : public Singleton<GameStreamClient> {
                                  const std::string& missingError,
                                  ServerCallback<T>& callback,
                                  Worker&& worker) {
-        if (m_server_data.count(address) == 0) {
+        if (!has_server_data(address)) {
             callback(GSResult<T>::failure(missingError));
             return;
         }
 
+        // Workers get their own copy of the host data, so a refresh on
+        // another thread can't change it under them.
         brls::async([this, address, callback,
                      worker = std::forward<Worker>(worker)]() mutable {
-            worker(address, callback);
+            SERVER_DATA server = server_data(address);
+            worker(address, server, callback);
         });
     }
 
-    void cache_server_data(const std::string& address, const SERVER_DATA& data);
+    void cache_server_data(const std::string& address, const SERVER_DATA& data,
+                           const std::string& activeKey = "");
     void connect_to_addresses(const std::vector<std::string>& addresses,
                               const std::string& activeKey,
                               ServerCallback<SERVER_DATA>& callback);
 
     std::map<std::string, SERVER_DATA> m_server_data;
     std::map<std::string, std::string> m_active_addresses;
-    STREAM_CONFIGURATION m_config;
+    // Guards both maps: workers and the UI thread update them.
+    mutable std::mutex m_mutex;
 };

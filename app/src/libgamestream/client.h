@@ -48,6 +48,12 @@ typedef struct _SERVER_DATA {
     unsigned short httpPort;
     unsigned short httpsPort;
     bool isSunshine();
+
+    _SERVER_DATA() = default;
+    // serverInfo points into the strings above: a copy must point at its
+    // own, not at the original's (which may be gone).
+    _SERVER_DATA(const _SERVER_DATA& other) { *this = other; }
+    _SERVER_DATA& operator=(const _SERVER_DATA& other);
 } SERVER_DATA, *PSERVER_DATA;
 
 void gs_set_error(std::string error);

@@ -25,6 +25,12 @@
 #include <atomic>
 #include <string>
 
+// Total time for a request. Connecting is capped separately at
+// HTTPConnectTimeout, so a PC that is gone fails fast even on a long request.
+constexpr long HTTPConnectTimeout = 4;
+// Shorter for the status check: it is how an asleep PC is noticed.
+constexpr long HTTPServerInfoConnectTimeout = 2;
+
 enum HTTPRequestTimeout : long {
     HTTPRequestTimeoutLow = 1,
     HTTPRequestTimeoutMedium = 5,
@@ -32,7 +38,8 @@ enum HTTPRequestTimeout : long {
 };
 
 int http_init(const std::string& key_directory);
-int http_request(const std::string& url, Data* data, HTTPRequestTimeout timeout);
+int http_request(const std::string& url, Data* data, HTTPRequestTimeout timeout,
+                 long connect_timeout = HTTPConnectTimeout);
 
 
 // GET `url` and measure the round trip (request sent -> response complete) in

@@ -23,6 +23,9 @@ class FavoriteTab : public brls::Box {
     BRLS_BIND(brls::Box, container, "container");
 
     bool isDirty = false;
+    // Bumped on each rebuild, so pending requests know their views are gone.
+    uint64_t buildGeneration = 0;
 
     void updateAppList();
+    void rebuildAfterUnstar(int section, int index);
 };
