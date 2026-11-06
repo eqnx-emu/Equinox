@@ -11,6 +11,7 @@
 #include "GameStreamClient.hpp"
 
 #include <functional>
+#include <memory>
 
 using namespace brls;
 
@@ -32,6 +33,23 @@ class AppCell : public Box {
     // Asked before starting the stream; return false to only select.
     std::function<bool()> beforeLaunch;
 
+    // True when the cover still has to be downloaded but the PC wasn't
+    // connected yet; call fetchCover() once it is.
+    bool needsCover() const { return coverPending; }
+    void fetchCover();
+
   private:
+    Host host;
+    int appId;
+    bool coverPending = false;
+
+    // Covers are decoded off the UI thread; only the upload runs on it.
+    void loadCover();
+    void applyCover(const std::string& path,
+                    std::shared_ptr<unsigned char> pixels, int width,
+                    int height);
+    bool useCachedCover(const std::string& path);
+    void setCoverTexture(int texture);
+
     void updateFavoriteAction(Host host, AppInfo app);
 };
