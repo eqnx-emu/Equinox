@@ -36,6 +36,15 @@ class MoonlightSession {
 
     void draw(NVGcontext* vg, int width, int height);
 
+    // Draw the video into this rectangle of the window, in pixels, instead
+    // of the whole window. A zero size goes back to the whole window.
+    void set_video_rect(int x, int y, int w, int h) {
+        m_video_rect[0] = x;
+        m_video_rect[1] = y;
+        m_video_rect[2] = w;
+        m_video_rect[3] = h;
+    }
+
     // Stop touching the GPU while the app is off screen, and drop renderer
     // state that may not survive a console sleep once it is back.
     void set_suspended(bool suspended);
@@ -102,6 +111,7 @@ class MoonlightSession {
 
     IFFmpegVideoDecoder* m_video_decoder = nullptr;
     IVideoRenderer* m_video_renderer = nullptr;
+    int m_video_rect[4] = {0, 0, 0, 0};
     IAudioRenderer* m_audio_renderer = nullptr;
 
     bool m_is_active = false;

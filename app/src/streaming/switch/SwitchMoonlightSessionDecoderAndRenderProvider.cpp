@@ -11,16 +11,10 @@
 
 #ifdef BOREALIS_USE_DEKO3D
 #include "DKVideoRenderer.hpp"
-#elif defined(PLATFORM_ANDROID)
-#include "../video/Android/AndroidMediaCodecVideoRenderer.hpp"
 #elif defined(USE_D3D11_RENDERER)
 #include "D3D11VideoRenderer.hpp"
-#elif defined(USE_METAL_RENDERER)
-#include "MetalVideoRenderer.hpp"
-#elif defined(USE_GL_RENDERER)
-#include "GLVideoRenderer.hpp"
 #else
-#error No renderer selected, enable USE_GL_RENDERER, USE_D3D11_RENDERER, or USE_METAL_RENDERER
+#error No renderer selected: build for Switch (deko3d) or Windows (USE_D3D11)
 #endif
 
 IFFmpegVideoDecoder*
@@ -32,14 +26,8 @@ IVideoRenderer*
 SwitchMoonlightSessionDecoderAndRenderProvider::video_renderer() {
 #ifdef BOREALIS_USE_DEKO3D
     return new DKVideoRenderer();
-#elif defined(PLATFORM_ANDROID)
-    return new AndroidMediaCodecVideoRenderer();
 #elif defined(USE_D3D11_RENDERER)
     return new D3D11VideoRenderer();
-#elif defined(USE_METAL_RENDERER)
-    return new MetalVideoRenderer();
-#elif defined(USE_GL_RENDERER)
-    return new GLVideoRenderer();
 #endif
 }
 

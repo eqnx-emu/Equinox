@@ -294,19 +294,10 @@ OptionsTab::OptionsTab(StreamingView* streamView) : streamView(streamView) {
             ditheringStrengthToSliderProgress(ditheringStrength));
         updateDitheringControls(Settings::instance().dithering());
 
-#if defined(PLATFORM_APPLE) && !defined(PLATFORM_TVOS)
-        upscalingButton->removeFromSuperView(true);
-        upscalingModeButton->init(
-            "settings/upscaling"_i18n,
-            {"hints/off"_i18n, "MetalFX", "FSR1"},
-            (int)Settings::instance().upscaling_mode(),
-            [](int value) { Settings::instance().set_upscaling_mode((UpscalingMode)value); });
-#else
         upscalingModeButton->removeFromSuperView(true);
         upscalingButton->init(
             "settings/upscaling"_i18n, Settings::instance().upscaling(),
             [](bool value) { Settings::instance().set_upscaling(value); });
-#endif
         rcasButton->init(
             "settings/rcas_sharpening"_i18n, Settings::instance().rcas(),
             [updateRcasControls](bool value) {

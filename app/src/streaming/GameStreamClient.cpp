@@ -24,10 +24,6 @@
 
 #include <fmt/core.h>
 
-#if defined(__linux) || defined(__APPLE__)
-#include <net/if.h>
-#include <sys/ioctl.h>
-#endif
 
 #if defined(__SWITCH__)
 #include <switch.h>
@@ -39,15 +35,10 @@ struct ipv6_mreq {
 };
 #endif
 
-#if defined(PLATFORM_PSV)
-#include <psp2/net/netctl.h>
-#endif
 
-#ifndef MULTICAST_DISABLED
 extern "C" {
 #include <mdns.h>
 }
-#endif
 
 using namespace brls;
 
@@ -166,86 +157,6 @@ bool connect_to_addresses_sync(const std::vector<std::string>& addresses,
 constexpr int WAKE_POLL_ATTEMPTS = 20;
 constexpr auto WAKE_POLL_INTERVAL = std::chrono::seconds(1);
 
-#if defined(__linux) || defined(__APPLE__)
-bool copy_interface_name(struct ifreq& request, const char* interfaceName) {
-    if (interfaceName == nullptr || interfaceName[0] == '\0') {
-        return false;
-    }
-
-    std::memset(&request, 0, sizeof(request));
-    std::strncpy(request.ifr_name, interfaceName, IFNAMSIZ - 1);
-    request.ifr_name[IFNAMSIZ - 1] = '\0';
-    return true;
-}
-
-uint32_t get_ipv4_address_for_interface(int fd, const char* interfaceName) {
-    struct ifreq flagsRequest;
-    if (!copy_interface_name(flagsRequest, interfaceName)) {
-        return 0;
-    }
-
-    if (ioctl(fd, SIOCGIFFLAGS, &flagsRequest) != 0) {
-        return 0;
-    }
-
-    if ((flagsRequest.ifr_flags & IFF_UP) == 0 ||
-        (flagsRequest.ifr_flags & IFF_LOOPBACK) != 0) {
-        return 0;
-    }
-
-    struct ifreq addressRequest;
-    if (!copy_interface_name(addressRequest, interfaceName)) {
-        return 0;
-    }
-
-    addressRequest.ifr_addr.sa_family = AF_INET;
-    if (ioctl(fd, SIOCGIFADDR, &addressRequest) != 0) {
-        return 0;
-    }
-
-    return reinterpret_cast<struct sockaddr_in*>(&addressRequest.ifr_addr)
-        ->sin_addr.s_addr;
-}
-
-uint32_t get_first_non_loopback_ipv4_address(
-    int fd, const char* const* preferredInterfaces,
-    size_t preferredInterfaceCount) {
-    if (preferredInterfaces != nullptr) {
-        for (size_t i = 0; i < preferredInterfaceCount; i++) {
-            uint32_t address =
-                get_ipv4_address_for_interface(fd, preferredInterfaces[i]);
-            if (address != 0) {
-                return address;
-            }
-        }
-    }
-
-    struct ifconf interfaceConfig;
-    char interfaceBuffer[4096];
-    std::memset(&interfaceConfig, 0, sizeof(interfaceConfig));
-    std::memset(interfaceBuffer, 0, sizeof(interfaceBuffer));
-
-    interfaceConfig.ifc_len = sizeof(interfaceBuffer);
-    interfaceConfig.ifc_buf = interfaceBuffer;
-    if (ioctl(fd, SIOCGIFCONF, &interfaceConfig) != 0) {
-        return 0;
-    }
-
-    for (char* cursor = interfaceBuffer;
-         cursor + sizeof(struct ifreq) <=
-         interfaceBuffer + interfaceConfig.ifc_len;
-         cursor += sizeof(struct ifreq)) {
-        const struct ifreq* entry =
-            reinterpret_cast<const struct ifreq*>(cursor);
-        uint32_t address = get_ipv4_address_for_interface(fd, entry->ifr_name);
-        if (address != 0) {
-            return address;
-        }
-    }
-
-    return 0;
-}
-#endif
 }
 
 GameStreamClient::GameStreamClient() { start(); }
@@ -253,69 +164,13 @@ GameStreamClient::GameStreamClient() { start(); }
 void GameStreamClient::start() {}
 
 void GameStreamClient::stop() {
-#ifndef MULTICAST_DISABLED
     cancel_find_hosts();
-#endif
 }
 
 static uint32_t get_my_ip_address() {
     uint32_t address = 0;
-#if defined(PLATFORM_ANDROID)
-    int fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (fd < 0) {
-        return 0;
-    }
-
-    const char* preferredInterfaces[] = {"wlan0", "eth0"};
-    address = get_first_non_loopback_ipv4_address(
-        fd, preferredInterfaces,
-        sizeof(preferredInterfaces) / sizeof(preferredInterfaces[0]));
-    close(fd);
-#elif defined(__linux)
-    int fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (fd < 0) {
-        return 0;
-    }
-
-    address = get_first_non_loopback_ipv4_address(fd, nullptr, 0);
-    close(fd);
-#elif defined(PLATFORM_IOS) || defined(PLATFORM_TVOS) || defined(PLATFORM_VISIONOS)
-    int fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (fd < 0) {
-        return 0;
-    }
-
-    address = get_ipv4_address_for_interface(fd, "en0");
-    close(fd);
-#elif defined(__APPLE__)
-    int fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (fd < 0) {
-        return 0;
-    }
-
-    address = get_first_non_loopback_ipv4_address(fd, nullptr, 0);
-    close(fd);
-#elif defined(__SWITCH__)
+#if   defined(__SWITCH__)
     nifmGetCurrentIpAddress(&address);
-#elif defined(PLATFORM_PSV)
-    SceNetCtlInfo info{};
-    const int result =
-        sceNetCtlInetGetInfo(SCE_NETCTL_INFO_GET_IP_ADDRESS, &info);
-    if (result < 0) {
-        Logger::warning(
-            "Vita host discovery could not obtain the local IP address: 0x{:08x}",
-            static_cast<uint32_t>(result));
-        return 0;
-    }
-
-    in_addr parsedAddress{};
-    if (inet_pton(AF_INET, info.ip_address, &parsedAddress) != 1) {
-        Logger::warning("Vita host discovery received an invalid local IP address: {}",
-                        info.ip_address);
-        return 0;
-    }
-    Logger::info("Vita host discovery local address: {}", info.ip_address);
-    address = parsedAddress.s_addr;
 #endif
     return address;
 }
@@ -377,14 +232,9 @@ std::string GameStreamClient::external_address_for_mdns(const std::string& addre
 }
 
 bool GameStreamClient::can_find_host() {
-#if defined(PLATFORM_IOS) || defined(PLATFORM_TVOS) || defined(PLATFORM_VISIONOS)
-    return true;
-#else
     return get_my_ip_address() != 0;
-#endif
 }
 
-#ifndef MULTICAST_DISABLED
 static std::atomic_uint64_t findHostsGeneration = 0;
 
 struct MdnsSearchContext {
@@ -526,7 +376,6 @@ void GameStreamClient::find_hosts(ServerCallback<std::vector<Host>>& callback) {
 void GameStreamClient::cancel_find_hosts() {
     ++findHostsGeneration;
 }
-#endif
 
 bool GameStreamClient::can_wake_up_host(const Host& host) {
     return WakeOnLanManager::can_wake_up_host(host);

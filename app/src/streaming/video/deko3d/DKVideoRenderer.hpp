@@ -48,6 +48,8 @@ class DKVideoRenderer : public IVideoRenderer {
     int m_frame_height = 0;
     int m_screen_width = 0;
     int m_screen_height = 0;
+    // Target rect the static command list was recorded for.
+    int m_recorded_target[4] = {0, 0, 0, 0};
 
     brls::SwitchVideoContext* vctx = nullptr;
     dk::Device dev;

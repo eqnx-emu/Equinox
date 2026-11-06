@@ -785,6 +785,14 @@ void DKVideoRenderer::recordStaticCommands(AVFrame* frame) {
     bool useDithering = requestedDithering;
     bool useUpscaling = requestedUpscaling;
     bool useRcas = requestedRcas;
+    // A preview inside the UI (target rect) takes the direct path: the
+    // post-process passes present to the whole framebuffer.
+    const bool useTargetRect = m_target_w > 0 && m_target_h > 0;
+    if (useTargetRect) {
+        useDithering = false;
+        useUpscaling = false;
+        useRcas = false;
+    }
 #ifdef SUPPORT_UPSCALING
     if ((useDithering || useUpscaling || useRcas) && !ensureUpscalingResources()) {
         brls::Logger::warning("{}: Falling back to direct presentation path",
@@ -888,6 +896,30 @@ void DKVideoRenderer::recordStaticCommands(AVFrame* frame) {
         cmdbuf.draw(DkPrimitive_Quads, QuadVertexData.size(), 1, 0, 0);
     };
 
+    // Direct path into part of the framebuffer; NanoVG relies on the
+    // full-framebuffer viewport, so restore it afterwards.
+    auto drawDirect = [&](const Transformation& transformState) {
+        if (!useTargetRect) {
+            drawDecodePass(transformState);
+            return;
+        }
+        cmdbuf.setViewports(
+            0, {{{static_cast<float>(m_target_x), static_cast<float>(m_target_y),
+                  static_cast<float>(m_target_w), static_cast<float>(m_target_h),
+                  0.0f, 1.0f}}});
+        cmdbuf.setScissors(
+            0, {{{static_cast<uint32_t>(m_target_x),
+                  static_cast<uint32_t>(m_target_y),
+                  static_cast<uint32_t>(m_target_w),
+                  static_cast<uint32_t>(m_target_h)}}});
+        drawDecodePass(transformState);
+        const float fullW = static_cast<float>(brls::Application::windowWidth);
+        const float fullH = static_cast<float>(brls::Application::windowHeight);
+        cmdbuf.setViewports(0, {{{0.0f, 0.0f, fullW, fullH, 0.0f, 1.0f}}});
+        cmdbuf.setScissors(0, {{{0, 0, static_cast<uint32_t>(fullW),
+                                 static_cast<uint32_t>(fullH)}}});
+    };
+
 #ifdef SUPPORT_UPSCALING
     if (useUpscaling && sourceTargetHandle && upscalingTargetHandle &&
         sourceTextureId >= 0 && upscalingFragmentShader && easuUniformBuffer) {
@@ -913,7 +945,7 @@ void DKVideoRenderer::recordStaticCommands(AVFrame* frame) {
                          m_upscaling_target_height);
         drawDecodePass(displayTransformState);
     } else {
-        drawDecodePass(displayTransformState);
+        drawDirect(displayTransformState);
     }
 
     if (useUpscaling || useDithering || useRcas) {
@@ -925,9 +957,13 @@ void DKVideoRenderer::recordStaticCommands(AVFrame* frame) {
         cmdbuf.barrier(DkBarrier_Fragments, DkInvalidateFlags_Image);
     }
 #else
-    drawDecodePass(displayTransformState);
+    drawDirect(displayTransformState);
 #endif
     cmdlist = cmdbuf.finishList();
+    m_recorded_target[0] = m_target_x;
+    m_recorded_target[1] = m_target_y;
+    m_recorded_target[2] = m_target_w;
+    m_recorded_target[3] = m_target_h;
 
     m_color_space = colorSpace;
     m_color_full = colorFull;
@@ -968,11 +1004,14 @@ void DKVideoRenderer::updateRenderState(int width, int height, AVFrame* frame) {
         Settings::instance().rcas() && Settings::instance().rcas_strength() > 0.0f &&
         frame->width > 0 && frame->height > 0 &&
         width > 0 && height > 0;
+    const bool targetChanged =
+        m_recorded_target[0] != m_target_x || m_recorded_target[1] != m_target_y ||
+        m_recorded_target[2] != m_target_w || m_recorded_target[3] != m_target_h;
     const bool ditheringChanged = m_dithering_requested != requestedDithering;
     const bool upscalingChanged = m_upscaling_requested != requestedUpscaling;
     const bool rcasChanged = m_rcas_requested != requestedRcas;
 
-    if (!frameSizeChanged && !screenSizeChanged && !colorChanged &&
+    if (!frameSizeChanged && !screenSizeChanged && !colorChanged && !targetChanged &&
         !ditheringChanged && !upscalingChanged && !rcasChanged) {
         return;
     }

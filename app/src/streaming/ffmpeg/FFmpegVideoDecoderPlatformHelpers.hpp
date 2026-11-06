@@ -25,27 +25,6 @@ void logD3D11HardwareInitFailure(const D3D11State& state, const char* error);
 bool useD3D11ZeroCopyHolder(const D3D11State& state);
 #endif
 
-#if defined(PLATFORM_ANDROID)
-struct AndroidMediaCodecState {
-	void* surfaceGlobalRef = nullptr;
-};
-
-int initializeAndroidMediaCodecHardwareDevice(AndroidMediaCodecState& state,
-											  AVBufferRef*& hw_device_ctx,
-											  int width,
-											  int height);
-void cleanupAndroidMediaCodecState(AndroidMediaCodecState& state);
-bool useAndroidDirectHardwareFrames(bool hw_decode_active);
-#endif
-
-#if defined(PLATFORM_APPLE)
-AVHWDeviceType metalHardwareDeviceType();
-#endif
-
-#if defined(USE_METAL_RENDERER)
-bool useMetalDirectHardwareFrames();
-#endif
-
 #if defined(PLATFORM_SWITCH) && defined(BOREALIS_USE_DEKO3D)
 int configureDeko3DDecoderContext(AVCodecContext* decoderContext, bool hw_decode_active);
 void initializeDeko3DFrame(AVFrame* frame);
