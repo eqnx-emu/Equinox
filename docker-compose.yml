@@ -1,0 +1,29 @@
+# Local Switch build, same toolchain as CI (devkitpro/devkita64).
+#
+#   docker compose run --rm switch          # build/docker/Equinox.nro
+#   docker compose run --rm switch-clean    # wipe the build cache
+#
+# Environment: JOBS (default: all cores), BUILD_TYPE (default: Release).
+
+services:
+  switch:
+    image: devkitpro/devkita64:latest
+    working_dir: /src
+    volumes:
+      - .:/src
+      - switch-build:/build
+    environment:
+      JOBS: ${JOBS:-}
+      BUILD_TYPE: ${BUILD_TYPE:-Release}
+    # Strip CRs so the script also runs from a Windows checkout.
+    command: ["bash", "-c", "sed 's/\r$//' docker/switch.sh | bash"]
+
+  switch-clean:
+    image: devkitpro/devkita64:latest
+    volumes:
+      - switch-build:/build
+    command: ["bash", "-c", "rm -rf /build/switch && echo 'Build cache removed.'"]
+    profiles: ["tools"]
+
+volumes:
+  switch-build:
