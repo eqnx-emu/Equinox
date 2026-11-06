@@ -10,15 +10,6 @@
 #include <switch.h>
 #endif
 
-#ifdef __PSV__
-extern "C" {
-// PVR_PSP2 allocates its EGL/GLES state from the Sony libc heap. Match the
-// memory model used by working Borealis Vita applications such as wiliwili.
-unsigned int _newlib_heap_size_user      = 220 * 1024 * 1024;
-unsigned int _pthread_stack_default_user = 2 * 1024 * 1024;
-unsigned int sceLibcHeapSize             = 24 * 1024 * 1024;
-}
-#endif
 
 #include <cstdlib>
 
@@ -33,6 +24,7 @@ unsigned int sceLibcHeapSize             = 24 * 1024 * 1024;
 #include "hosts_tab.hpp"
 #include "link_cell.hpp"
 #include "main_activity.hpp"
+#include "backdrop_frame.hpp"
 #include "main_tabs_view.hpp"
 #include "settings_tab.hpp"
 #include "views/boolean_slider_cell.hpp"
@@ -59,19 +51,8 @@ using namespace brls::literals; // for _i18n
 namespace {
 
 bool loadBundledFont(const std::string& name, const std::string& file) {
-#ifdef USE_LIBROMFS
-    try {
-        auto& font = romfs::get(file);
-        if (font.valid())
-            return brls::Application::loadFontFromMemory(
-                name, (void*)font.data(), font.size(), false);
-    } catch (...) {
-    }
-    return false;
-#else
     return brls::Application::loadFontFromFile(name,
                                                std::string(BRLS_RESOURCES) + file);
-#endif
 }
 
 // Equinox uses Onest for its interface. The platform fonts loaded by Borealis
@@ -184,9 +165,6 @@ int main(int argc, char* argv[]) {
 
     registerDeepLinkHandler();
 
-#if defined(PLATFORM_VISIONOS)
-    brls::Application::setMaximumUIScale(1.0f);
-#endif
 
     MoonlightSession::set_provider(
             new SwitchMoonlightSessionDecoderAndRenderProvider());
@@ -209,8 +187,9 @@ int main(int argc, char* argv[]) {
     brls::Application::registerXMLView("LinkCell", LinkCell::create);
 
     brls::Application::registerXMLView("MainTabs", MainTabs::create);
+    brls::Application::registerXMLView("BackdropFrame", BackdropFrame::create);
     brls::Application::registerXMLView("HostsTab", HostsTab::create);
-    brls::Application::registerXMLView("HorizonView", HorizonView::create);
+    brls::Application::registerXMLView("MonitorView", MonitorView::create);
     brls::Application::registerXMLView("BoldLabel", BoldLabel::create);
     brls::Application::registerXMLView("AddHostTab", AddHostTab::create);
     brls::Application::registerXMLView("SettingsTab", SettingsTab::create);
@@ -236,11 +215,13 @@ int main(int argc, char* argv[]) {
     brls::Theme::getLightTheme().addColor("equinox/card_inner", nvgRGB(239, 241, 247));
     brls::Theme::getLightTheme().addColor("equinox/muted", nvgRGB(96, 100, 120));
     brls::Theme::getLightTheme().addColor("equinox/status_on", nvgRGB(158, 98, 0));
+    brls::Theme::getLightTheme().addColor("equinox/online", nvgRGB(34, 139, 72));
     brls::Theme::getLightTheme().addColor("equinox/status_moon", nvgRGB(52, 88, 186));
     brls::Theme::getDarkTheme().addColor("equinox/card", nvgRGB(35, 40, 73));
     brls::Theme::getDarkTheme().addColor("equinox/card_inner", nvgRGB(27, 31, 62));
     brls::Theme::getDarkTheme().addColor("equinox/muted", nvgRGB(174, 179, 214));
     brls::Theme::getDarkTheme().addColor("equinox/status_on", nvgRGB(244, 184, 96));
+    brls::Theme::getDarkTheme().addColor("equinox/online", nvgRGB(124, 214, 138));
     brls::Theme::getDarkTheme().addColor("equinox/status_moon", nvgRGB(157, 184, 255));
 
     // Equinox palette for the dark theme: dusk blue ground, sun amber accent
@@ -278,6 +259,11 @@ int main(int argc, char* argv[]) {
     }
 
     // Add custom values to the style
+    // Narrower sidebar, so the content gets the room.
+    brls::getStyle().addMetric("brls/tab_frame/sidebar_width", 290);
+    brls::getStyle().addMetric("brls/sidebar/padding_left", 44);
+    brls::getStyle().addMetric("brls/sidebar/padding_right", 28);
+
     brls::getStyle().addMetric("about/padding_top_bottom", 50);
     brls::getStyle().addMetric("about/padding_sides", 75);
     brls::getStyle().addMetric("about/description_margin", 50);
@@ -288,26 +274,12 @@ int main(int argc, char* argv[]) {
     }
 
     brls::Application::enableDebuggingView(Settings::instance().write_log());
-    brls::Application::setSwapInputKeys(Settings::instance().swap_ui_keys());
 
-    // Run the app. The Vita development loop waits for this marker so a
-    // successful launch means at least one complete Borealis frame rendered.
-#ifdef __PSV__
-    bool vitaHealthReported = false;
-#endif
+    // Run the app.
     while (brls::Application::mainLoop()) {
-#ifdef __PSV__
-        if (!vitaHealthReported) {
-            brls::Logger::info("VITA_HEALTH: READY");
-            vitaHealthReported = true;
-        }
-#endif
     }
 
     // Exit
-#if defined(PLATFORM_TVOS)
-    exit(0);
-#endif
     
     return EXIT_SUCCESS;
 }

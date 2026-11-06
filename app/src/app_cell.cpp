@@ -24,7 +24,9 @@ AppCell::AppCell(const Host& host, const AppInfo& app, int currentApp) {
         currentApp == app.app_id ? Visibility::VISIBLE : Visibility::GONE);
 
     this->addGestureRecognizer(new TapGestureRecognizer(this));
-    this->registerClickAction([host, app](View* view) {
+    this->registerClickAction([this, host, app](View* view) {
+        if (beforeLaunch && !beforeLaunch())
+            return true;
         auto* frame = new AppletFrame(new StreamingView(host, app));
         frame->setBackground(ViewBackground::NONE);
         frame->setHeaderVisibility(brls::Visibility::GONE);
@@ -51,6 +53,10 @@ AppCell::AppCell(const Host& host, const AppInfo& app, int currentApp) {
                 }
             });
     }
+}
+
+void AppCell::setCaptionVisible(bool visible) {
+    caption->setVisibility(visible ? Visibility::VISIBLE : Visibility::GONE);
 }
 
 void AppCell::setFavorite(bool favorite) {
