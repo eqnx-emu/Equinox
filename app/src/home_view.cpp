@@ -1099,6 +1099,8 @@ std::vector<HomeOption> HomeView::hostOptions(HostCard* card) {
                            [card] { card->openLibrary(); }});
         if (favorites > 0)
             options.push_back(favoritesOption());
+        options.push_back({"", "hosts/steam_import"_i18n, "",
+                           [card] { card->importSteamGames(); }});
         options.push_back({"", "capacity/action"_i18n, "",
                            [card] { card->openCapacityTest(); }});
         break;

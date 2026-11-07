@@ -629,6 +629,38 @@ exit:
     return ret;
 }
 
+int gs_steam_import(PSERVER_DATA server, SteamImportResult* result) {
+    char url[4096];
+    snprintf(url, sizeof(url),
+             "https://%s:%u/solstice/steam-import?uniqueid=%s",
+             server->serverInfo.address, server->httpsPort, unique_id.c_str());
+
+    Data data;
+    // Covers the host has to download can take a while.
+    int ret = http_request(url, &data, HTTPRequestTimeoutLong);
+    if (ret != GS_OK)
+        return ret;
+
+    if ((ret = xml_status(data)) != GS_OK) {
+        // Hosts without the endpoint answer with status 404.
+        const std::string body((const char*)data.bytes(), data.size());
+        if (body.find("\"404\"") != std::string::npos)
+            return GS_NOT_SUPPORTED;
+        return ret;
+    }
+
+    int value = 0;
+    if (xml_search(data, "steam", &value) == GS_OK)
+        result->steamFound = value != 0;
+    if (xml_search(data, "added", &value) == GS_OK)
+        result->added = value;
+    if (xml_search(data, "removed", &value) == GS_OK)
+        result->removed = value;
+    if (xml_search(data, "installed", &value) == GS_OK)
+        result->installed = value;
+    return GS_OK;
+}
+
 int gs_init(PSERVER_DATA server, const std::string address) {
     std::stringstream addressStream(address);
     std::string segment;

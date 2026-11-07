@@ -105,6 +105,9 @@ class GameStreamClient : public Singleton<GameStreamClient> {
                int app_id, ServerCallback<STREAM_CONFIGURATION>& callback);
     void quit(const std::string& address, ServerCallback<bool>& callback);
     void quit(const Host& host, ServerCallback<bool>& callback);
+    // Solstice only; fails with "not_supported" on other hosts.
+    void steam_import(const Host& host,
+                      ServerCallback<SteamImportResult>& callback);
 
     // RTT in ms. Discard the first result (TLS warm-up) when sampling; pass
     // warmup = true for that call (5 s timeout instead of 1 s).

@@ -463,6 +463,37 @@ void HostCard::openCapacityTest() {
         CapacityTestView::open(host);
 }
 
+void HostCard::importSteamGames() {
+    if (!isOnline(state))
+        return;
+
+    Dialog* loader = createLoadingDialog("hosts/steam_importing"_i18n);
+    loader->open();
+    ASYNC_RETAIN
+    GameStreamClient::instance().steam_import(
+        host, [ASYNC_TOKEN, loader](const GSResult<SteamImportResult>& result) {
+            ASYNC_RELEASE
+            loader->close([this, result] {
+                if (!result.isSuccess()) {
+                    showError(result.error() == "not_supported"
+                                  ? "hosts/steam_not_supported"_i18n
+                                  : result.error());
+                    return;
+                }
+                const SteamImportResult& r = result.value();
+                if (!r.steamFound) {
+                    showAlert("hosts/steam_not_found"_i18n);
+                    return;
+                }
+                showAlert(brls::getStr("hosts/steam_import_result", r.added,
+                                       r.removed, r.installed));
+                // The game count and the library change.
+                if (r.added > 0 || r.removed > 0)
+                    refresh();
+            });
+        });
+}
+
 void HostCard::quitRunningApp() {
     if (state != HostCardState::RUNNING)
         return;
