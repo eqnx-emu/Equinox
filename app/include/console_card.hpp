@@ -5,7 +5,7 @@
 //  A console whose emulator is installed, on the Devices shelf: a card in
 //  the console's colors with its controller drawn large in the corner. Shows
 //  how many games are on the SD card, or that an update is waiting. With
-//  focus the card grows, its tag turns gold and the controller
+//  focus its tag turns gold and the controller
 //  hops upright.
 //
 

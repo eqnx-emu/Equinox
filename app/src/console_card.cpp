@@ -5,7 +5,6 @@
 
 #include "console_card.hpp"
 
-#if defined(PLATFORM_SWITCH)
 
 #include "bold_label.hpp"
 #include "emu/RomScan.hpp"
@@ -78,8 +77,8 @@ ConsoleCard::ConsoleCard(const emu::Console& console) : consoleRef(console) {
     icon = new Image();
     icon->setScalingType(ImageScalingType::FIT);
     icon->setImageFromRes("img/consoles/" + console.slug + ".png");
-    icon->setWidth(30);
-    icon->setHeight(30);
+    icon->setWidth(46);
+    icon->setHeight(20);
     icon->setMarginRight(8);
     header->addView(icon);
 
@@ -219,11 +218,6 @@ void ConsoleCard::animateFocus(bool focused) {
     focus.addStep(to, 220, EasingFunction::quadraticOut);
     focus.start();
 
-    lift.stop();
-    lift.reset();
-    lift.addStep(focused ? 1.04f : 1.0f, 220, EasingFunction::quadraticOut);
-    lift.start();
-
     hop.stop();
     hop.reset();
     if (focused)
@@ -251,19 +245,33 @@ void ConsoleCard::draw(NVGcontext* vg, float x, float y, float width,
     // (outside the picture its transparent edge repeats).
     const int texture = icon ? icon->getTexture() : 0;
     if (texture > 0) {
+        int imageW = 0, imageH = 0;
+        nvgImageSize(vg, texture, &imageW, &imageH);
         const float h = hop;
-        const float size = 215 * (1 + 0.1f * h);
+        const float w = 205 * (1 + 0.1f * h);
+        const float ht = imageW > 0 ? w * imageH / imageW : w;
         const float angle = nvgDegToRad(-14 + 8 * h);
-        const float cx = x + width - 87.5f;
-        const float cy = y + height - 72.5f;
+        const float cx = x + width - 62;
+        const float cy = y + height - 56;
         const float c = std::cos(angle), s = std::sin(angle);
-        const float half = size / 2;
-        const float ox = cx + (-half * c + half * s);
-        const float oy = cy + (-half * s - half * c);
+        const float hw = w / 2, hh = ht / 2;
+        const float ox = cx + (-hw * c + hh * s);
+        const float oy = cy + (-hw * s - hh * c);
         nvgBeginPath(vg);
         nvgRoundedRect(vg, x, y, width, height, radius);
-        nvgFillPaint(vg, nvgImagePattern(vg, ox, oy, size, size, angle, texture,
-                                         (0.8f + 0.2f * f) * getAlpha()));
+        nvgFillPaint(vg, nvgImagePattern(vg, ox, oy, w, ht, angle, texture,
+                                         (0.7f + 0.3f * f) * getAlpha()));
+        nvgFill(vg);
+
+        // Shade the left side so the name stays readable over it.
+        NVGcolor shade = hex(consoleRef.cardColorBottom);
+        shade.a = 0.75f * getAlpha();
+        NVGcolor clear = shade;
+        clear.a = 0;
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x, y, width, height, radius);
+        nvgFillPaint(vg, nvgLinearGradient(vg, x + width * 0.35f, y,
+                                           x + width * 0.75f, y, shade, clear));
         nvgFill(vg);
     }
 
@@ -273,4 +281,3 @@ void ConsoleCard::draw(NVGcontext* vg, float x, float y, float width,
     PressableBox::draw(vg, x, y, width, height, style, ctx);
 }
 
-#endif // PLATFORM_SWITCH
