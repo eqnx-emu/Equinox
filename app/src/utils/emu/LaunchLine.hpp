@@ -1,8 +1,10 @@
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "emu/Console.hpp"
 #include "emu/RomScan.hpp"
@@ -14,6 +16,19 @@ std::string sanitizeArg(std::string_view value);
 
 // A launch path is usable only as sdmc:/...*.nro; otherwise the Equinox default.
 std::string returnPath(const std::string& launchPath);
+
+// "/switch/x.nro" (argv[0] without a device) becomes "sdmc:/switch/x.nro";
+// anything else is returned as is.
+std::string normalizeLaunchPath(const std::string& launchPath);
+
+// Where Equinox may be, best first, without repeats: the path it was started
+// from (when usable), then the README's sdmc:/switch/Equinox/Equinox.nro,
+// then sdmc:/switch/Equinox.nro.
+std::vector<std::string> returnCandidates(const std::string& launchPath);
+
+// The first candidate for which `exists` is true; nullopt when none is.
+std::optional<std::string> pickReturnPath(const std::string& launchPath,
+                                          const std::function<bool(const std::string&)>& exists);
 
 enum class Origin { Shelf, Favorites };
 

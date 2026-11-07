@@ -677,7 +677,8 @@ MotionBox* HomeView::makeLayer(Shelf& shelf, bool forPcs) {
         lit->setSingleLine(true);
         lit->setTextColor(themeColor("equinox/sun"));
         std::string text = "home/pcs"_i18n;
-        std::transform(text.begin(), text.end(), text.begin(), ::toupper);
+        std::transform(text.begin(), text.end(), text.begin(),
+                       [](unsigned char c) { return (char)std::toupper(c); });
         lit->setText(text);
         crumbRow->addView(lit);
     }
@@ -943,7 +944,7 @@ void HomeView::confirmExit() {
     dialog->open();
 }
 
-void HomeView::openPcs() {
+void HomeView::openPcs(bool checkUpdates) {
     if (level == Level::PCS)
         return;
     level = Level::PCS;
@@ -962,7 +963,8 @@ void HomeView::openPcs() {
     Application::giveFocus(pcs.carousel->getChildren()[index]);
     updateShelfInfo();
     updateBackAction();
-    checkConsoleUpdates();
+    if (checkUpdates)
+        checkConsoleUpdates();
 }
 
 void HomeView::closePcs() {
@@ -1594,7 +1596,7 @@ void HomeView::resumeConsole() {
     if (!console || !runnerInstalled(*console))
         return; // removed meanwhile: just the home screen
 
-    openPcs();
+    openPcs(false);
     for (size_t i = 0; i < consoleCards.size(); i++) {
         if (&consoleCards[i]->console() != console)
             continue;

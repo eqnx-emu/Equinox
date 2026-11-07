@@ -55,7 +55,9 @@ class CoverAmbient {
     // Cleared on destruction, so colours read in the background are dropped.
     std::shared_ptr<bool> alive = std::make_shared<bool>(true);
 
-    void select(const std::string& path, bool onDisk);
+    // cacheFailure: remember an unreadable file as "no colours" (PC boxart)
+    // instead of reading it again on the next select (console covers).
+    void select(const std::string& path, bool onDisk, bool cacheFailure);
     void show(const Colors& colors);
     void paint(NVGcontext* vg, float x, float y, float width, float height);
     void paintOne(NVGcontext* vg, const Colors& colors, float alpha, float x,

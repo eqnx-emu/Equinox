@@ -15,10 +15,10 @@
 #include "emu/EmuLauncher.hpp"
 #include "emu/PathUtf8.hpp"
 #include "emu/PlayedAgo.hpp"
+#include "helper.hpp"
 
 #include <algorithm>
 #include <atomic>
-#include <chrono>
 #include <cctype>
 #include <cstdlib>
 #include <ctime>
@@ -36,6 +36,10 @@ struct ConsoleShelfView::CoverQueue {
 
 namespace {
 constexpr long kCoverTimeout = 20;
+// Before playing, the cover thread gets this long to stop (checked every
+// kStopPollMs on the UI thread).
+constexpr int kStopPollMs = 100;
+constexpr int kStopPolls = 50;
 
 NVGcolor themeColor(const std::string& name) {
     return Application::getTheme().getColor(name);
@@ -61,13 +65,15 @@ void removeFile(const std::string& path) {
 // Covers download one at a time across every shelf: a shelf closed and
 // opened again waits for the previous queue to stop before it starts. Held
 // by the download thread for as long as it runs.
-std::timed_mutex& coverLock() {
-    static std::timed_mutex lock;
+std::mutex& coverLock() {
+    static std::mutex lock;
     return lock;
 }
 
 std::string upper(std::string text) {
-    std::transform(text.begin(), text.end(), text.begin(), ::toupper);
+    std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) {
+        return (char)std::toupper(c);
+    });
     return text;
 }
 
@@ -344,18 +350,71 @@ void ConsoleShelfView::onSelected(int index) {
 void ConsoleShelfView::play(int index) {
     if (launching || index < 0 || index >= (int)games.size())
         return;
-    // Nothing should be downloading or writing to the SD card while the app
-    // hands over: wait (briefly) for the cover thread to notice the stop.
-    stopCovers();
-    std::unique_lock<std::timed_mutex> idle(coverLock(), std::defer_lock);
-    if (!idle.try_lock_for(std::chrono::seconds(3)))
-        brls::Logger::warning("ConsoleShelf: cover thread still busy");
     launching = true;
-    if (emu::launchRom(consoleRef, games[index].rom, emu::Origin::Shelf, -1))
+    // Nothing may be downloading or writing to the SD card while the app
+    // hands over: the game starts only once the cover thread has let go.
+    stopCovers();
+    waitForCovers(index, 0);
+}
+
+void ConsoleShelfView::waitForCovers(int index, int attempt) {
+    if (coverLock().try_lock()) {
+        // Held until the app quits, or released below if it does not.
+        if (stopLoader) {
+            Dialog* loader = stopLoader;
+            stopLoader = nullptr;
+            std::shared_ptr<bool> token = alive;
+            loader->close([this, token, index] {
+                if (!*token) {
+                    coverLock().unlock();
+                    return;
+                }
+                launch(index);
+            });
+        } else {
+            launch(index);
+        }
         return;
+    }
+
+    if (attempt >= kStopPolls) {
+        brls::Logger::warning("ConsoleShelf: cover thread did not stop");
+        Dialog* loader = stopLoader;
+        stopLoader = nullptr;
+        launching = false;
+        auto giveUp = [this, index] {
+            Application::notify("emu/try_again"_i18n);
+            fetchCovers(index);
+        };
+        if (loader) {
+            std::shared_ptr<bool> token = alive;
+            loader->close([token, giveUp] {
+                if (*token)
+                    giveUp();
+            });
+        } else {
+            giveUp();
+        }
+        return;
+    }
+
+    // Usually free right away; a download in flight stops within a second.
+    if (attempt == 0) {
+        stopLoader = createLoadingDialog("emu/opening"_i18n);
+        stopLoader->open();
+    }
+    std::shared_ptr<bool> token = alive;
+    brls::delay(kStopPollMs, [this, token, index, attempt] {
+        if (*token)
+            waitForCovers(index, attempt + 1);
+    });
+}
+
+void ConsoleShelfView::launch(int index) {
+    if (emu::launchRom(consoleRef, games[index].rom, emu::Origin::Shelf, -1))
+        return; // quitting; the cover lock stays held
+    coverLock().unlock();
     launching = false;
-    if (idle.owns_lock())
-        idle.unlock();
 
     // The game may have been deleted since the shelf was filled.
     if (!fileExists(games[index].rom.path))
@@ -402,7 +461,7 @@ void ConsoleShelfView::fetchCovers(int first) {
     // Its own thread, not the pool: the queue can run for minutes and the
     // Switch pool has only a few workers.
     std::thread([this, token, queue, console, where, jobs, forGeneration] {
-        std::lock_guard<std::timed_mutex> lock(coverLock());
+        std::lock_guard<std::mutex> lock(coverLock());
         const Progress keepGoing = [queue](uint64_t, uint64_t) {
             return !queue->stop.load();
         };
@@ -413,7 +472,11 @@ void ConsoleShelfView::fetchCovers(int first) {
 
             // Fetched meanwhile by another shelf.
             bool found = fileExists(job.path);
-            bool offline = false, diskError = false;
+            // A miss is remembered only when libretro clearly answered "no"
+            // for every name: 404/403, or a 200 that is not a PNG. Anything
+            // else (no answer, 5xx, 429, a body cut short) is like being
+            // offline: the queue stops and nothing is remembered.
+            bool transient = false, diskError = false;
             const std::vector<std::string> names =
                 found ? std::vector<std::string>{}
                       : emu::coverNameCandidates(job.title);
@@ -426,7 +489,8 @@ void ConsoleShelfView::fetchCovers(int first) {
                 const bool ok =
                     httpGetToFile(emu::coverUrl(*console, name), part,
                                   kCoverTimeout, keepGoing, error, status);
-                if (ok && emu::looksLikePng(part)) {
+                const bool png = ok && emu::looksLikePng(part);
+                if (png) {
                     if (emu::replaceFile(part, job.path)) {
                         found = true;
                     } else {
@@ -436,14 +500,15 @@ void ConsoleShelfView::fetchCovers(int first) {
                     break;
                 }
                 removeFile(part);
-                // No answer at all: offline (or cancelled). Not a miss.
-                if (!ok && status == 0) {
-                    offline = true;
+                const bool notThere =
+                    ok || status == 404 || status == 403;
+                if (!notThere) {
+                    transient = true;
                     break;
                 }
             }
 
-            if (queue->stop.load() || offline)
+            if (queue->stop.load() || transient)
                 return; // generic covers; tried again next time
             if (found) {
                 const size_t index = job.index;

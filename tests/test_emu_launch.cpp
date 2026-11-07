@@ -2,6 +2,7 @@
 #include "doctest/doctest.h"
 
 #include <string>
+#include <vector>
 
 #include "emu/LaunchLine.hpp"
 
@@ -37,6 +38,37 @@ TEST_CASE("returnPath") {
     CHECK(returnPath("") == "sdmc:/switch/Equinox.nro");
     CHECK(returnPath("romfs:/x") == "sdmc:/switch/Equinox.nro");
     CHECK(returnPath("sdmc:/switch/Equinox.elf") == "sdmc:/switch/Equinox.nro");
+}
+
+TEST_CASE("launch path normalization") {
+    CHECK(normalizeLaunchPath("/switch/Equinox/Equinox.nro") == "sdmc:/switch/Equinox/Equinox.nro");
+    CHECK(normalizeLaunchPath("sdmc:/switch/Equinox.nro") == "sdmc:/switch/Equinox.nro");
+    CHECK(normalizeLaunchPath("") == "");
+    CHECK(normalizeLaunchPath("romfs:/x") == "romfs:/x");
+    CHECK(returnPath("/switch/apps/Eqx.nro") == "sdmc:/switch/apps/Eqx.nro");
+    CHECK(returnPath("/switch/Equinox.elf") == "sdmc:/switch/Equinox.nro");
+}
+
+TEST_CASE("return candidates and pick") {
+    using V = std::vector<std::string>;
+    CHECK(returnCandidates("/switch/apps/Eqx.nro") ==
+          V{"sdmc:/switch/apps/Eqx.nro", "sdmc:/switch/Equinox/Equinox.nro", "sdmc:/switch/Equinox.nro"});
+    CHECK(returnCandidates("sdmc:/switch/Equinox/Equinox.nro") ==
+          V{"sdmc:/switch/Equinox/Equinox.nro", "sdmc:/switch/Equinox.nro"});
+    CHECK(returnCandidates("sdmc:/switch/Equinox.nro") ==
+          V{"sdmc:/switch/Equinox.nro", "sdmc:/switch/Equinox/Equinox.nro"});
+    CHECK(returnCandidates("") == V{"sdmc:/switch/Equinox/Equinox.nro", "sdmc:/switch/Equinox.nro"});
+    CHECK(returnCandidates("romfs:/x") == V{"sdmc:/switch/Equinox/Equinox.nro", "sdmc:/switch/Equinox.nro"});
+
+    auto only = [](const std::string& path) {
+        return [path](const std::string& p) { return p == path; };
+    };
+    CHECK(pickReturnPath("/switch/apps/Eqx.nro", only("sdmc:/switch/apps/Eqx.nro")) == "sdmc:/switch/apps/Eqx.nro");
+    // argv[0] gone (moved): the README location.
+    CHECK(pickReturnPath("/switch/apps/Eqx.nro", only("sdmc:/switch/Equinox/Equinox.nro")) ==
+          "sdmc:/switch/Equinox/Equinox.nro");
+    CHECK(pickReturnPath("", only("sdmc:/switch/Equinox.nro")) == "sdmc:/switch/Equinox.nro");
+    CHECK(!pickReturnPath("/switch/apps/Eqx.nro", [](const std::string&) { return false; }));
 }
 
 TEST_CASE("token round trip and rejects") {

@@ -54,7 +54,23 @@ bool launchRom(const Console& console, const RomEntry& rom, Origin origin, int f
         return false;
     }
 
-    ensureFolders(paths);
+    // The runner opens this file when the player leaves the game; without it
+    // the Switch would fall back to the Homebrew Menu.
+    const auto isFile = [](const std::string& path) {
+        std::error_code err;
+        return std::filesystem::is_regular_file(fromUtf8(path), err);
+    };
+    const std::optional<std::string> returnTo =
+        pickReturnPath(Settings::instance().launch_path(), isFile);
+    if (!returnTo) {
+        showError("emu/no_return"_i18n);
+        return false;
+    }
+    if (!ensureFolders(paths)) {
+        showError("emu/error_folders"_i18n);
+        return false;
+    }
+
     Settings::instance().set_last_played(console.slug, rom.fileName, (int64_t)std::time(nullptr));
     Settings::instance().save();
 
@@ -64,11 +80,10 @@ bool launchRom(const Console& console, const RomEntry& rom, Origin origin, int f
     token.filter = filter;
     token.romFile = rom.fileName;
 
-    const std::string args = runnerArgs(console, paths, rom, returnPath(Settings::instance().launch_path()),
-                                        encodeToken(token));
+    const std::string args = runnerArgs(console, paths, rom, *returnTo, encodeToken(token));
     // argv[0] must be the runner's own path.
     const std::string line = "\"" + paths.runner + "\" " + args;
-    brls::Logger::info("EmuLauncher: {} {}", paths.runner, line);
+    brls::Logger::info("EmuLauncher: {}", line);
     if (R_FAILED(envSetNextLoad(paths.runner.c_str(), line.c_str()))) {
         showError("emu/cannot_launch"_i18n);
         return false;

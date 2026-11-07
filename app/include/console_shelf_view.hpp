@@ -71,6 +71,11 @@ class ConsoleShelfView : public brls::Box {
     void showGames(std::vector<Game> found);
     void onSelected(int index);
     void play(int index);
+    // Polls (on the UI thread) until the cover thread has stopped, then
+    // launches; gives up after a few seconds.
+    void waitForCovers(int index, int attempt);
+    void launch(int index);
+    brls::Dialog* stopLoader = nullptr;
     std::string metaText(const Game& game) const;
 
     // Downloads the missing covers, nearest to `first` first.

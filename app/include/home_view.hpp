@@ -148,7 +148,10 @@ class HomeView : public brls::Box {
     // B on the home shelf: asks before closing the app.
     void confirmExit();
 
-    void openPcs();
+    // checkUpdates: false on the way back from a game, so no manifest
+    // request is in flight if the player starts another one right away;
+    // the check runs on the next visit to Dispositivos.
+    void openPcs(bool checkUpdates = true);
     void closePcs();
     void enter();
     void leave(bool focusCard = true);

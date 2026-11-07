@@ -477,6 +477,9 @@
         "played_days": "jogado há {} dias",
         "not_installed": "Emulador não instalado",
         "rom_missing": "Este jogo não está mais no cartão SD.",
-        "cannot_launch": "Não deu para abrir o jogo daqui. Abra o Equinox pelo Homebrew Menu e tente de novo."
+        "cannot_launch": "Não deu para abrir o jogo daqui. Abra o Equinox pelo Homebrew Menu e tente de novo.",
+        "opening": "Abrindo o jogo…",
+        "try_again": "Tente de novo em instantes.",
+        "no_return": "Não achei o Equinox.nro no cartão SD, e o jogo não teria como voltar para o Equinox. Coloque-o em sdmc:/switch/Equinox/ e tente de novo."
     }
 }

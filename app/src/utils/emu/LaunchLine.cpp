@@ -26,7 +26,13 @@ std::string sanitizeArg(std::string_view value) {
     return out;
 }
 
-std::string returnPath(const std::string& launchPath) {
+std::string normalizeLaunchPath(const std::string& launchPath) {
+    if (!launchPath.empty() && launchPath[0] == '/') return "sdmc:" + launchPath;
+    return launchPath;
+}
+
+std::string returnPath(const std::string& rawPath) {
+    const std::string launchPath = normalizeLaunchPath(rawPath);
     static const std::string prefix = "sdmc:/";
     static const std::string suffix = ".nro";
     if (launchPath.size() < prefix.size() + suffix.size() ||
@@ -37,6 +43,27 @@ std::string returnPath(const std::string& launchPath) {
         if (std::tolower(c) != suffix[i]) return kDefaultReturn;
     }
     return launchPath;
+}
+
+std::vector<std::string> returnCandidates(const std::string& launchPath) {
+    std::vector<std::string> out;
+    auto add = [&out](const std::string& path) {
+        if (std::find(out.begin(), out.end(), path) == out.end()) out.push_back(path);
+    };
+    const std::string own = returnPath(launchPath);
+    // returnPath falls back to the default; only a real path of its own
+    // goes first.
+    if (own == normalizeLaunchPath(launchPath)) add(own);
+    add("sdmc:/switch/Equinox/Equinox.nro");
+    add(kDefaultReturn);
+    return out;
+}
+
+std::optional<std::string> pickReturnPath(const std::string& launchPath,
+                                          const std::function<bool(const std::string&)>& exists) {
+    for (const std::string& path : returnCandidates(launchPath))
+        if (exists(path)) return path;
+    return std::nullopt;
 }
 
 std::string encodeToken(const ResumeToken& token) {
