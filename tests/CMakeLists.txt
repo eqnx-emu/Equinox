@@ -22,3 +22,10 @@ add_executable(test_stage_retry test_stage_retry.cpp)
 target_include_directories(test_stage_retry PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
     "${MOONLIGHT_ROOT}/extern")
+
+add_executable(test_emu_console
+    test_emu_console.cpp
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp")
+target_include_directories(test_emu_console PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
