@@ -203,9 +203,8 @@
         "keys": "Controller keys",
         "keys_mapping": "Game keys mapping",
         "keys_mapping_create_new": "+ Create new layout",
-        "keys_mapping_default": "Xbox (buttons keep their position)",
+        "keys_mapping_default": "Xbox",
         "keys_mapping_new_title": "New layout",
-        "keys_mapping_swap": "Xbox (buttons keep their letter)",
         "keys_mapping_switch": "Switch (PC sees a Switch controller)",
         "keys_mapping_title": "Keys mapping layout",
         "mouse": "Mouse",
@@ -243,6 +242,16 @@
         "video_codec": "Video codec",
         "volume_amplification": "Allow volume amplification",
         "zero_threads": "0 (No use threads)",
+        "quick": {
+            "title": "Stream quality",
+            "hint": "{} to adjust, then ◀ ▶",
+            "adjust": "Adjust",
+            "all": "All settings",
+            "on": "on",
+            "off": "off",
+            "upscaling": "Upscaling",
+            "bitrate": "Bitrate"
+        },
         "groups": {
             "video": {
                 "title": "Video",

@@ -133,6 +133,7 @@ void SettingsTab::updateBitrateHints() {
     applyBitrateHint(handheldBitrateHeader, Settings::instance().handheld_bitrate(),
                      minRecommendedFor(Settings::instance().handheld_resolution()));
 #endif
+    updateQuickSettings();
 }
 
 SettingsTab::SettingsTab() {
@@ -145,6 +146,7 @@ SettingsTab::SettingsTab() {
     };
     resolution->setText("settings/resolution"_i18n);
     resolution->setData(resolutions);
+    resolutionNames = resolutions;
     switch (Settings::instance().resolution()) {
         GET_SETTINGS(resolution, -1, 0);
         GET_SETTINGS(resolution, 360, 1);
@@ -275,6 +277,7 @@ SettingsTab::SettingsTab() {
     };
     fps->setText("settings/fps"_i18n);
     fps->setData(fpss);
+    fpsNames = fpss;
     switch (Settings::instance().fps()) {
         GET_SETTINGS(fps, 30, 0);
         GET_SETTINGS(fps, 40, 1);
@@ -821,54 +824,285 @@ SettingsTab::SettingsTab() {
 }
 
 namespace {
-// Menu card for a settings group: Material icon, name and what it covers.
-PressableBox* makeGroupCard(const std::string& icon, const std::string& title,
-                   const std::string& summary) {
+// Four 200 px cards with 12 px gaps: the quick settings box matches it.
+constexpr float kMenuWidth = 4 * 200 + 3 * 12;
+// Three tiles with 12 px gaps inside the box's 20 px padding.
+constexpr float kTileWidth = (kMenuWidth - 2 * 20 - 2 * 12) / 3;
+
+// Bitrate range of the slider in the Video group.
+#if defined(PLATFORM_SWITCH)
+constexpr int kBitrateMaxKbps = 100000;
+#else
+constexpr int kBitrateMaxKbps = 150000;
+#endif
+constexpr int kBitrateMinKbps = 500;
+constexpr int kBitrateStepKbps = 1000;
+
+// Menu entry for a settings group: Material icon and name.
+PressableBox* makeGroupCard(const std::string& icon, const std::string& title) {
     Theme theme = Application::getTheme();
 
-    auto* card = new PressableBox(Axis::COLUMN);
+    auto* card = new PressableBox(Axis::ROW);
     card->setWidth(200);
-    card->setHeight(184);
-    card->setPadding(18, 18, 18, 18);
-    card->setCornerRadius(16);
-    card->setHighlightCornerRadius(18);
+    card->setHeight(64);
+    card->setPadding(0, 12, 0, 14);
+    card->setAlignItems(AlignItems::CENTER);
+    card->setCornerRadius(14);
+    card->setHighlightCornerRadius(16);
     card->setHideHighlightBackground(true);
     card->setBackgroundColor(theme.getColor("equinox/card"));
     card->setFocusable(true);
     card->addGestureRecognizer(new TapGestureRecognizer(card));
 
-    auto* badge = new Box(Axis::ROW);
-    badge->setWidth(48);
-    badge->setHeight(48);
-    badge->setCornerRadius(24);
-    badge->setJustifyContent(JustifyContent::CENTER);
-    badge->setAlignItems(AlignItems::CENTER);
-    badge->setBackgroundColor(theme.getColor("equinox/sky_night"));
-
     auto* glyph = new IconLabel();
-    glyph->setFontSize(26);
-    glyph->setTextColor(theme.getColor("equinox/sun"));
+    glyph->setFontSize(22);
+    glyph->setTextColor(theme.getColor("equinox/status_moon"));
     glyph->setText(icon);
-    badge->addView(glyph);
-    card->addView(badge);
+    card->addView(glyph);
 
     auto* name = new BoldLabel();
-    name->setFontSize(19);
-    name->setMarginTop(14);
+    name->setFontSize(15);
+    name->setMarginLeft(10);
     name->setSingleLine(true);
+    name->setGrow(1.0f);
+    name->setShrink(1.0f);
     name->setText(title);
     card->addView(name);
 
-    auto* text = new Label();
-    text->setFontSize(14);
-    text->setMarginTop(4);
-    text->setTextColor(theme.getColor("equinox/muted"));
-    text->setText(summary);
-    card->addView(text);
-
     return card;
 }
+
+// A quick setting: A starts adjusting, then left/right change the value and
+// A or B stop. While not adjusting, left/right move between tiles as usual.
+class QuickTile : public PressableBox {
+  public:
+    std::function<void(int)> onStep;
+
+    QuickTile(const std::string& title, float width, bool withBar)
+        : PressableBox(Axis::COLUMN) {
+        Theme theme = Application::getTheme();
+        setWidth(width);
+        setHeight(104);
+        setPadding(14, 14, 14, 14);
+        setCornerRadius(14);
+        setHighlightCornerRadius(16);
+        setHideHighlightBackground(true);
+        setBackgroundColor(theme.getColor("equinox/card_inner"));
+        setBorderColor(theme.getColor("equinox/sun"));
+        setBorderThickness(0);
+        setFocusable(true);
+        addGestureRecognizer(new TapGestureRecognizer(this));
+
+        auto* name = new Label();
+        name->setFontSize(14);
+        name->setTextColor(theme.getColor("equinox/muted"));
+        name->setText(title);
+        addView(name);
+
+        auto* row = new Box(Axis::ROW);
+        row->setAlignItems(AlignItems::CENTER);
+        row->setMarginTop(6);
+        left = makeArrow("\ue5cb"); // chevron_left
+        row->addView(left);
+        value = new BoldLabel();
+        value->setFontSize(24);
+        value->setGrow(1.0f);
+        value->setSingleLine(true);
+        value->setHorizontalAlign(HorizontalAlign::CENTER);
+        row->addView(value);
+        right = makeArrow("\ue5cc"); // chevron_right
+        row->addView(right);
+        addView(row);
+
+        if (withBar) {
+            auto* track = new Box(Axis::ROW);
+            track->setHeight(6);
+            track->setMarginTop(10);
+            track->setCornerRadius(3);
+            track->setBackgroundColor(theme.getColor("brls/slider/line_empty"));
+            fill = new Box(Axis::ROW);
+            fill->setHeight(6);
+            fill->setCornerRadius(3);
+            fill->setBackgroundColor(theme.getColor("equinox/sun"));
+            track->addView(fill);
+            addView(track);
+        }
+
+        registerAction("settings/quick/adjust"_i18n, BUTTON_A, [this](View*) {
+            setEditing(!editing);
+            return true;
+        });
+        registerClickAction([this](View*) {
+            setEditing(!editing);
+            return true;
+        });
+        auto step = [this](int direction) {
+            return [this, direction](View*) {
+                if (!editing)
+                    return false; // let focus move
+                if (onStep)
+                    onStep(direction);
+                return true;
+            };
+        };
+        registerAction("", BUTTON_NAV_LEFT, step(-1), true, true);
+        registerAction("", BUTTON_NAV_RIGHT, step(1), true, true);
+        registerAction("", BUTTON_B, [this](View*) {
+            if (!editing)
+                return false;
+            setEditing(false);
+            return true;
+        }, true);
+    }
+
+    void setValue(const std::string& text) { value->setText(text); }
+
+    void setProgress(float progress) {
+        if (fill)
+            fill->setWidthPercentage(std::clamp(progress, 0.0f, 1.0f) * 100.0f);
+    }
+
+    void onFocusLost() override {
+        setEditing(false);
+        PressableBox::onFocusLost();
+    }
+
+  private:
+    BoldLabel* value = nullptr;
+    IconLabel* left = nullptr;
+    IconLabel* right = nullptr;
+    Box* fill = nullptr;
+    bool editing = false;
+
+    IconLabel* makeArrow(const std::string& glyph) {
+        auto* arrow = new IconLabel();
+        arrow->setFontSize(24);
+        arrow->setTextColor(Application::getTheme().getColor("equinox/sun"));
+        arrow->setText(glyph);
+        arrow->setVisibility(Visibility::INVISIBLE);
+        return arrow;
+    }
+
+    void setEditing(bool on) {
+        editing = on;
+        setBorderThickness(on ? 2 : 0);
+        left->setVisibility(on ? Visibility::VISIBLE : Visibility::INVISIBLE);
+        right->setVisibility(on ? Visibility::VISIBLE : Visibility::INVISIBLE);
+    }
+};
 } // namespace
+
+Box* SettingsTab::makeQuickSettings() {
+    Theme theme = Application::getTheme();
+
+    auto* section = new Box(Axis::COLUMN);
+    section->setWidth(kMenuWidth);
+    section->setAlignSelf(AlignSelf::FLEX_START);
+    section->setPadding(18, 20, 20, 20);
+    section->setCornerRadius(20);
+    section->setBackgroundColor(theme.getColor("equinox/card"));
+
+    auto* top = new Box(Axis::ROW);
+    top->setAlignItems(AlignItems::CENTER);
+    auto* title = new BoldLabel();
+    title->setFontSize(19);
+    title->setGrow(1.0f);
+    title->setText("settings/quick/title"_i18n);
+    top->addView(title);
+    auto* hint = new Label();
+    hint->setFontSize(14);
+    hint->setTextColor(theme.getColor("equinox/muted"));
+    hint->setText(brls::getStr("settings/quick/hint",
+                               Hint::getKeyIcon(BUTTON_A, true)));
+    top->addView(hint);
+    section->addView(top);
+
+    auto* tiles = new Box(Axis::ROW);
+    tiles->setMarginTop(14);
+
+    auto* res = new QuickTile("settings/resolution"_i18n, kTileWidth, false);
+    res->onStep = [this](int direction) {
+        const int next = std::clamp(resolution->getSelection() + direction, 0,
+                                    (int)resolutionNames.size() - 1);
+        if (next != resolution->getSelection())
+            resolution->setSelection(next); // runs the same handler as the Video group
+    };
+    res->setMarginRight(12);
+    tiles->addView(res);
+    quickResolution = res;
+
+    auto* rate = new QuickTile("settings/fps"_i18n, kTileWidth, false);
+    rate->onStep = [this](int direction) {
+        const int next = std::clamp(fps->getSelection() + direction, 0,
+                                    (int)fpsNames.size() - 1);
+        if (next != fps->getSelection())
+            fps->setSelection(next);
+    };
+    rate->setMarginRight(12);
+    tiles->addView(rate);
+    quickFps = rate;
+
+    auto* bits = new QuickTile("settings/quick/bitrate"_i18n, kTileWidth, true);
+    bits->onStep = [this](int direction) { stepBitrate(direction); };
+    tiles->addView(bits);
+    quickBitrate = bits;
+
+    section->addView(tiles);
+
+    quickChips = new Label();
+    quickChips->setFontSize(14);
+    quickChips->setMarginTop(14);
+    quickChips->setTextColor(theme.getColor("equinox/muted"));
+    section->addView(quickChips);
+
+    updateQuickSettings();
+    return section;
+}
+
+void SettingsTab::stepBitrate(int direction) {
+    // Snap to whole Mbps, then step.
+    const int current = Settings::instance().bitrate();
+    int next = (current / kBitrateStepKbps) * kBitrateStepKbps;
+    if (direction > 0 || next == current)
+        next += direction * kBitrateStepKbps;
+    next = std::clamp(next, kBitrateMinKbps, kBitrateMaxKbps);
+    if (next == current)
+        return;
+    // The slider's handler saves it and updates the hints (and this box).
+    slider->setProgress(float(next - kBitrateMinKbps) /
+                        float(kBitrateMaxKbps - kBitrateMinKbps));
+}
+
+void SettingsTab::updateQuickSettings() {
+    if (!quickResolution)
+        return;
+    const Settings& s = Settings::instance();
+
+    auto* res = (QuickTile*)quickResolution;
+    const int r = resolution->getSelection();
+    res->setValue(r >= 0 && r < (int)resolutionNames.size() ? resolutionNames[r] : "");
+
+    auto* rate = (QuickTile*)quickFps;
+    const int f = fps->getSelection();
+    rate->setValue(f >= 0 && f < (int)fpsNames.size() ? fpsNames[f] : "");
+
+    auto* bits = (QuickTile*)quickBitrate;
+    bits->setValue(formatMbps(s.bitrate()) + " Mbps");
+    bits->setProgress(float(s.bitrate() - kBitrateMinKbps) /
+                      float(kBitrateMaxKbps - kBitrateMinKbps));
+
+    std::string chips = "settings/video_codec"_i18n + ": " +
+                        getVideoCodecName(s.video_codec());
+#if defined(PLATFORM_SWITCH)
+    if (s.mode_profiles())
+        chips += "   ·   " + "settings/handheld_profile"_i18n + ": " +
+                 std::to_string(s.handheld_resolution()) + "p, " +
+                 formatMbps(s.handheld_bitrate()) + " Mbps";
+#endif
+    chips += "   ·   " + "settings/quick/upscaling"_i18n + ": " +
+             (s.upscaling() ? "settings/quick/on"_i18n : "settings/quick/off"_i18n);
+    quickChips->setText(chips);
+}
 
 void SettingsTab::setupGroups() {
     // Material Icons code points.
@@ -884,6 +1118,16 @@ void SettingsTab::setupGroups() {
     };
 
     pageTitle->setText("tabs/settings"_i18n);
+
+    menu->addView(makeQuickSettings());
+
+    auto* allTitle = new Label();
+    allTitle->setFontSize(15);
+    allTitle->setMarginTop(22);
+    allTitle->setMarginBottom(10);
+    allTitle->setTextColor(Application::getTheme().getColor("equinox/muted"));
+    allTitle->setText("settings/quick/all"_i18n);
+    menu->addView(allTitle);
 
     auto* grid = new GridView(4);
     for (const auto& [id, icon] : ids) {
@@ -906,7 +1150,7 @@ void SettingsTab::setupGroups() {
 
         const size_t index = groups.size();
         const std::string title = brls::getStr(key + "/title");
-        PressableBox* card = makeGroupCard(icon, title, brls::getStr(key + "/summary"));
+        PressableBox* card = makeGroupCard(icon, title);
         groups.push_back({card, content, title});
         grid->addView(card);
 
@@ -937,6 +1181,7 @@ void SettingsTab::closeGroup(size_t index) {
     groups[index].content->setVisibility(Visibility::GONE);
     menu->setVisibility(Visibility::VISIBLE);
     pageTitle->setText("tabs/settings"_i18n);
+    updateQuickSettings(); // the group may have changed what they show
     scroll->setContentOffsetY(0, false);
     Application::giveFocus(groups[index].entry);
 }

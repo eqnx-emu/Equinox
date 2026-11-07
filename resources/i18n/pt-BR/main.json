@@ -203,9 +203,8 @@
         "keys": "Teclas de controle",
         "keys_mapping": "Mapear teclas de jogo",
         "keys_mapping_create_new": "+ Criar novo layout",
-        "keys_mapping_default": "Xbox (botões na mesma posição)",
+        "keys_mapping_default": "Xbox",
         "keys_mapping_new_title": "Novo layout",
-        "keys_mapping_swap": "Xbox (botões com a mesma letra)",
         "keys_mapping_switch": "Switch (o PC vê um controle de Switch)",
         "keys_mapping_title": "Layout de mapeamento das teclas",
         "mouse": "Mouse",
@@ -243,6 +242,16 @@
         "video_codec": "Codec de vídeo",
         "volume_amplification": "Permitir amplificação de volume",
         "zero_threads": "0 (Não usar threads)",
+        "quick": {
+            "title": "Qualidade da transmissão",
+            "hint": "{} ajusta, depois ◀ ▶",
+            "adjust": "Ajustar",
+            "all": "Todas as configurações",
+            "on": "ligado",
+            "off": "desligado",
+            "upscaling": "Upscaling",
+            "bitrate": "Bitrate"
+        },
         "groups": {
             "video": {
                 "title": "Vídeo",

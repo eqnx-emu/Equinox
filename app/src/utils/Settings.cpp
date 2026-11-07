@@ -467,12 +467,31 @@ void Settings::load() {
                 if (json_typeof(current_mapping_layout) == JSON_INTEGER) {
                     m_current_mapping_layout = (int)json_integer_value(current_mapping_layout);
 
-                    // Settings saved before the Switch layout existed had 2 built-in layouts;
-                    // the Switch layout now comes first, so shift the saved index past it.
-                    json_t* base_layouts = json_object_get(settings, "base_mapping_layouts");
-                    int saved_base_layouts = base_layouts && json_typeof(base_layouts) == JSON_INTEGER ? (int)json_integer_value(base_layouts) : 2;
-                    if (saved_base_layouts < BASE_MAPPING_LAYOUTS_COUNT) {
-                        m_current_mapping_layout += BASE_MAPPING_LAYOUTS_COUNT - saved_base_layouts;
+                    // Older settings index into other built-in lists:
+                    //   no marker:                  Xbox, Xbox with swapped letters
+                    //   base_mapping_layouts == 3:  Switch, Xbox, Xbox with swapped letters
+                    // The swapped one is now Xbox plus the swap setting.
+                    json_t* scheme = json_object_get(settings, "mapping_layouts_scheme");
+                    if (!scheme || json_typeof(scheme) != JSON_INTEGER ||
+                        json_integer_value(scheme) < MAPPING_LAYOUTS_SCHEME) {
+                        enum { OLD_SWITCH, OLD_XBOX, OLD_XBOX_SWAPPED };
+                        json_t* base_layouts = json_object_get(settings, "base_mapping_layouts");
+                        const bool hadSwitch = base_layouts && json_typeof(base_layouts) == JSON_INTEGER &&
+                                               json_integer_value(base_layouts) == 3;
+                        const std::vector<int> old = hadSwitch
+                            ? std::vector<int>{OLD_SWITCH, OLD_XBOX, OLD_XBOX_SWAPPED}
+                            : std::vector<int>{OLD_XBOX, OLD_XBOX_SWAPPED};
+                        const int index = m_current_mapping_layout;
+                        if (index < 0) {
+                            m_current_mapping_layout = 0;
+                        } else if (index < (int)old.size()) {
+                            m_current_mapping_layout = old[index] == OLD_SWITCH ? 0 : 1;
+                            if (old[index] == OLD_XBOX_SWAPPED)
+                                m_swap_ui_keys = !m_swap_ui_keys;
+                        } else {
+                            m_current_mapping_layout =
+                                BASE_MAPPING_LAYOUTS_COUNT + index - (int)old.size();
+                        }
                     }
                 }
             }
@@ -643,7 +662,7 @@ void Settings::save() {
             json_object_set_new(settings, "deadzone_stick_right", json_integer(int(m_deadzone_stick_right * 100.f)));
             json_object_set_new(settings, "rumble_force", json_integer(m_rumble_force));
             json_object_set_new(settings, "current_mapping_layout", json_integer(m_current_mapping_layout));
-            json_object_set_new(settings, "base_mapping_layouts", json_integer(BASE_MAPPING_LAYOUTS_COUNT));
+            json_object_set_new(settings, "mapping_layouts_scheme", json_integer(MAPPING_LAYOUTS_SCHEME));
             json_object_set_new(settings, "keyboard_type", json_integer(m_keyboard_type));
             json_object_set_new(settings, "keyboard_fingers", json_integer(m_keyboard_fingers));
             json_object_set_new(settings, "overlay_system_button", json_integer((int)m_overlay_system_button));
@@ -710,15 +729,9 @@ void Settings::loadBaseLayouts() {
         .editable = false,
         .mapping = {}
     };
-    KeyMappingLayout swapLayout {
-        .title = "settings/keys_mapping_swap"_i18n,
-        .editable = false,
-        .mapping = { {ControllerButton::BUTTON_A, ControllerButton::BUTTON_B}, {ControllerButton::BUTTON_B, ControllerButton::BUTTON_A}, {ControllerButton::BUTTON_X, ControllerButton::BUTTON_Y}, {ControllerButton::BUTTON_Y, ControllerButton::BUTTON_X} }
-    };
 
     m_mapping_laouts.push_back(switchLayout);
     m_mapping_laouts.push_back(defaultLayout);
-    m_mapping_laouts.push_back(swapLayout);
 }
 
 int Settings::get_current_mapping_layout() {

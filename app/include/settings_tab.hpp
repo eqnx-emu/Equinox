@@ -84,6 +84,19 @@ class SettingsTab : public brls::Box {
     };
     std::vector<Group> groups;
 
+    // Quick settings on top of the menu: resolution, FPS and bitrate change
+    // in place; the chips below them show a few other current values.
+    std::vector<std::string> resolutionNames;
+    std::vector<std::string> fpsNames;
+    brls::View* quickResolution = nullptr;
+    brls::View* quickFps = nullptr;
+    brls::View* quickBitrate = nullptr;
+    brls::Label* quickChips = nullptr;
+
+    brls::Box* makeQuickSettings();
+    void updateQuickSettings();
+    void stepBitrate(int direction);
+
     void setupGroups();
     void openGroup(size_t index);
     void closeGroup(size_t index);
