@@ -42,6 +42,7 @@ class PressableBox : public brls::Box {
         const float cx = getX() + getWidth() / 2;
         const float cy = getY() + getHeight() / 2;
         nvgSave(ctx->vg);
+        nvgTextScaleSnap(ctx->vg, 0.06f);
         nvgTranslate(ctx->vg, cx, cy);
         nvgScale(ctx->vg, s, s);
         nvgTranslate(ctx->vg, -cx, -cy);

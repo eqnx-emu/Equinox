@@ -240,7 +240,9 @@ void FavoritesView::rebuild(int selectIndex) {
     dots->setVisibility(none ? Visibility::GONE : Visibility::VISIBLE);
     empty->setVisibility(none ? Visibility::VISIBLE : Visibility::GONE);
 
-    if (!none) {
+    if (none)
+        ambient.clear();
+    else {
         const int index = std::clamp(selectIndex, 0, (int)entries.size() - 1);
         carousel->jumpTo(index);
         onSelected(index);
@@ -304,6 +306,23 @@ void FavoritesView::onSelected(int index) {
                                 "hosts/status_asleep"_i18n
                           : hosts[host].hostname);
     dots->setState(entries.size(), index);
+    ambient.select(hosts[host], entries[index].app.app_id);
+}
+
+void FavoritesView::willAppear(bool resetState) {
+    Box::willAppear(resetState);
+    ambient.attach(this);
+}
+
+void FavoritesView::willDisappear(bool resetState) {
+    Box::willDisappear(resetState);
+    ambient.detach();
+}
+
+void FavoritesView::draw(NVGcontext* vg, float x, float y, float width,
+                         float height, Style style, FrameContext* ctx) {
+    ambient.drawFallback(vg, x, y, width, height);
+    Box::draw(vg, x, y, width, height, style, ctx);
 }
 
 void FavoritesView::unstar(int index) {

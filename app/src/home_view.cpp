@@ -391,6 +391,8 @@ void MotionBox::frame(FrameContext* ctx) {
     const float cx = getX() + getWidth() / 2;
     const float cy = getY() + getHeight() * originY;
     nvgSave(vg);
+    if (s != 1.0f)
+        nvgTextScaleSnap(vg, 0.06f);
     nvgTranslate(vg, cx + dx, cy);
     nvgScale(vg, s, s);
     nvgTranslate(vg, -cx, -cy);
@@ -559,7 +561,7 @@ HomeView::HomeView() {
         else if (level == Level::PCS)
             closePcs();
         else
-            return false;
+            confirmExit();
         return true;
     });
 
@@ -799,8 +801,16 @@ void HomeView::updateShelfInfo() {
 }
 
 void HomeView::updateBackAction() {
-    setActionAvailable(BUTTON_B, entered || level == Level::PCS);
+    const bool back = entered || level == Level::PCS;
+    updateActionHint(BUTTON_B, back ? "home/back"_i18n : "home/exit"_i18n);
     Application::getGlobalHintsUpdateEvent()->fire();
+}
+
+void HomeView::confirmExit() {
+    auto* dialog = new Dialog("home/exit_message"_i18n);
+    dialog->addButton("common/cancel"_i18n, [] {});
+    dialog->addButton("home/exit"_i18n, [] { Application::quit(); });
+    dialog->open();
 }
 
 void HomeView::openPcs() {
@@ -1089,6 +1099,8 @@ std::vector<HomeOption> HomeView::hostOptions(HostCard* card) {
                            [card] { card->openLibrary(); }});
         if (favorites > 0)
             options.push_back(favoritesOption());
+        options.push_back({"", "hosts/steam_import"_i18n, "",
+                           [card] { card->importSteamGames(); }});
         options.push_back({"", "capacity/action"_i18n, "",
                            [card] { card->openCapacityTest(); }});
         break;

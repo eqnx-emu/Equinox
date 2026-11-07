@@ -686,6 +686,27 @@ void GameStreamClient::quit(const Host& host,
     quit(active_address(host), callback);
 }
 
+void GameStreamClient::steam_import(
+    const Host& host, ServerCallback<SteamImportResult>& callback) {
+    with_cached_server_data<SteamImportResult>(
+        active_address(host), "Firstly call connect() & pair()...", callback,
+        [](const std::string& cachedAddress, SERVER_DATA& server,
+           ServerCallback<SteamImportResult>& callback) {
+            SteamImportResult result;
+            int status = gs_steam_import(&server, &result);
+            const std::string error = status == GS_OK ? "" : gs_error();
+
+            brls::sync([callback, status, result, error] {
+                if (status == GS_OK)
+                    callback(GSResult<SteamImportResult>::success(result));
+                else if (status == GS_NOT_SUPPORTED)
+                    callback(GSResult<SteamImportResult>::failure("not_supported"));
+                else
+                    callback(GSResult<SteamImportResult>::failure(error));
+            });
+        });
+}
+
 void GameStreamClient::ping(const std::string& address,
                             ServerCallback<float>& callback, bool warmup) {
     with_cached_server_data<float>(

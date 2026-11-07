@@ -67,6 +67,16 @@ int gs_unpair(PSERVER_DATA server);
 int gs_pair(PSERVER_DATA server, char* pin);
 int gs_quit_app(PSERVER_DATA server);
 
+// Solstice: adds the host's installed Steam games to its app list.
+struct SteamImportResult {
+    bool steamFound = false;
+    int added = 0;
+    int removed = 0;
+    int installed = 0;
+};
+// GS_NOT_SUPPORTED when the host has no such endpoint (not Solstice, or older).
+int gs_steam_import(PSERVER_DATA server, SteamImportResult* result);
+
 // Latency/speed probes against the Solstice host (GS_NOT_SUPPORTED on 404).
 // Callers should discard one warm-up gs_ping before sampling so the TLS
 // handshake is not measured (the curl handle is reused between pings). Pass

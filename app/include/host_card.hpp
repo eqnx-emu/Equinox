@@ -74,6 +74,8 @@ class HostCard : public PressableBox {
     void quitRunningApp();
     void wake();
     void openCapacityTest();
+    // Asks Solstice to add the PC's installed Steam games to its library.
+    void importSteamGames();
     void rename();
     void remove();
 
