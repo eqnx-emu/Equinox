@@ -105,12 +105,9 @@ endif ()
 
 # building target
 program_target(${PROJECT_NAME} "${MAIN_SRC}")
-# ScreenScraper developer credentials come from the environment only.
-set(EQUINOX_SS_DEVID "$ENV{EQUINOX_SS_DEVID}" CACHE STRING "")
-set(EQUINOX_SS_DEVPASSWORD "$ENV{EQUINOX_SS_DEVPASSWORD}" CACHE STRING "")
-target_compile_definitions(${PROJECT_NAME} PRIVATE
-    EQUINOX_SS_DEVID="${EQUINOX_SS_DEVID}"
-    EQUINOX_SS_DEVPASSWORD="${EQUINOX_SS_DEVPASSWORD}")
+set(EQUINOX_SS_DEV_OUT_DIR "${CMAKE_BINARY_DIR}/generated")
+include(cmake/EquinoxSsDev.cmake)
+target_include_directories(${PROJECT_NAME} PRIVATE "${EQUINOX_SS_DEV_OUT_DIR}")
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 20)
 if (USE_SDL3)
     target_compile_definitions(${PROJECT_NAME} PRIVATE SDL_ENABLE_OLD_NAMES)

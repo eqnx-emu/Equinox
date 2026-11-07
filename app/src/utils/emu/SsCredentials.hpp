@@ -6,12 +6,7 @@
 #include "../Settings.hpp"
 #include "ScreenScraper.hpp"
 
-#ifndef EQUINOX_SS_DEVID
-#define EQUINOX_SS_DEVID ""
-#endif
-#ifndef EQUINOX_SS_DEVPASSWORD
-#define EQUINOX_SS_DEVPASSWORD ""
-#endif
+#include "ss_dev.h"
 
 namespace emu {
 
