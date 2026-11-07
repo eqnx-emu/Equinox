@@ -1,6 +1,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -82,4 +83,27 @@ TEST_CASE("cover url and path") {
           "Named_Boxarts/Super%20Metroid%20%28Japan%2C%20USA%29%20%28En%2CJa%29.png");
     CHECK(emu::coverUrl(*snes, "Pok\xC3\xA9").find("Pok%C3%A9.png") != std::string::npos);
     CHECK(emu::coverPath(emu::pathsFor(*snes), "Zelda") == "sdmc:/equinox/covers/snes/Zelda.png");
+}
+
+TEST_CASE("thumb urls, paths and name candidates") {
+    const emu::Console* snes = emu::findConsole("snes");
+    REQUIRE(snes);
+    const std::string base =
+        "https://thumbnails.libretro.com/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System/";
+    CHECK(emu::thumbUrl(*snes, emu::ThumbKind::Snap, "Super Mario World (USA)") ==
+          base + "Named_Snaps/Super%20Mario%20World%20%28USA%29.png");
+    CHECK(emu::thumbUrl(*snes, emu::ThumbKind::Title, "Super Mario World (USA)") ==
+          base + "Named_Titles/Super%20Mario%20World%20%28USA%29.png");
+    const auto p = emu::pathsFor(*snes);
+    CHECK(emu::thumbPath(p, emu::ThumbKind::Title, "x") == p.titles + "/x.png");
+    CHECK(emu::thumbPath(p, emu::ThumbKind::Snap, "x") == p.snaps + "/x.png");
+    CHECK(emu::thumbPath(p, emu::ThumbKind::Boxart, "x") == p.covers + "/x.png");
+
+    const std::string canon = "Legend of Zelda, The - A Link to the Past (USA)";
+    CHECK(emu::thumbNameCandidates(canon, "zelda")[0] == canon);
+    CHECK(emu::thumbNameCandidates("", "zelda") == emu::coverNameCandidates("zelda"));
+    CHECK(emu::thumbNameCandidates("A/B (USA)", "zelda")[0] == "A_B (USA)");
+    const auto dup = emu::thumbNameCandidates("zelda", "zelda");
+    CHECK(dup[0] == "zelda");
+    CHECK(std::count(dup.begin(), dup.end(), "zelda") == 1);
 }

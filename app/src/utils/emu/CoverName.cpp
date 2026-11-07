@@ -39,6 +39,13 @@ static std::string replaceAll(std::string s, const std::string& from, const std:
     return s;
 }
 
+static std::string replaceForbidden(std::string s) {
+    static const std::string bad = "&*/:`<>?\\|\"";
+    for (char& ch : s)
+        if (bad.find(ch) != std::string::npos) ch = '_';
+    return s;
+}
+
 std::vector<std::string> coverNameCandidates(const std::string& title) {
     std::string noBrackets = stripBlocks(title, '[', ']');
     std::string c3 = tidy(noBrackets);
@@ -54,12 +61,10 @@ std::vector<std::string> coverNameCandidates(const std::string& title) {
             cands.push_back(bare + region);
     }
 
-    static const std::string bad = "&*/:`<>?\\|\"";
     std::vector<std::string> out;
     for (std::string c : cands) {
         if (c.empty()) continue;
-        for (char& ch : c)
-            if (bad.find(ch) != std::string::npos) ch = '_';
+        c = replaceForbidden(c);
         if (std::find(out.begin(), out.end(), c) == out.end()) out.push_back(c);
     }
     return out;
@@ -81,13 +86,36 @@ static std::string urlEncode(const std::string& s) {
     return r;
 }
 
+std::string thumbUrl(const Console& console, ThumbKind kind, const std::string& candidate) {
+    const char* dir = kind == ThumbKind::Snap    ? "Named_Snaps"
+                      : kind == ThumbKind::Title ? "Named_Titles"
+                                                 : "Named_Boxarts";
+    return "https://thumbnails.libretro.com/" + urlEncode(console.libretroSystem) + "/" + dir +
+           "/" + urlEncode(candidate) + ".png";
+}
+
+std::string thumbPath(const ConsolePaths& paths, ThumbKind kind, const std::string& title) {
+    const std::string& dir = kind == ThumbKind::Snap    ? paths.snaps
+                             : kind == ThumbKind::Title ? paths.titles
+                                                        : paths.covers;
+    return dir + "/" + title + ".png";
+}
+
+std::vector<std::string> thumbNameCandidates(const std::string& canonical, const std::string& title) {
+    std::vector<std::string> out = coverNameCandidates(title);
+    if (canonical.empty()) return out;
+    const std::string c = replaceForbidden(canonical);
+    out.erase(std::remove(out.begin(), out.end(), c), out.end());
+    out.insert(out.begin(), c);
+    return out;
+}
+
 std::string coverUrl(const Console& console, const std::string& candidate) {
-    return "https://thumbnails.libretro.com/" + urlEncode(console.libretroSystem) +
-           "/Named_Boxarts/" + urlEncode(candidate) + ".png";
+    return thumbUrl(console, ThumbKind::Boxart, candidate);
 }
 
 std::string coverPath(const ConsolePaths& paths, const std::string& title) {
-    return paths.covers + "/" + title + ".png";
+    return thumbPath(paths, ThumbKind::Boxart, title);
 }
 
 }  // namespace emu
