@@ -429,7 +429,7 @@ void GameListPanel::setItems(std::vector<emu::LibraryItem> nextItems,
         cell->onFocused = [this, i] { focusedGame(i); };
         list->addView(cell);
     }
-    applyOrder();
+    applyOrder(true);
     // Nothing to pick in the new set; applyOrder only reports a first result.
     if (hadCurrent && !current && onFocusGame)
         onFocusGame(std::nullopt);
@@ -439,10 +439,11 @@ void GameListPanel::setItem(size_t index, emu::LibraryItem item) {
     if (index >= items.size())
         return;
     items[index] = std::move(item);
-    applyOrder();
+    // Only the data changed: the list stays where the user left it.
+    applyOrder(false);
 }
 
-void GameListPanel::applyOrder() {
+void GameListPanel::applyOrder(bool resetScroll) {
     const std::optional<size_t> focused = focusedIndex();
     shown = emu::libraryOrder(items, query, static_cast<emu::LibrarySort>(sort));
 
@@ -485,7 +486,7 @@ void GameListPanel::applyOrder() {
 
     if (focusInList())
         scroll->recenterNextFrame();
-    else
+    else if (resetScroll)
         scroll->setContentOffsetY(0, false);
     applyBatch();
 }
@@ -571,7 +572,7 @@ void GameListPanel::setQuery(const std::string& text) {
         return;
     query = text;
     applyQuery();
-    applyOrder();
+    applyOrder(true);
 }
 
 void GameListPanel::openSort() {
@@ -596,7 +597,7 @@ void GameListPanel::chooseSort(int value) {
     Settings::instance().set_library_sort(sort);
     Settings::instance().save();
     applySort();
-    applyOrder();
+    applyOrder(true);
 }
 
 void GameListPanel::downloadAllOrCancel() {
@@ -606,9 +607,12 @@ void GameListPanel::downloadAllOrCancel() {
             onCancel();
         break;
     case Batch::Idle:
-    case Batch::Stopped:
         if (onDownloadAll)
             onDownloadAll();
+        break;
+    case Batch::Stopped:
+        if (onRetry)
+            onRetry();
         break;
     case Batch::Done:
         break;

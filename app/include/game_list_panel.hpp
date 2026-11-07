@@ -122,7 +122,8 @@ class GameListPanel : public brls::Box {
     void applySort();
     void applyToggle();
     void applyBatch();
-    void applyOrder();
+    // resetScroll: the order or the filter changed, not just a game's data.
+    void applyOrder(bool resetScroll);
     void applyLooks(bool animate);
     void setCurrent(std::optional<size_t> next, bool animate);
     void focusedGame(size_t index);
