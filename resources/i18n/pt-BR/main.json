@@ -494,5 +494,62 @@
         "queued": "na fila",
         "no_data": "Sem dados",
         "no_return": "Não achei o Equinox.nro no cartão SD, e o jogo não teria como voltar para o Equinox. Coloque-o em sdmc:/switch/Equinox/ e tente de novo."
+    },
+    "library": {
+        "details": {
+            "download": "Baixar dados deste jogo",
+            "update": "Atualizar",
+            "retry": "Tentar de novo",
+            "waiting": "Aguardando os outros downloads",
+            "queued": "Na fila",
+            "ready": "Dados baixados",
+            "failed": "Falhou: {} O que já foi baixado ficou salvo.",
+            "not_identified": "Arquivo {}. Jogo não reconhecido no banco do libretro.",
+            "step_identify": "Identificando o jogo",
+            "step_snap": "Baixando a captura",
+            "step_title": "Baixando a tela de título",
+            "step_synopsis": "Baixando a sinopse",
+            "step_done": "Concluindo",
+            "snap_placeholder": "Captura de gameplay",
+            "snap_missing": "Sem captura no libretro",
+            "title_missing": "Sem tela de título no libretro",
+            "title_caption": "Tela de título",
+            "facts_pending": "Gênero, jogadores, desenvolvedora e ano aparecem depois de baixar os dados.",
+            "facts_none": "Sem ficha para este jogo no libretro-database.",
+            "synopsis": "Sinopse",
+            "synopsis_none": "Sem sinopse ainda. Baixe os dados deste jogo para ver a sinopse, a ficha e as imagens.",
+            "sources": "Fontes: libretro, libretro-database, ScreenScraper",
+            "sources_free": "Fontes: libretro, libretro-database"
+        },
+        "fact": {
+            "genre": "Gênero",
+            "players": "Jogadores",
+            "developer": "Desenvolvedora",
+            "publisher": "Publicadora",
+            "released": "Lançamento",
+            "region": "Região",
+            "franchise": "Franquia"
+        },
+        "stop": {
+            "offline": "Sem conexão.",
+            "bad_login": "Verifique sua conta do ScreenScraper nas Configurações.",
+            "quota": "Limite do ScreenScraper atingido. Tente mais tarde.",
+            "disk": "Não foi possível gravar no cartão SD."
+        },
+        "region": {
+            "USA": "EUA",
+            "Europe": "Europa",
+            "Japan": "Japão",
+            "World": "Mundo",
+            "Brazil": "Brasil",
+            "Korea": "Coreia",
+            "Asia": "Ásia",
+            "Australia": "Austrália",
+            "Canada": "Canadá",
+            "France": "França",
+            "Germany": "Alemanha",
+            "Spain": "Espanha",
+            "Italy": "Itália"
+        }
     }
 }

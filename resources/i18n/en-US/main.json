@@ -494,5 +494,62 @@
         "queued": "queued",
         "no_data": "No data",
         "no_return": "Equinox.nro was not found on the SD card, so the game could not return to Equinox. Put it in sdmc:/switch/Equinox/ and try again."
+    },
+    "library": {
+        "details": {
+            "download": "Download this game's data",
+            "update": "Update",
+            "retry": "Try again",
+            "waiting": "Waiting for the other downloads",
+            "queued": "Queued",
+            "ready": "Data downloaded",
+            "failed": "Failed: {} What was already downloaded is saved.",
+            "not_identified": "File {}. Game not recognized in the libretro database.",
+            "step_identify": "Identifying the game",
+            "step_snap": "Downloading the screenshot",
+            "step_title": "Downloading the title screen",
+            "step_synopsis": "Downloading the synopsis",
+            "step_done": "Finishing",
+            "snap_placeholder": "Gameplay screenshot",
+            "snap_missing": "No screenshot on libretro",
+            "title_missing": "No title screen on libretro",
+            "title_caption": "Title screen",
+            "facts_pending": "Genre, players, developer and year show up after downloading the data.",
+            "facts_none": "No details for this game in libretro-database.",
+            "synopsis": "Synopsis",
+            "synopsis_none": "No synopsis yet. Download this game's data to see the synopsis, the details and the images.",
+            "sources": "Sources: libretro, libretro-database, ScreenScraper",
+            "sources_free": "Sources: libretro, libretro-database"
+        },
+        "fact": {
+            "genre": "Genre",
+            "players": "Players",
+            "developer": "Developer",
+            "publisher": "Publisher",
+            "released": "Release",
+            "region": "Region",
+            "franchise": "Franchise"
+        },
+        "stop": {
+            "offline": "No connection.",
+            "bad_login": "Check your ScreenScraper account in Settings.",
+            "quota": "ScreenScraper limit reached. Try again later.",
+            "disk": "Could not write to the SD card."
+        },
+        "region": {
+            "USA": "USA",
+            "Europe": "Europe",
+            "Japan": "Japan",
+            "World": "World",
+            "Brazil": "Brazil",
+            "Korea": "Korea",
+            "Asia": "Asia",
+            "Australia": "Australia",
+            "Canada": "Canada",
+            "France": "France",
+            "Germany": "Germany",
+            "Spain": "Spain",
+            "Italy": "Italy"
+        }
     }
 }
