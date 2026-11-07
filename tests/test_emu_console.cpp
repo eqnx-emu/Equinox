@@ -30,6 +30,8 @@ TEST_CASE("console lookup") {
     CHECK(snes->protocol == 1);
     CHECK(snes->cardColorTop == 0x3a2f52);
     CHECK(snes->cardColorBottom == 0x1b1828);
+    CHECK(snes->shortName == "SNES");
+    CHECK(snes->cardAccent == 0xb5a8e0);
     CHECK(emu::findConsole("nes") == nullptr);
     CHECK(emu::consoles().size() == 1);
 }

@@ -13,6 +13,9 @@ struct Console {
     std::string repo;
     int protocol = 0;
     unsigned cardColorTop = 0, cardColorBottom = 0;
+    // Tag on the card ("SNES") and its color.
+    std::string shortName;
+    unsigned cardAccent = 0;
 };
 
 struct ConsolePaths {

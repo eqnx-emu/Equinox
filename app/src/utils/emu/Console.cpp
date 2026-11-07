@@ -14,7 +14,9 @@ const std::vector<Console>& consoles() {
          "luizfbalves/equinox-snes9x",
          1,
          0x3a2f52,
-         0x1b1828},
+         0x1b1828,
+         "SNES",
+         0xb5a8e0},
     };
     return all;
 }

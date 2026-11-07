@@ -33,7 +33,7 @@ class PressableBox : public brls::Box {
     }
 
     void frame(brls::FrameContext* ctx) override {
-        const float s = scale;
+        const float s = scale * lift;
         if (s == 1.0f) {
             brls::Box::frame(ctx);
             return;
@@ -49,6 +49,10 @@ class PressableBox : public brls::Box {
         brls::Box::frame(ctx);
         nvgRestore(ctx->vg);
     }
+
+  protected:
+    // Extra scale on top of the press, for a card that grows with focus.
+    brls::Animatable lift = 1.0f;
 
   private:
     brls::Animatable scale = 1.0f;

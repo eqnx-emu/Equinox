@@ -177,6 +177,9 @@ Equinox exists thanks to:
   [FFmpeg](https://github.com/averne/FFmpeg).
 - [Cooler3D](https://github.com/Cooler3Ds) for help with the deko3d renderer and performance.
 - The forwarder installer is adapted from [sphaira](https://github.com/ITotalJustice/sphaira).
+- Console icons are from the RetroSystem theme of
+  [libretro/retroarch-assets](https://github.com/libretro/retroarch-assets), licensed under
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 The Switch deko3d upscaling path includes AMD FidelityFX Super Resolution 1.0 EASU and RCAS
 code translated from the MIT-licensed
