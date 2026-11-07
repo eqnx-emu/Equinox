@@ -491,6 +491,8 @@
         "opening": "Abrindo o jogo…",
         "try_again": "Tente de novo em instantes.",
         "fetching_cover": "Buscando capa…",
+        "queued": "na fila",
+        "no_data": "Sem dados",
         "no_return": "Não achei o Equinox.nro no cartão SD, e o jogo não teria como voltar para o Equinox. Coloque-o em sdmc:/switch/Equinox/ e tente de novo."
     }
 }

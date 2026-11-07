@@ -491,6 +491,8 @@
         "opening": "Opening the game…",
         "try_again": "Try again in a moment.",
         "fetching_cover": "Fetching cover…",
+        "queued": "queued",
+        "no_data": "No data",
         "no_return": "Equinox.nro was not found on the SD card, so the game could not return to Equinox. Put it in sdmc:/switch/Equinox/ and try again."
     }
 }
