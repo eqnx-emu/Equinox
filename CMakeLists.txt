@@ -45,7 +45,7 @@ include(GNUInstallDirs)
 
 set(VERSION_MAJOR "1")
 set(VERSION_MINOR "9")
-set(VERSION_ALTER "0")
+set(VERSION_ALTER "1")
 set(VERSION_BUILD "7")
 set(PACKAGE_NAME "ru.xitrix.Moonlight")
 set(PROJECT_AUTHOR "luizfbalves")

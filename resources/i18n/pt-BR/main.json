@@ -455,6 +455,7 @@
         "roms_folder": "ROMs em {}",
         "games": "Jogos",
         "update": "Atualizar emulador",
+        "check_update": "Procurar atualização",
         "rescan": "Procurar jogos de novo",
         "remove": "Remover console",
         "remove_message": "Remover o {}? Seus jogos, saves e capas continuam no cartão SD.",

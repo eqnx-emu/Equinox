@@ -1422,6 +1422,11 @@ std::vector<HomeOption> HomeView::consoleOptions(ConsoleCard* card) {
         options.push_back({"", "emu/update"_i18n,
                            "v" + card->latest()->version,
                            [this, console] { installConsole(*console); }});
+    else
+        // The automatic check runs at most once a day; this asks now. The
+        // install flow fetches the manifest, says "up to date" or installs.
+        options.push_back({"", "emu/check_update"_i18n, "",
+                           [this, console] { installConsole(*console); }});
     // Runners before 1.1.0 ignore --video.
     const emu::ConsolePaths paths = emu::pathsFor(*console);
     const std::optional<emu::Installed> installed =

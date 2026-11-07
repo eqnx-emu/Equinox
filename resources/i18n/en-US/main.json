@@ -455,6 +455,7 @@
         "roms_folder": "ROMs in {}",
         "games": "Games",
         "update": "Update emulator",
+        "check_update": "Check for updates",
         "rescan": "Look for games again",
         "remove": "Remove console",
         "remove_message": "Remove {}? Your games, saves and covers stay on the SD card.",
