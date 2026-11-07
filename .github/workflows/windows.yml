@@ -1,12 +1,9 @@
 name: Windows Dev Build
 
+# Manual only: Windows is for local testing, and CI builds just the Switch.
 on:
   workflow_call:
   workflow_dispatch:
-  # Windows test build of feature branches (Equinox ships for the Switch).
-  push:
-    branches:
-      - 'feat/**'
 
 jobs:
   build:
