@@ -22,6 +22,9 @@ constexpr float kEnterBump = 0.16f;
 constexpr float kEnterBumpTime = 0.6f;
 // Opacity of the entered item's ring while focus is on its options.
 constexpr float kEnteredGlow = 0.55f;
+// While the shelf moves, text is rasterized in 6% size steps: a new glyph
+// size every frame would stall the slide.
+constexpr float kTextSnap = 0.06f;
 
 float seconds(Time t) { return (float)t / 1000000.0f; }
 } // namespace
@@ -132,6 +135,8 @@ void CoverCarousel::draw(NVGcontext* vg, float x, float y, float width,
         if (since < kEnterBumpTime)
             bump = kEnterBump * std::sin(3.14159265f * since / kEnterBumpTime);
     }
+    const bool moving = std::fabs(pos - (float)selected) > 0.0005f ||
+                        (e > 0.0005f && e < 0.9995f) || bump != 0;
 
     // Covers more than ~4 steps away are fully faded out. Only the visible
     // window is sorted and drawn; the others just follow along, so a large
@@ -235,6 +240,8 @@ void CoverCarousel::draw(NVGcontext* vg, float x, float y, float width,
         }
 
         nvgSave(vg);
+        if (moving)
+            nvgTextScaleSnap(vg, kTextSnap);
         nvgTranslate(vg, cx, cy);
         nvgScale(vg, scale * squash, scale);
         nvgTranslate(vg, -cx, -cy);

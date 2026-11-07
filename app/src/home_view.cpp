@@ -391,6 +391,8 @@ void MotionBox::frame(FrameContext* ctx) {
     const float cx = getX() + getWidth() / 2;
     const float cy = getY() + getHeight() * originY;
     nvgSave(vg);
+    if (s != 1.0f)
+        nvgTextScaleSnap(vg, 0.06f);
     nvgTranslate(vg, cx + dx, cy);
     nvgScale(vg, s, s);
     nvgTranslate(vg, -cx, -cy);
