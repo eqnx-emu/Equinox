@@ -420,7 +420,9 @@
         "host_resume": "Continuar {}",
         "host_quit": "Encerrar jogo",
         "host_remove": "Remover PC",
-        "back": "Voltar"
+        "back": "Voltar",
+        "exit": "Sair",
+        "exit_message": "Fechar o Equinox?"
     },
     "favorites": {
         "all": "Todos",

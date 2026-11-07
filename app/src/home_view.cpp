@@ -561,7 +561,7 @@ HomeView::HomeView() {
         else if (level == Level::PCS)
             closePcs();
         else
-            return false;
+            confirmExit();
         return true;
     });
 
@@ -801,8 +801,16 @@ void HomeView::updateShelfInfo() {
 }
 
 void HomeView::updateBackAction() {
-    setActionAvailable(BUTTON_B, entered || level == Level::PCS);
+    const bool back = entered || level == Level::PCS;
+    updateActionHint(BUTTON_B, back ? "home/back"_i18n : "home/exit"_i18n);
     Application::getGlobalHintsUpdateEvent()->fire();
+}
+
+void HomeView::confirmExit() {
+    auto* dialog = new Dialog("home/exit_message"_i18n);
+    dialog->addButton("common/cancel"_i18n, [] {});
+    dialog->addButton("home/exit"_i18n, [] { Application::quit(); });
+    dialog->open();
 }
 
 void HomeView::openPcs() {

@@ -135,6 +135,8 @@ class HomeView : public brls::Box {
     void updateHomeCards();
     void updateShelfInfo();
     void updateBackAction();
+    // B on the home shelf: asks before closing the app.
+    void confirmExit();
 
     void openPcs();
     void closePcs();
