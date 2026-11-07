@@ -496,6 +496,29 @@
         "no_return": "Não achei o Equinox.nro no cartão SD, e o jogo não teria como voltar para o Equinox. Coloque-o em sdmc:/switch/Equinox/ e tente de novo."
     },
     "library": {
+        "list": {
+            "count_one": "1 jogo",
+            "count_many": "{} jogos",
+            "count_filtered": "{} de {}",
+            "search": "Buscar por nome",
+            "none": "Nenhum jogo com “{}”",
+            "sort_title": "Ordenar por",
+            "hint_mode": "Modo",
+            "hint_sort": "Ordenar",
+            "hint_search": "Buscar",
+            "download_all": "Baixar todos",
+            "missing": "{} sem dados",
+            "done": "Todos os jogos têm dados.",
+            "running": "Baixando {} de {} · {}%",
+            "stopped": "Parou: {} O que já foi baixado ficou salvo."
+        },
+        "sort": {
+            "name_asc": "Nome A-Z",
+            "name_desc": "Nome Z-A",
+            "year_asc": "Mais antigos",
+            "year_desc": "Mais novos",
+            "genre": "Gênero"
+        },
         "details": {
             "download": "Baixar dados deste jogo",
             "update": "Atualizar",

@@ -496,6 +496,29 @@
         "no_return": "Equinox.nro was not found on the SD card, so the game could not return to Equinox. Put it in sdmc:/switch/Equinox/ and try again."
     },
     "library": {
+        "list": {
+            "count_one": "1 game",
+            "count_many": "{} games",
+            "count_filtered": "{} of {}",
+            "search": "Search by name",
+            "none": "No game with “{}”",
+            "sort_title": "Sort by",
+            "hint_mode": "View",
+            "hint_sort": "Sort",
+            "hint_search": "Search",
+            "download_all": "Download all",
+            "missing": "{} without data",
+            "done": "All games have data.",
+            "running": "Downloading {} of {} · {}%",
+            "stopped": "Stopped: {} What was already downloaded is saved."
+        },
+        "sort": {
+            "name_asc": "Name A-Z",
+            "name_desc": "Name Z-A",
+            "year_asc": "Oldest first",
+            "year_desc": "Newest first",
+            "genre": "Genre"
+        },
         "details": {
             "download": "Download this game's data",
             "update": "Update",
