@@ -15,6 +15,11 @@ using Progress = std::function<bool(uint64_t done, uint64_t total)>;
 bool httpGetToString(const std::string& url, std::string& out, long timeoutSec,
                      std::string& error);
 
+// Same, and `httpStatus` receives the HTTP status the server answered with
+// (0 when there was no answer). The body of an HTTP error is not kept.
+bool httpGetToString(const std::string& url, std::string& out, long timeoutSec,
+                     const Progress& progress, std::string& error, long& httpStatus);
+
 // Writes the body to `path`. On failure the partial file is left for the
 // caller to remove.
 bool httpGetToFile(const std::string& url, const std::string& path, long timeoutSec,

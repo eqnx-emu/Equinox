@@ -88,6 +88,13 @@ bool httpGetToString(const std::string& url, std::string& out, long timeoutSec,
     return httpGet(url, writeToString, &out, timeoutSec, nullptr, error);
 }
 
+bool httpGetToString(const std::string& url, std::string& out, long timeoutSec,
+                     const Progress& progress, std::string& error, long& httpStatus) {
+    out.clear();
+    httpStatus = 0;
+    return httpGet(url, writeToString, &out, timeoutSec, &progress, error, &httpStatus);
+}
+
 bool httpGetToFile(const std::string& url, const std::string& path, long timeoutSec,
                    const Progress& progress, std::string& error) {
     long status = 0;
