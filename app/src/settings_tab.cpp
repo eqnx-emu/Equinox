@@ -12,6 +12,7 @@
 #include "settings_tab.hpp"
 #include "Updater.hpp"
 #include "Settings.hpp"
+#include "metrics_hud.hpp"
 #include "helper.hpp"
 #include "button_selecting_dialog.hpp"
 #include "mapping_layout_editor.hpp"
@@ -21,6 +22,7 @@
 #include "bold_label.hpp"
 #include "UpscalingSupport.hpp"
 #include "StreamCapacity.hpp"
+#include <yoga/Yoga.h>
 #include <fmt/core.h>
 #include <cmath>
 #include <iomanip>
@@ -92,20 +94,57 @@ int minRecommendedFor(int resolution) {
                                         Settings::instance().video_codec());
 }
 
+// Bitrate zones shown by the hint color: below the minimum the picture
+// suffers, then an ideal range, then values the network may not keep up with.
+enum class BitrateZone { Low, Ideal, Risky, Lag };
+
+#if defined(PLATFORM_SWITCH)
+// Rough Wi-Fi comfort limits of the Switch.
+constexpr int kRiskyKbps = 50000;
+constexpr int kLagKbps = 80000;
+#else
+constexpr int kRiskyKbps = 80000;
+constexpr int kLagKbps = 120000;
+#endif
+
+// High resolutions push the limits up so the ideal range never vanishes.
+BitrateZone zoneFor(int kbps, int minKbps) {
+    const int risky = std::max(kRiskyKbps, minKbps * 2);
+    if (kbps < minKbps)
+        return BitrateZone::Low;
+    if (kbps < risky)
+        return BitrateZone::Ideal;
+    if (kbps < std::max(kLagKbps, risky * 3 / 2))
+        return BitrateZone::Risky;
+    return BitrateZone::Lag;
+}
+
+NVGcolor zoneColor(BitrateZone zone) {
+    switch (zone) {
+        case BitrateZone::Low: return nvgRGB(128, 134, 168);
+        case BitrateZone::Ideal: return nvgRGB(86, 200, 124);
+        case BitrateZone::Risky: return nvgRGB(245, 160, 64);
+        case BitrateZone::Lag: return nvgRGB(236, 84, 84);
+    }
+    return nvgRGB(128, 134, 168);
+}
+
 void applyBitrateHint(brls::Header* header, int currentKbps, int minKbps) {
-    const bool below = currentKbps < minKbps;
+    const BitrateZone zone = zoneFor(currentKbps, minKbps);
     std::string text = brls::getStr("settings/bitrate_min_hint", formatMbps(currentKbps),
-                      formatMbps(minKbps));
-    if (below)
-        text += " · " + "settings/bitrate_below_min"_i18n;
+                                    formatMbps(minKbps));
+    switch (zone) {
+        case BitrateZone::Low: text += " · " + "settings/bitrate_below_min"_i18n; break;
+        case BitrateZone::Ideal: text += " · " + "settings/bitrate_ideal"_i18n; break;
+        case BitrateZone::Risky: text += " · " + "settings/bitrate_risky"_i18n; break;
+        case BitrateZone::Lag: text += " · " + "settings/bitrate_lag"_i18n; break;
+    }
     header->setSubtitle(text);
 
     // Header exposes no subtitle color API; reach its inflated label by id.
     if (auto* label = dynamic_cast<brls::Label*>(
-            header->getView("brls/header/subtitle"))) {
-        label->setTextColor(below ? nvgRGB(255, 140, 0)
-                                  : brls::Application::getTheme()["brls/header/subtitle"]);
-    }
+            header->getView("brls/header/subtitle")))
+        label->setTextColor(zoneColor(zone));
 }
 }
 
@@ -133,7 +172,95 @@ void SettingsTab::updateBitrateHints() {
     applyBitrateHint(handheldBitrateHeader, Settings::instance().handheld_bitrate(),
                      minRecommendedFor(Settings::instance().handheld_resolution()));
 #endif
-    updateQuickSettings();
+}
+
+namespace {
+// First label inside a view, depth first: the title of a cell or header.
+Label* findTitle(View* view) {
+    if (auto* label = dynamic_cast<Label*>(view))
+        return label;
+    if (auto* box = dynamic_cast<Box*>(view))
+        for (View* child : box->getChildren())
+            if (Label* found = findTitle(child))
+                return found;
+    return nullptr;
+}
+
+void showInfo(const std::string& title, const std::string& text) {
+    Theme theme = Application::getTheme();
+    auto* content = new Box(Axis::COLUMN);
+    content->setPadding(36, 44, 30, 44);
+    content->setWidth(640);
+
+    auto* name = new BoldLabel();
+    name->setFontSize(24);
+    name->setText(title);
+    content->addView(name);
+
+    auto* body = new Label();
+    body->setFontSize(18);
+    body->setMarginTop(16);
+    body->setLineHeight(1.4f);
+    body->setTextColor(theme.getColor("brls/text"));
+    body->setText(text);
+    content->addView(body);
+
+    auto* dialog = new Dialog(content);
+    dialog->addButton("hints/ok"_i18n, [] {});
+    dialog->open();
+}
+
+// Puts an info icon after the option's title and opens its explanation with
+// Y (or a tap on the hint at the bottom). `icon` is where the title is (a cell or the header above a slider),
+// `focus` is what holds focus while the option is selected.
+void addInfo(View* icon, View* focus, const std::string& id) {
+    if (!icon || !focus)
+        return;
+    Label* title = findTitle(icon);
+    auto* row = title ? dynamic_cast<Box*>(title->getParent()) : nullptr;
+    const std::string name = title ? title->getFullText() : "";
+    const std::string text = brls::getStr("settings/info/" + id);
+    if (row) {
+        auto& children = row->getChildren();
+        const auto at = std::find(children.begin(), children.end(), title);
+        auto* glyph = new IconLabel();
+        glyph->setFontSize(20);
+        glyph->setMarginLeft(10);
+        glyph->setTextColor(Application::getTheme().getColor("equinox/status_moon"));
+        glyph->setText(""); // info
+        // The icon takes the title's place in the row's spacing, so it
+        // stays right next to the text.
+        glyph->setGrow(YGNodeStyleGetFlexGrow(title->getYGNode()));
+        title->setGrow(0);
+        title->setShrink(1);
+        row->addView(glyph, (size_t)(at - children.begin()) + 1);
+    }
+    focus->registerAction("settings/info/action"_i18n, BUTTON_Y,
+                          [name, text](View*) {
+                              showInfo(name, text);
+                              return true;
+                          });
+}
+} // namespace
+
+void SettingsTab::setupInfo() {
+    // Looked up by id: options a platform doesn't use are already gone.
+    const std::pair<const char*, const char*> cells[] = {
+        {"frame_pacing", "frame_pacing"},
+        {"resolution_scale", "resolution_scale"},
+        {"codec", "codec"},
+        {"decoder", "decoder"},
+        {"use_hw_decoding", "use_hw_decoding"},
+        {"dithering", "dithering"},
+        {"upscaling", "upscaling"},
+        {"rcas", "rcas"},
+        {"show_metrics", "show_metrics"},
+    };
+    for (const auto& [view, id] : cells) {
+        View* cell = getView(view);
+        addInfo(cell, cell, id);
+    }
+    addInfo(getView("header"), getView("slider"), "bitrate");
 }
 
 SettingsTab::SettingsTab(const std::string& group) {
@@ -146,7 +273,6 @@ SettingsTab::SettingsTab(const std::string& group) {
     };
     resolution->setText("settings/resolution"_i18n);
     resolution->setData(resolutions);
-    resolutionNames = resolutions;
     switch (Settings::instance().resolution()) {
         GET_SETTINGS(resolution, -1, 0);
         GET_SETTINGS(resolution, 360, 1);
@@ -277,7 +403,6 @@ SettingsTab::SettingsTab(const std::string& group) {
     };
     fps->setText("settings/fps"_i18n);
     fps->setData(fpss);
-    fpsNames = fpss;
     switch (Settings::instance().fps()) {
         GET_SETTINGS(fps, 30, 0);
         GET_SETTINGS(fps, 40, 1);
@@ -807,6 +932,49 @@ SettingsTab::SettingsTab(const std::string& group) {
     });
     mouseSpeedSlider->setProgress(mouseProgress);
 
+    // The metric options only show while the metrics are on.
+    metricsOptions->setVisibility(Settings::instance().show_metrics()
+                                      ? Visibility::VISIBLE
+                                      : Visibility::GONE);
+    showMetrics->init("settings/show_metrics"_i18n,
+                      Settings::instance().show_metrics(), [this](bool value) {
+                          Settings::instance().set_show_metrics(value);
+                          metricsOptions->setVisibility(
+                              value ? Visibility::VISIBLE : Visibility::GONE);
+                      });
+
+    const std::pair<brls::BooleanCell*, int> metricCells[] = {
+        {metricFps, MetricsHud::FPS},
+        {metricLatency, MetricsHud::LATENCY},
+        {metricBitrate, MetricsHud::BITRATE},
+        {metricLoss, MetricsHud::LOSS},
+    };
+    const char* metricTitles[] = {"settings/metric_fps", "settings/metric_latency",
+                                  "settings/metric_bitrate", "settings/metric_loss"};
+    for (size_t i = 0; i < 4; i++) {
+        const int bit = metricCells[i].second;
+        metricCells[i].first->init(
+            brls::getStr(metricTitles[i]),
+            (Settings::instance().metrics_mask() & bit) != 0, [bit](bool value) {
+                int mask = Settings::instance().metrics_mask();
+                Settings::instance().set_metrics_mask(value ? mask | bit : mask & ~bit);
+            });
+    }
+    metricsPosition->init("settings/metrics_position"_i18n,
+                          MetricsHud::positionNames(),
+                          Settings::instance().metrics_position(), [](int selected) {
+                              Settings::instance().set_metrics_position(selected);
+                          });
+    metricsColor->init("settings/metrics_color"_i18n, MetricsHud::colorNames(),
+                       Settings::instance().metrics_color(), [](int selected) {
+                           Settings::instance().set_metrics_color(selected);
+                       });
+    metricsBackground->init("settings/metrics_background"_i18n,
+                            MetricsHud::backgroundNames(),
+                            Settings::instance().metrics_background(), [](int selected) {
+                                Settings::instance().set_metrics_background(selected);
+                            });
+
     writeLog->init("settings/debugging_view"_i18n,
                    Settings::instance().write_log(), [](bool value) {
                        Settings::instance().set_write_log(value);
@@ -820,6 +988,7 @@ SettingsTab::SettingsTab(const std::string& group) {
         return true;
     });
 
+    setupInfo();
     setupGroups();
 
     for (size_t i = 0; i < groups.size(); i++) {
@@ -834,20 +1003,6 @@ SettingsTab::SettingsTab(const std::string& group) {
 }
 
 namespace {
-// Four 200 px cards with 12 px gaps: the quick settings box matches it.
-constexpr float kMenuWidth = 4 * 200 + 3 * 12;
-// Three tiles with 12 px gaps inside the box's 20 px padding.
-constexpr float kTileWidth = (kMenuWidth - 2 * 20 - 2 * 12) / 3;
-
-// Bitrate range of the slider in the Video group.
-#if defined(PLATFORM_SWITCH)
-constexpr int kBitrateMaxKbps = 100000;
-#else
-constexpr int kBitrateMaxKbps = 150000;
-#endif
-constexpr int kBitrateMinKbps = 500;
-constexpr int kBitrateStepKbps = 1000;
-
 // Menu entry for a settings group: Material icon and name.
 PressableBox* makeGroupCard(const std::string& icon, const std::string& title) {
     Theme theme = Application::getTheme();
@@ -882,244 +1037,13 @@ PressableBox* makeGroupCard(const std::string& icon, const std::string& title) {
     return card;
 }
 
-// A quick setting: A starts adjusting, then left/right change the value and
-// A or B stop. While not adjusting, left/right move between tiles as usual.
-class QuickTile : public PressableBox {
-  public:
-    std::function<void(int)> onStep;
-
-    QuickTile(const std::string& title, float width, bool withBar)
-        : PressableBox(Axis::COLUMN) {
-        Theme theme = Application::getTheme();
-        setWidth(width);
-        setHeight(104);
-        setPadding(14, 14, 14, 14);
-        setCornerRadius(14);
-        setHighlightCornerRadius(16);
-        setHideHighlightBackground(true);
-        setBackgroundColor(theme.getColor("equinox/card_inner"));
-        setBorderColor(theme.getColor("equinox/sun"));
-        setBorderThickness(0);
-        setFocusable(true);
-        addGestureRecognizer(new TapGestureRecognizer(this));
-
-        auto* name = new Label();
-        name->setFontSize(14);
-        name->setTextColor(theme.getColor("equinox/muted"));
-        name->setText(title);
-        addView(name);
-
-        auto* row = new Box(Axis::ROW);
-        row->setAlignItems(AlignItems::CENTER);
-        row->setMarginTop(6);
-        left = makeArrow("\ue5cb"); // chevron_left
-        row->addView(left);
-        value = new BoldLabel();
-        value->setFontSize(24);
-        value->setGrow(1.0f);
-        value->setSingleLine(true);
-        value->setHorizontalAlign(HorizontalAlign::CENTER);
-        row->addView(value);
-        right = makeArrow("\ue5cc"); // chevron_right
-        row->addView(right);
-        addView(row);
-
-        if (withBar) {
-            auto* track = new Box(Axis::ROW);
-            track->setHeight(6);
-            track->setMarginTop(10);
-            track->setCornerRadius(3);
-            track->setBackgroundColor(theme.getColor("brls/slider/line_empty"));
-            fill = new Box(Axis::ROW);
-            fill->setHeight(6);
-            fill->setCornerRadius(3);
-            fill->setBackgroundColor(theme.getColor("equinox/sun"));
-            track->addView(fill);
-            addView(track);
-        }
-
-        registerAction("settings/quick/adjust"_i18n, BUTTON_A, [this](View*) {
-            setEditing(!editing);
-            return true;
-        });
-        registerClickAction([this](View*) {
-            setEditing(!editing);
-            return true;
-        });
-        auto step = [this](int direction) {
-            return [this, direction](View*) {
-                if (!editing)
-                    return false; // let focus move
-                if (onStep)
-                    onStep(direction);
-                return true;
-            };
-        };
-        registerAction("", BUTTON_NAV_LEFT, step(-1), true, true);
-        registerAction("", BUTTON_NAV_RIGHT, step(1), true, true);
-        registerAction("", BUTTON_B, [this](View*) {
-            if (!editing)
-                return false;
-            setEditing(false);
-            return true;
-        }, true);
-    }
-
-    void setValue(const std::string& text) { value->setText(text); }
-
-    void setProgress(float progress) {
-        if (fill)
-            fill->setWidthPercentage(std::clamp(progress, 0.0f, 1.0f) * 100.0f);
-    }
-
-    void onFocusLost() override {
-        setEditing(false);
-        PressableBox::onFocusLost();
-    }
-
-  private:
-    BoldLabel* value = nullptr;
-    IconLabel* left = nullptr;
-    IconLabel* right = nullptr;
-    Box* fill = nullptr;
-    bool editing = false;
-
-    IconLabel* makeArrow(const std::string& glyph) {
-        auto* arrow = new IconLabel();
-        arrow->setFontSize(24);
-        arrow->setTextColor(Application::getTheme().getColor("equinox/sun"));
-        arrow->setText(glyph);
-        arrow->setVisibility(Visibility::INVISIBLE);
-        return arrow;
-    }
-
-    void setEditing(bool on) {
-        editing = on;
-        setBorderThickness(on ? 2 : 0);
-        left->setVisibility(on ? Visibility::VISIBLE : Visibility::INVISIBLE);
-        right->setVisibility(on ? Visibility::VISIBLE : Visibility::INVISIBLE);
-    }
-};
 } // namespace
-
-Box* SettingsTab::makeQuickSettings() {
-    Theme theme = Application::getTheme();
-
-    auto* section = new Box(Axis::COLUMN);
-    section->setWidth(kMenuWidth);
-    section->setAlignSelf(AlignSelf::FLEX_START);
-    section->setPadding(18, 20, 20, 20);
-    section->setCornerRadius(20);
-    section->setBackgroundColor(theme.getColor("equinox/card"));
-
-    auto* top = new Box(Axis::ROW);
-    top->setAlignItems(AlignItems::CENTER);
-    auto* title = new BoldLabel();
-    title->setFontSize(19);
-    title->setGrow(1.0f);
-    title->setText("settings/quick/title"_i18n);
-    top->addView(title);
-    auto* hint = new Label();
-    hint->setFontSize(14);
-    hint->setTextColor(theme.getColor("equinox/muted"));
-    hint->setText(brls::getStr("settings/quick/hint",
-                               Hint::getKeyIcon(BUTTON_A, true)));
-    top->addView(hint);
-    section->addView(top);
-
-    auto* tiles = new Box(Axis::ROW);
-    tiles->setMarginTop(14);
-
-    auto* res = new QuickTile("settings/resolution"_i18n, kTileWidth, false);
-    res->onStep = [this](int direction) {
-        const int next = std::clamp(resolution->getSelection() + direction, 0,
-                                    (int)resolutionNames.size() - 1);
-        if (next != resolution->getSelection())
-            resolution->setSelection(next); // runs the same handler as the Video group
-    };
-    res->setMarginRight(12);
-    tiles->addView(res);
-    quickResolution = res;
-
-    auto* rate = new QuickTile("settings/fps"_i18n, kTileWidth, false);
-    rate->onStep = [this](int direction) {
-        const int next = std::clamp(fps->getSelection() + direction, 0,
-                                    (int)fpsNames.size() - 1);
-        if (next != fps->getSelection())
-            fps->setSelection(next);
-    };
-    rate->setMarginRight(12);
-    tiles->addView(rate);
-    quickFps = rate;
-
-    auto* bits = new QuickTile("settings/quick/bitrate"_i18n, kTileWidth, true);
-    bits->onStep = [this](int direction) { stepBitrate(direction); };
-    tiles->addView(bits);
-    quickBitrate = bits;
-
-    section->addView(tiles);
-
-    quickChips = new Label();
-    quickChips->setFontSize(14);
-    quickChips->setMarginTop(14);
-    quickChips->setTextColor(theme.getColor("equinox/muted"));
-    section->addView(quickChips);
-
-    updateQuickSettings();
-    return section;
-}
-
-void SettingsTab::stepBitrate(int direction) {
-    // Snap to whole Mbps, then step.
-    const int current = Settings::instance().bitrate();
-    int next = (current / kBitrateStepKbps) * kBitrateStepKbps;
-    if (direction > 0 || next == current)
-        next += direction * kBitrateStepKbps;
-    next = std::clamp(next, kBitrateMinKbps, kBitrateMaxKbps);
-    if (next == current)
-        return;
-    // The slider's handler saves it and updates the hints (and this box).
-    slider->setProgress(float(next - kBitrateMinKbps) /
-                        float(kBitrateMaxKbps - kBitrateMinKbps));
-}
-
-void SettingsTab::updateQuickSettings() {
-    if (!quickResolution)
-        return;
-    const Settings& s = Settings::instance();
-
-    auto* res = (QuickTile*)quickResolution;
-    const int r = resolution->getSelection();
-    res->setValue(r >= 0 && r < (int)resolutionNames.size() ? resolutionNames[r] : "");
-
-    auto* rate = (QuickTile*)quickFps;
-    const int f = fps->getSelection();
-    rate->setValue(f >= 0 && f < (int)fpsNames.size() ? fpsNames[f] : "");
-
-    auto* bits = (QuickTile*)quickBitrate;
-    bits->setValue(formatMbps(s.bitrate()) + " Mbps");
-    bits->setProgress(float(s.bitrate() - kBitrateMinKbps) /
-                      float(kBitrateMaxKbps - kBitrateMinKbps));
-
-    std::string chips = "settings/video_codec"_i18n + ": " +
-                        getVideoCodecName(s.video_codec());
-#if defined(PLATFORM_SWITCH)
-    if (s.mode_profiles())
-        chips += "   ·   " + "settings/handheld_profile"_i18n + ": " +
-                 std::to_string(s.handheld_resolution()) + "p, " +
-                 formatMbps(s.handheld_bitrate()) + " Mbps";
-#endif
-    chips += "   ·   " + "settings/quick/upscaling"_i18n + ": " +
-             (s.upscaling() ? "settings/quick/on"_i18n : "settings/quick/off"_i18n);
-    quickChips->setText(chips);
-}
 
 void SettingsTab::setupGroups() {
     // Material Icons code points.
     static const std::pair<const char*, const char*> ids[] = {
         {"video", "\ue04b"},     // videocam
         {"handheld", "\ue0d3"},  // stay_current_landscape
-        {"image", "\ue429"},     // tune
         {"audio", "\ue050"},     // volume_up
         {"controls", "\ue338"},  // videogame_asset
         {"shortcuts", "\ue3e7"}, // flash_on
@@ -1128,16 +1052,6 @@ void SettingsTab::setupGroups() {
     };
 
     pageTitle->setText("tabs/settings"_i18n);
-
-    menu->addView(makeQuickSettings());
-
-    auto* allTitle = new Label();
-    allTitle->setFontSize(15);
-    allTitle->setMarginTop(22);
-    allTitle->setMarginBottom(10);
-    allTitle->setTextColor(Application::getTheme().getColor("equinox/muted"));
-    allTitle->setText("settings/quick/all"_i18n);
-    menu->addView(allTitle);
 
     auto* grid = new GridView(4);
     for (const auto& [id, icon] : ids) {
@@ -1170,8 +1084,13 @@ void SettingsTab::setupGroups() {
         });
         content->registerAction("hints/back"_i18n, BUTTON_B,
                                 [this, index](View* view) {
-                                    if (directGroup)
-                                        return false; // the frame closes the screen
+                                    if (directGroup) {
+                                        // Close the screen here: a click on the
+                                        // Back hint runs only this action and
+                                        // never reaches the frame's own back.
+                                        dismiss();
+                                        return true;
+                                    }
                                     closeGroup(index);
                                     return true;
                                 });
@@ -1193,7 +1112,6 @@ void SettingsTab::closeGroup(size_t index) {
     groups[index].content->setVisibility(Visibility::GONE);
     menu->setVisibility(Visibility::VISIBLE);
     pageTitle->setText("tabs/settings"_i18n);
-    updateQuickSettings(); // the group may have changed what they show
     scroll->setContentOffsetY(0, false);
     Application::giveFocus(groups[index].entry);
 }

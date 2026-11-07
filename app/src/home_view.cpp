@@ -1029,7 +1029,7 @@ std::vector<HomeOption> HomeView::settingsOptions() {
 #if defined(PLATFORM_SWITCH)
         {"handheld", ""},
 #endif
-        {"image", ""},     {"audio", ""},
+        {"audio", ""},
         {"controls", ""},  {"shortcuts", ""},
         {"input", ""},     {"system", ""},
     };
@@ -1041,7 +1041,6 @@ std::vector<HomeOption> HomeView::settingsOptions() {
     };
 
     std::vector<HomeOption> options;
-    options.push_back({"", "home/quick"_i18n, "", [open] { open(""); }});
     for (const auto& [id, icon] : groups) {
         const std::string group = id;
         options.push_back(

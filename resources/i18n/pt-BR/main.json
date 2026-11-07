@@ -14,7 +14,10 @@
         "version": "Equinox v{}",
         "fork_title": "Baseado no Moonlight-Switch",
         "fork_text": "Equinox é um fork não oficial do Moonlight-Switch, de XITRIX. A maior parte do cliente de streaming vem desse projeto e do Moonlight. O Equinox não tem vínculo com os autores originais nem é endossado por eles.",
-        "link_original": "Projeto original: Moonlight-Switch"
+        "link_original": "Projeto original: Moonlight-Switch",
+        "support_title": "Apoie o Equinox",
+        "support_text": "O Equinox é gratuito. Se ele te ajuda, você pode pagar um café para quem desenvolve: aponte a câmera do celular para o código ou abra o link.",
+        "link_coffee": "Me pague um café"
     },
     "add_host": {
         "connect": "Conectar",
@@ -163,8 +166,24 @@
         "title": "Modo mouse"
     },
     "settings": {
+        "info": {
+            "action": "Sobre a opção",
+            "frame_pacing": "Define quantos quadros ficam guardados antes de aparecer na tela.\n\nMenor latência mostra cada quadro assim que ele chega: o controle responde mais rápido, mas a imagem pode dar pequenos trancos se a rede oscilar.\n\nMais suave guarda alguns quadros de reserva: o movimento fica mais fluido, com um atraso um pouco maior. Equilibrado fica no meio.",
+            "resolution_scale": "Só vale quando a resolução está em Nativa. Multiplica o tamanho da tela usado na transmissão.\n\n0.5x e 0.75x deixam a imagem mais leve para a rede e para o aparelho. 2.0x pede uma imagem maior que a tela: mais nítida, mas bem mais pesada.",
+            "codec": "É o formato em que o PC comprime o vídeo antes de enviar.\n\nH.264 é o mais compatível. HEVC (H.265) entrega a mesma qualidade com menos bitrate, ótimo para Wi-Fi. AV1 é o mais eficiente, mas precisa de uma placa de vídeo recente no PC.\n\nSe a imagem falhar ou a transmissão não abrir, volte para H.264.",
+            "decoder": "Quantos núcleos do processador ajudam a decodificar o vídeo.\n\nMais threads ajudam em resoluções altas, mas usam mais CPU. Na dúvida, deixe o valor padrão.",
+            "use_hw_decoding": "Usa o chip de vídeo do aparelho para decodificar a transmissão, em vez do processador. Deixa tudo mais leve e com menos atraso.",
+            "bitrate": "É a quantidade de dados por segundo que o PC envia.\n\nMais bitrate deixa a imagem mais limpa, principalmente em cenas rápidas, mas exige uma rede melhor. Se a transmissão travar ou perder quadros, diminua.\n\nO mínimo recomendado para a resolução e o FPS escolhidos aparece ao lado do título.",
+            "dithering": "Espalha um ruído bem fino sobre a imagem para disfarçar faixas de cor, comuns em céus e degradês escuros.\n\nA barra controla a intensidade.",
+            "upscaling": "Quando a transmissão chega numa resolução menor que a tela, usa o AMD FSR para aumentar a imagem com contornos mais definidos, em vez de só esticar.",
+            "rcas": "Realça contornos e texturas para a imagem parecer mais nítida.\n\nExagerar pode deixar bordas serrilhadas. A barra controla a intensidade.",
+            "show_metrics": "Mostra no canto da tela, durante o jogo, um resumo de como a transmissão está indo:\n\nFPS: quadros por segundo exibidos.\nms: atraso estimado entre o PC e a sua tela.\nMbps: quanto vídeo está chegando de verdade.\nPerda: quadros que se perderam na rede. Fica laranja a partir de 1% e vermelha a partir de 5%."
+        },
         "audio_backend": "Audio driver",
         "bitrate_below_min": "abaixo do recomendado — imagem pode borrar em movimento",
+        "bitrate_ideal": "ideal",
+        "bitrate_risky": "pode dar lag",
+        "bitrate_lag": "lag provável",
         "bitrate_min_hint": "{} Mbps · mín. recomendado {} Mbps",
         "av1": "AV1 (Experimental)",
         "buttons": {
@@ -178,6 +197,34 @@
             "title": "Dead zones"
         },
         "debug": "Debug",
+        "ingame": "Durante o jogo",
+        "show_metrics": "Mostrar métricas na tela",
+        "metric_fps": "FPS",
+        "metric_latency": "Latência (ms)",
+        "metric_bitrate": "Bitrate (Mbps)",
+        "metric_loss": "Perda de quadros",
+        "metrics_position": "Posição",
+        "metrics_color": "Cor do texto",
+        "metrics_background": "Fundo",
+        "metrics_positions": {
+            "top_left": "Superior esquerda",
+            "top_center": "Superior centro",
+            "top_right": "Superior direita",
+            "bottom_left": "Inferior esquerda",
+            "bottom_center": "Inferior centro",
+            "bottom_right": "Inferior direita"
+        },
+        "metrics_colors": {
+            "white": "Branco",
+            "sun": "Sol (âmbar)",
+            "moon": "Lua (azul)",
+            "green": "Verde"
+        },
+        "metrics_backgrounds": {
+            "none": "Nenhum",
+            "translucent": "Translúcido",
+            "solid": "Sólido"
+        },
         "debugging_view": "Mostrar janela de debug",
         "decoder_threads": "Decor Threads",
         "frame_pacing": "Ritmo de quadros",
@@ -242,16 +289,6 @@
         "video_codec": "Codec de vídeo",
         "volume_amplification": "Permitir amplificação de volume",
         "zero_threads": "0 (Não usar threads)",
-        "quick": {
-            "title": "Qualidade da transmissão",
-            "hint": "{} ajusta, depois ◀ ▶",
-            "adjust": "Ajustar",
-            "all": "Todas as configurações",
-            "on": "ligado",
-            "off": "desligado",
-            "upscaling": "Upscaling",
-            "bitrate": "Bitrate"
-        },
         "groups": {
             "video": {
                 "title": "Vídeo",
@@ -260,10 +297,6 @@
             "handheld": {
                 "title": "Modo portátil",
                 "summary": "Resolução e bitrate próprios fora da base"
-            },
-            "image": {
-                "title": "Imagem",
-                "summary": "Upscaling, nitidez e dithering"
             },
             "audio": {
                 "title": "Áudio",
@@ -292,6 +325,7 @@
         "decoder_overloaded": "Decodificador sobrecarregado...",
         "profile_reconnect_hint": "Modo do console mudou: reconecte para aplicar o outro perfil",
         "connection": "Conexão",
+        "metrics_loss": "perda",
         "debug_info": "Informações de debug",
         "disconnect": "Desconectar",
         "esc": "Botão ESC",
@@ -379,7 +413,6 @@
         "fav_empty_detail": "Marque jogos com Y na biblioteca",
         "fav_all": "Todos os favoritos",
         "settings_detail": "Qualidade do stream, controles e sistema",
-        "quick": "Ajustes rápidos",
         "about_status": "Versão {}",
         "about_detail": "Cliente de streaming para o host Solstice",
         "about_more": "Sobre e agradecimentos",

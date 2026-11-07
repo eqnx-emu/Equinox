@@ -67,6 +67,15 @@ class SettingsTab : public brls::Box {
     BRLS_BIND(brls::BooleanCell, swapMouseScroll, "swap_mouse_scroll");
     BRLS_BIND(brls::Header, mouseSpeedHeader, "mouse_speed_header");
     BRLS_BIND(brls::Slider, mouseSpeedSlider, "mouse_speed_slider");
+    BRLS_BIND(brls::BooleanCell, showMetrics, "show_metrics");
+    BRLS_BIND(brls::Box, metricsOptions, "metrics_options");
+    BRLS_BIND(brls::BooleanCell, metricFps, "metric_fps");
+    BRLS_BIND(brls::BooleanCell, metricLatency, "metric_latency");
+    BRLS_BIND(brls::BooleanCell, metricBitrate, "metric_bitrate");
+    BRLS_BIND(brls::BooleanCell, metricLoss, "metric_loss");
+    BRLS_BIND(brls::SelectorCell, metricsPosition, "metrics_position");
+    BRLS_BIND(brls::SelectorCell, metricsColor, "metrics_color");
+    BRLS_BIND(brls::SelectorCell, metricsBackground, "metrics_background");
     BRLS_BIND(brls::BooleanCell, writeLog, "writeLog");
     BRLS_BIND(brls::DetailCell, checkUpdate, "check_update");
 
@@ -88,20 +97,9 @@ class SettingsTab : public brls::Box {
     std::vector<Group> groups;
     bool directGroup = false;
 
-    // Quick settings on top of the menu: resolution, FPS and bitrate change
-    // in place; the chips below them show a few other current values.
-    std::vector<std::string> resolutionNames;
-    std::vector<std::string> fpsNames;
-    brls::View* quickResolution = nullptr;
-    brls::View* quickFps = nullptr;
-    brls::View* quickBitrate = nullptr;
-    brls::Label* quickChips = nullptr;
-
-    brls::Box* makeQuickSettings();
-    void updateQuickSettings();
-    void stepBitrate(int direction);
-
     void setupGroups();
+    // Info button on the technical video options.
+    void setupInfo();
     void openGroup(size_t index);
     void closeGroup(size_t index);
 

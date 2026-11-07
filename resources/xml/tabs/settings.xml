@@ -81,6 +81,23 @@
                     height="84"
                     grow="1"/>
 
+                <brls:Header
+                    id="image_adjustments_header"
+                    title="@i18n/settings/image_adjustments"
+                    paddingTop="40"/>
+
+                <BooleanSliderCell
+                    id="dithering"/>
+
+                <brls:BooleanCell
+                    id="upscaling"/>
+
+                <brls:SelectorCell
+                    id="upscaling_mode"/>
+
+                <BooleanSliderCell
+                    id="rcas"/>
+
             </brls:Box>
 
             <brls:Box
@@ -112,32 +129,6 @@
                     width="auto"
                     height="84"
                     grow="1"/>
-
-            </brls:Box>
-
-            <brls:Box
-                id="group_image"
-                width="auto"
-                height="auto"
-                axis="column"
-                alignItems="stretch"
-                visibility="gone">
-
-                <brls:Header
-                    id="image_adjustments_header"
-                    title="@i18n/settings/image_adjustments"/>
-
-                <BooleanSliderCell
-                    id="dithering"/>
-
-                <brls:BooleanCell
-                    id="upscaling"/>
-
-                <brls:SelectorCell
-                    id="upscaling_mode"/>
-
-                <BooleanSliderCell
-                    id="rcas"/>
 
             </brls:Box>
 
@@ -310,7 +301,55 @@
                 visibility="gone">
 
                 <brls:Header
-                    title="@i18n/settings/debug"/>
+                    title="@i18n/settings/ingame"/>
+
+                <brls:BooleanCell
+                    id="show_metrics"/>
+
+                <brls:Box
+                    id="metrics_options"
+                    width="auto"
+                    height="auto"
+                    axis="row"
+                    alignItems="flexStart">
+
+                    <brls:Box
+                        width="auto"
+                        height="auto"
+                        grow="1"
+                        axis="column"
+                        alignItems="stretch">
+
+                        <brls:BooleanCell
+                            id="metric_fps"/>
+
+                        <brls:BooleanCell
+                            id="metric_latency"/>
+
+                        <brls:BooleanCell
+                            id="metric_bitrate"/>
+
+                        <brls:BooleanCell
+                            id="metric_loss"/>
+
+                        <brls:SelectorCell
+                            id="metrics_position"/>
+
+                        <brls:SelectorCell
+                            id="metrics_color"/>
+
+                        <brls:SelectorCell
+                            id="metrics_background"/>
+
+                    </brls:Box>
+
+                    <MetricsPreview/>
+
+                </brls:Box>
+
+                <brls:Header
+                    title="@i18n/settings/debug"
+                    paddingTop="60"/>
 
                 <brls:BooleanCell
                     id="writeLog"/>
