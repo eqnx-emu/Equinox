@@ -218,5 +218,29 @@
         "games_one": "1 game",
         "favorites_count": "{} favorites",
         "favorites_one": "1 favorite"
+    },
+    "emu": {
+        "video": {
+            "title": "Video",
+            "size": "Size",
+            "smoothing": "Smoothing",
+            "filter": "Filter",
+            "border": "Border",
+            "size_original": "Original",
+            "size_8_7": "8:7",
+            "size_4_3": "4:3",
+            "size_full": "Full screen",
+            "smooth_pixel": "Pixel",
+            "smooth_sharp": "Sharp",
+            "smooth_soft": "Soft",
+            "filter_none": "None",
+            "filter_scanlines": "Scanlines",
+            "filter_ntsc": "NTSC",
+            "border_equinox": "Equinox",
+            "border_cover": "Game cover",
+            "border_tv": "CRT TV",
+            "border_black": "Black",
+            "save_failed": "Could not save the setting"
+        }
     }
 }

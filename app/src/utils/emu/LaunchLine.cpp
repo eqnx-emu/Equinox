@@ -4,6 +4,7 @@
 #include <cctype>
 #include <charconv>
 #include <cstring>
+#include <utility>
 
 namespace emu {
 
@@ -101,11 +102,28 @@ std::optional<ResumeToken> decodeToken(const std::string& text) {
 }
 
 std::string runnerArgs(const Console& console, const ConsolePaths& paths, const RomEntry& rom,
-                       const std::string& returnTo, const std::string& token) {
+                       const std::string& returnTo, const std::string& token,
+                       const std::string& cover, const std::string& video) {
     (void)console;
-    return "--protocol 1 --rom " + quoted(paths.roms + "/" + rom.fileName) + " --title " + quoted(rom.title) +
+    std::string line = "--protocol 1 --rom " + quoted(paths.roms + "/" + rom.fileName) + " --title " + quoted(rom.title) +
            " --saves " + quoted(paths.saves) + " --states " + quoted(paths.states) + " --return " +
            quoted(returnTo) + " --resume " + quoted(token);
+    if (!cover.empty()) line += " --cover " + quoted(cover);
+    if (!video.empty()) line += " --video " + quoted(video);
+    return line;
+}
+
+std::optional<std::string> launchLine(const std::string& runner, const Console& console,
+                                      const ConsolePaths& paths, const RomEntry& rom,
+                                      const std::string& returnTo, const std::string& token,
+                                      const std::string& cover, const std::string& video) {
+    const std::string head = "\"" + runner + "\" ";
+    for (const auto& [c, v] : {std::pair{cover, video}, std::pair{std::string(), video},
+                               std::pair{std::string(), std::string()}}) {
+        std::string line = head + runnerArgs(console, paths, rom, returnTo, token, c, v);
+        if (line.size() <= kMaxLaunchLine) return line;
+    }
+    return std::nullopt;
 }
 
 std::optional<std::string> resumeArg(int argc, const char* const* argv) {

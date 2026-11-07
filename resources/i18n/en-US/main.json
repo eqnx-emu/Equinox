@@ -489,7 +489,33 @@
         "fetching_cover": "Fetching cover…",
         "queued": "queued",
         "no_data": "No data",
-        "no_return": "Equinox.nro was not found on the SD card, so the game could not return to Equinox. Put it in sdmc:/switch/Equinox/ and try again."
+        "no_return": "Equinox.nro was not found on the SD card, so the game could not return to Equinox. Put it in sdmc:/switch/Equinox/ and try again.",
+        "never_played": "never played",
+        "played_today": "played today",
+        "played_yesterday": "played yesterday",
+        "played_days": "played {} days ago",
+        "video": {
+            "title": "Video",
+            "size": "Size",
+            "smoothing": "Smoothing",
+            "filter": "Filter",
+            "border": "Border",
+            "size_original": "Original",
+            "size_8_7": "8:7",
+            "size_4_3": "4:3",
+            "size_full": "Full screen",
+            "smooth_pixel": "Pixel",
+            "smooth_sharp": "Sharp",
+            "smooth_soft": "Soft",
+            "filter_none": "None",
+            "filter_scanlines": "Scanlines",
+            "filter_ntsc": "NTSC",
+            "border_equinox": "Equinox",
+            "border_cover": "Game cover",
+            "border_tv": "CRT TV",
+            "border_black": "Black",
+            "save_failed": "Could not save the setting"
+        }
     },
     "library": {
         "hint": {

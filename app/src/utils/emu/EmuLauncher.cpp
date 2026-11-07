@@ -11,7 +11,9 @@
 #include <system_error>
 
 #include "Settings.hpp"
+#include "emu/CoverName.hpp"
 #include "emu/PathUtf8.hpp"
+#include "emu/VideoDefaults.hpp"
 #include "helper.hpp"
 
 using namespace brls::literals;
@@ -80,11 +82,20 @@ bool launchRom(const Console& console, const RomEntry& rom, Origin origin, int f
     token.filter = filter;
     token.romFile = rom.fileName;
 
-    const std::string args = runnerArgs(console, paths, rom, *returnTo, encodeToken(token));
+    const std::string cover = coverPath(paths, rom.title);
+    const std::string video = videoDefaultsPath(paths);
+    recoverVideoDefaults(video);
     // argv[0] must be the runner's own path.
-    const std::string line = "\"" + paths.runner + "\" " + args;
-    brls::Logger::info("EmuLauncher: {}", line);
-    if (R_FAILED(envSetNextLoad(paths.runner.c_str(), line.c_str()))) {
+    const std::optional<std::string> line =
+        launchLine(paths.runner, console, paths, rom, *returnTo, encodeToken(token),
+                   isFile(cover) ? cover : "", isFile(video) ? video : "");
+    if (!line) {
+        brls::Logger::error("EmuLauncher: launch line too long for {}", rom.fileName);
+        showError("emu/cannot_launch"_i18n);
+        return false;
+    }
+    brls::Logger::info("EmuLauncher: {}", *line);
+    if (R_FAILED(envSetNextLoad(paths.runner.c_str(), line->c_str()))) {
         showError("emu/cannot_launch"_i18n);
         return false;
     }

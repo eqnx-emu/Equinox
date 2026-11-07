@@ -1,6 +1,7 @@
 #include "emu/RunnerInstaller.hpp"
 
 #include "emu/PathUtf8.hpp"
+#include "emu/ReplaceFile.hpp"
 
 #include <ctime>
 #include <filesystem>
@@ -14,34 +15,6 @@ namespace fs = std::filesystem;
 
 const long MANIFEST_TIMEOUT = 15;
 const long RUNNER_TIMEOUT = 300;
-
-// Moves `from` onto `to` keeping the old file until the new one is in place.
-// Horizon's FAT driver will not rename over an existing file, so every rename
-// here targets a name that does not exist: the old file goes to `backup`
-// first and comes back if the new one cannot be moved in.
-bool replaceFile(const fs::path& from, const fs::path& to, const fs::path& backup) {
-    std::error_code ec;
-    fs::remove(backup, ec);
-    if (fs::exists(backup, ec)) return false;
-
-    const bool hadOld = fs::exists(to, ec);
-    if (hadOld) {
-        fs::rename(to, backup, ec);
-        if (ec) return false;
-    }
-
-    fs::rename(from, to, ec);
-    if (ec) {
-        if (hadOld) {
-            std::error_code restoreEc;
-            fs::rename(backup, to, restoreEc);
-        }
-        return false;
-    }
-
-    if (hadOld) fs::remove(backup, ec);
-    return true;
-}
 
 InstallResult fail(const fs::path& part, const Manifest& manifest, RunnerError code,
                    const std::string& error) {
@@ -105,7 +78,7 @@ InstallResult installRunner(const Console& console, const Manifest& manifest,
         return fail(part, manifest, RunnerError::Mismatch,
                     "downloaded runner does not match the manifest");
 
-    if (!replaceFile(part, fromUtf8(paths.runner), fromUtf8(paths.runner + ".old")))
+    if (!replaceKeepingBackup(part, fromUtf8(paths.runner), fromUtf8(paths.runner + ".old")))
         return fail(part, manifest, RunnerError::Move, "could not move the runner into place");
 
     Installed installed;

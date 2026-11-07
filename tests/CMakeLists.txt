@@ -68,6 +68,7 @@ target_include_directories(test_emu_launch PRIVATE
 add_executable(test_emu_installer
     test_emu_installer.cpp
     "${MOONLIGHT_ROOT}/app/src/utils/emu/RunnerInstaller.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/ReplaceFile.cpp"
     "${MOONLIGHT_ROOT}/app/src/utils/emu/RunnerManifest.cpp"
     "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp")
 target_include_directories(test_emu_installer PRIVATE
@@ -151,3 +152,15 @@ target_include_directories(test_emu_gamedata PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
     "${MOONLIGHT_ROOT}/extern")
 target_link_libraries(test_emu_gamedata PRIVATE ${JANSSON_LIB} ${Z_LIB})
+
+add_executable(test_emu_video
+    test_emu_video.cpp
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/VideoDefaults.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/ReplaceFile.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp")
+target_include_directories(test_emu_video PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
+target_link_libraries(test_emu_video PRIVATE ${JANSSON_LIB})
+target_compile_definitions(test_emu_video PRIVATE
+    EQX_I18N_DIR="${MOONLIGHT_ROOT}/resources/i18n")

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -50,7 +51,19 @@ std::string encodeToken(const ResumeToken& token);
 std::optional<ResumeToken> decodeToken(const std::string& text);
 
 std::string runnerArgs(const Console& console, const ConsolePaths& paths, const RomEntry& rom,
-                       const std::string& returnTo, const std::string& token);
+                       const std::string& returnTo, const std::string& token,
+                       const std::string& cover = "", const std::string& video = "");
+
+// nx-hbloader copies the next-load line into a 2048-byte buffer with strcpy.
+inline constexpr size_t kMaxLaunchLine = 2047;
+
+// The line for envSetNextLoad: the quoted runner path (argv[0]) and runnerArgs.
+// Too long, it drops --cover, then --video (both optional); nullopt if it still
+// does not fit.
+std::optional<std::string> launchLine(const std::string& runner, const Console& console,
+                                      const ConsolePaths& paths, const RomEntry& rom,
+                                      const std::string& returnTo, const std::string& token,
+                                      const std::string& cover, const std::string& video);
 
 // Value after "--resume": tokens up to the next "--*" joined by single spaces.
 std::optional<std::string> resumeArg(int argc, const char* const* argv);

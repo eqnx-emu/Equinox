@@ -24,6 +24,57 @@ TEST_CASE("runnerArgs exact line") {
           "--resume \"1|snes|shelf|-1|Super Mario World (U) [!].smc\"");
 }
 
+TEST_CASE("runnerArgs appends cover and video") {
+    const Console* snes = findConsole("snes");
+    REQUIRE(snes != nullptr);
+    ConsolePaths p = pathsFor(*snes);
+    RomEntry r{p.roms + "/Chrono Trigger (USA).sfc", "Chrono Trigger (USA).sfc", "Chrono Trigger (USA)"};
+    const std::string base = runnerArgs(*snes, p, r, "sdmc:/switch/Equinox.nro", "t");
+    CHECK(runnerArgs(*snes, p, r, "sdmc:/switch/Equinox.nro", "t", "", "") == base);
+    CHECK(runnerArgs(*snes, p, r, "sdmc:/switch/Equinox.nro", "t",
+                     "sdmc:/equinox/covers/snes/Chrono Trigger (USA).png",
+                     "sdmc:/equinox/emulators/snes/video.json") ==
+          base + " --cover \"sdmc:/equinox/covers/snes/Chrono Trigger (USA).png\""
+                 " --video \"sdmc:/equinox/emulators/snes/video.json\"");
+    CHECK(runnerArgs(*snes, p, r, "sdmc:/switch/Equinox.nro", "t", "", "a\"b.json") ==
+          base + " --video \"ab.json\"");
+    CHECK(runnerArgs(*snes, p, r, "sdmc:/switch/Equinox.nro", "t", "c\"d.png") ==
+          base + " --cover \"cd.png\"");
+}
+
+TEST_CASE("launchLine drops cover then video when too long") {
+    const Console* snes = findConsole("snes");
+    REQUIRE(snes != nullptr);
+    ConsolePaths p = pathsFor(*snes);
+    const std::string runner = "sdmc:/switch/equinox-snes9x.nro";
+    const std::string cover = "sdmc:/equinox/covers/snes/c.png";
+    const std::string video = "sdmc:/equinox/emulators/snes/video.json";
+    RomEntry shortRom{p.roms + "/a.sfc", "a.sfc", "a"};
+    auto line = launchLine(runner, *snes, p, shortRom, "r", "t", cover, video);
+    REQUIRE(line);
+    CHECK(line->rfind("\"" + runner + "\" --protocol 1", 0) == 0);
+    CHECK(line->find("--cover") != std::string::npos);
+
+    // Title and file name repeat in --title, --rom, --resume: pick sizes that only fit
+    // without the cover, or without both optional arguments.
+    const std::string base = "\"" + runner + "\" " +
+                             runnerArgs(*snes, p, RomEntry{p.roms + "/.sfc", ".sfc", ""}, "r", "t");
+    const size_t room = kMaxLaunchLine - base.size();
+    const std::string withVideo = " --video \"" + video + "\"";
+    // The name appears in --rom, --title and the token "t" (not here), so 2 per char.
+    std::string name((room - withVideo.size()) / 2, 'x');
+    RomEntry mid{p.roms + "/" + name + ".sfc", name + ".sfc", name};
+    line = launchLine(runner, *snes, p, mid, "r", "t", cover, video);
+    REQUIRE(line);
+    CHECK(line->size() <= kMaxLaunchLine);
+    CHECK(line->find("--cover") == std::string::npos);
+    CHECK(line->find("--video") != std::string::npos);
+
+    name.assign(room, 'x');
+    RomEntry huge{p.roms + "/" + name + ".sfc", name + ".sfc", name};
+    CHECK_FALSE(launchLine(runner, *snes, p, huge, "r", "t", cover, video));
+}
+
 TEST_CASE("runnerArgs sanitizes") {
     std::string l = lineFor("a.sfc", "Bad \"T\"\nitle");
     CHECK(l.find("--title \"Bad Title\"") != std::string::npos);
