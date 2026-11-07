@@ -5,16 +5,27 @@
 
 #include "home_view.hpp"
 #include "about_tab.hpp"
+#include "add_host_tab.hpp"
 #include "bold_label.hpp"
 #include "favorites_view.hpp"
 #include "helper.hpp"
 #include "settings_tab.hpp"
 #include <Settings.hpp>
 
+#if defined(PLATFORM_SWITCH)
+#include "emu/PathUtf8.hpp"
+#include "emu/RunnerInstaller.hpp"
+#endif
+
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cmath>
+#include <ctime>
+#include <filesystem>
 #include <fmt/core.h>
+#include <map>
+#include <memory>
 
 using namespace brls;
 using namespace brls::literals;
@@ -68,6 +79,31 @@ std::string pcsText(int count) {
     return count == 1 ? "home/pcs_one"_i18n
                       : brls::getStr("home/pcs_count", count);
 }
+
+std::string consolesText(int count) {
+    return count == 1 ? "home/consoles_one"_i18n
+                      : brls::getStr("home/consoles_count", count);
+}
+
+#if defined(PLATFORM_SWITCH)
+// Latest manifest seen per console (update check or install), kept while
+// the app runs: the "Add" choice shows its size, the cards their update.
+std::map<std::string, emu::Manifest>& latestManifests() {
+    static std::map<std::string, emu::Manifest> manifests;
+    return manifests;
+}
+
+// One install at a time; the daily check leaves installed.json alone then.
+std::atomic<bool> installing{false};
+std::atomic<bool> checkingUpdates{false};
+
+bool runnerInstalled(const emu::Console& console) {
+    const emu::ConsolePaths paths = emu::pathsFor(console);
+    std::error_code ec;
+    return std::filesystem::is_regular_file(emu::fromUtf8(paths.runner), ec) &&
+           emu::readInstalled(paths.installed).has_value();
+}
+#endif
 
 // Favorite games per PC, without the apps the library hides.
 struct FavoriteSummary {
@@ -337,6 +373,14 @@ class OptionButton : public PressableBox {
         hint->setVisibility(option.hint.empty() ? Visibility::GONE
                                                 : Visibility::VISIBLE);
         action = option.action;
+    }
+
+    // Shown but not selectable, e.g. "More consoles soon".
+    void disable() {
+        setFocusable(false);
+        action = nullptr;
+        icon->setTextColor(themeColor("brls/text_disabled"));
+        label->setTextColor(themeColor("brls/text_disabled"));
     }
 
   private:
@@ -682,7 +726,36 @@ void HomeView::buildHostCards() {
         hostCards.push_back(card);
         pcs.carousel->addView(card);
     }
-    pcs.carousel->addView(new AddHostCard(hosts.empty()));
+
+    consoleCards.clear();
+#if defined(PLATFORM_SWITCH)
+    for (const emu::Console& console : emu::consoles()) {
+        if (!runnerInstalled(console))
+            continue;
+        auto* card = new ConsoleCard(console);
+        const int index = (int)(hostCards.size() + consoleCards.size());
+        card->onEnter = [this, card, index] {
+            if (pcs.carousel->selectedIndex() != index) {
+                Application::giveFocus(card);
+                return;
+            }
+            enter();
+        };
+        auto latest = latestManifests().find(console.slug);
+        if (latest != latestManifests().end())
+            card->setLatest(latest->second);
+        card->onChanged = [this, card] {
+            updateHomeCards();
+            updateShelfInfo();
+            if (entered && level == Level::PCS && selectedConsole() == card)
+                fillPanel();
+        };
+        consoleCards.push_back(card);
+        pcs.carousel->addView(card);
+    }
+#endif
+    pcs.carousel->addView(
+        new AddHostCard(hosts.empty() && consoleCards.empty()));
 }
 
 void HomeView::rebuildHosts(int selectIndex) {
@@ -720,14 +793,26 @@ HostCard* HomeView::selectedHost() {
                                                        : nullptr;
 }
 
+ConsoleCard* HomeView::selectedConsole() {
+    const int index = pcs.carousel->selectedIndex() - (int)hostCards.size();
+    return index >= 0 && index < (int)consoleCards.size() ? consoleCards[index]
+                                                          : nullptr;
+}
+
 void HomeView::updateHomeCards() {
     const auto hosts = Settings::instance().hosts();
     int running = 0;
     for (HostCard* card : hostCards)
         if (card->getState() == HostCardState::RUNNING)
             running++;
-    std::string pcsStatus = hosts.empty() ? "home/pcs_none"_i18n
-                                          : pcsText((int)hosts.size());
+    std::string pcsStatus;
+    if (!hosts.empty())
+        pcsStatus = pcsText((int)hosts.size());
+    if (!consoleCards.empty())
+        pcsStatus += (pcsStatus.empty() ? "" : "  ·  ") +
+                     consolesText((int)consoleCards.size());
+    if (pcsStatus.empty())
+        pcsStatus = "home/pcs_none"_i18n;
     if (running > 0)
         pcsStatus += "  ·  " + brls::getStr("home/pcs_running", running);
     homeCards[0]->setStatus(pcsStatus);
@@ -748,11 +833,16 @@ void HomeView::updateShelfInfo() {
     switch (sel) {
     case 0: {
         const int count = (int)hostCards.size();
-        info = count == 0   ? "home/pcs_none"_i18n
+        const int consoles = (int)consoleCards.size();
+        info = count == 0   ? ""
                : count == 1 ? "home/pcs_info_one"_i18n
                             : brls::getStr("home/pcs_info", count);
-        detail = count == 0 ? "home/pcs_detail_empty"_i18n
-                            : "home/pcs_detail"_i18n;
+        if (consoles > 0)
+            info += (info.empty() ? "" : "  ·  ") + consolesText(consoles);
+        if (info.empty())
+            info = "home/pcs_none"_i18n;
+        detail = count == 0 && consoles == 0 ? "home/pcs_detail_empty"_i18n
+                                             : "home/pcs_detail"_i18n;
         for (HostCard* card : hostCards) {
             if (card->getState() == HostCardState::RUNNING &&
                 !card->getRunningApp().name.empty()) {
@@ -793,9 +883,19 @@ void HomeView::updateShelfInfo() {
         pcs.info->setText(text.empty() || text == " " ? card->statusText()
                                                       : text);
         pcs.detail->setText(card->detailText());
+#if defined(PLATFORM_SWITCH)
+    } else if (ConsoleCard* console = selectedConsole()) {
+        pcs.info->setText(console->statusText());
+        pcs.detail->setText(console->detailText() + "  ·  " +
+                            console->infoText());
+    } else {
+        pcs.info->setText("home/add_title"_i18n);
+        pcs.detail->setText("home/add_body"_i18n);
+#else
     } else {
         pcs.info->setText("hosts/add_title"_i18n);
         pcs.detail->setText("hosts/add_body"_i18n);
+#endif
     }
     pcs.dots->setState(pcs.carousel->count(), pcs.carousel->selectedIndex());
 }
@@ -832,6 +932,7 @@ void HomeView::openPcs() {
     Application::giveFocus(pcs.carousel->getChildren()[index]);
     updateShelfInfo();
     updateBackAction();
+    checkConsoleUpdates();
 }
 
 void HomeView::closePcs() {
@@ -906,18 +1007,28 @@ void HomeView::fillPanel() {
     int columns = 1;
 
     if (level == Level::PCS) {
-        HostCard* card = selectedHost();
-        if (!card)
+        if (HostCard* card = selectedHost()) {
+            panelName->setText(card->getHost().hostname);
+            panelStatus->setText(card->statusText());
+            color = card->statusColor();
+            std::string detail = card->detailText();
+            const std::string info = card->infoText();
+            if (!info.empty() && info != " ")
+                detail += "  ·  " + info;
+            panelDetail->setText(detail);
+            options = hostOptions(card);
+#if defined(PLATFORM_SWITCH)
+        } else if (ConsoleCard* card = selectedConsole()) {
+            panelName->setText(card->console().name);
+            panelStatus->setText(card->statusText());
+            color = card->statusColor();
+            panelDetail->setText(card->detailText() + "  ·  " +
+                                 card->infoText());
+            options = consoleOptions(card);
+#endif
+        } else {
             return;
-        panelName->setText(card->getHost().hostname);
-        panelStatus->setText(card->statusText());
-        color = card->statusColor();
-        std::string detail = card->detailText();
-        const std::string info = card->infoText();
-        if (!info.empty() && info != " ")
-            detail += "  ·  " + info;
-        panelDetail->setText(detail);
-        options = hostOptions(card);
+        }
     } else {
         const int sel = home.carousel->selectedIndex();
         if (sel < 0 || sel >= (int)homeCards.size())
@@ -1139,6 +1250,333 @@ std::vector<HomeOption> HomeView::hostOptions(HostCard* card) {
     return options;
 }
 
+// MARK: - Consoles
+
+void HomeView::openConsole(const emu::Console& console,
+                           const std::string& selectRom) {
+    (void)selectRom;
+    // Task 7: push ConsoleShelfView
+    Application::notify(console.name);
+}
+
+void HomeView::showAddChoices() {
+    if (!instance)
+        return;
+    auto openAddHost = [] {
+        if (!instance)
+            return;
+        auto* screen = new AddHostTab();
+        screen->getAppletFrameItem()->title = "hosts/add_screen"_i18n;
+        presentWithHeader(instance, screen);
+    };
+
+#if defined(PLATFORM_SWITCH)
+    Style style = Application::getStyle();
+    auto* box = new Box(Axis::COLUMN);
+    box->setPadding(style["brls/dialog/paddingTopBottom"],
+                    style["brls/dialog/paddingLeftRight"], 18,
+                    style["brls/dialog/paddingLeftRight"]);
+
+    auto* title = new BoldLabel();
+    title->setFontSize(24);
+    title->setMarginBottom(18);
+    title->setText("home/add_title"_i18n);
+    box->addView(title);
+
+    auto* dialog = new Dialog(box);
+    auto addChoice = [box](const HomeOption& option, bool first) {
+        auto* button = new OptionButton();
+        button->set(option, first);
+        box->addView(button);
+        return button;
+    };
+
+    addChoice({"", "emu/add_pc"_i18n, "emu/add_pc_hint"_i18n,
+               [dialog, openAddHost] { dialog->close(openAddHost); }},
+              true);
+
+    for (const emu::Console& console : emu::consoles()) {
+        const emu::Console* target = &console;
+        std::string hint;
+        if (!runnerInstalled(console)) {
+            auto latest = latestManifests().find(console.slug);
+            hint = brls::getStr("emu/add_console_hint",
+                                latest != latestManifests().end()
+                                    ? emuSizeText(latest->second.size)
+                                    : std::string("11 MB"));
+        }
+        addChoice({"", console.name, hint, [dialog, target] {
+                       dialog->close([target] {
+                           if (!instance)
+                               return;
+                           if (runnerInstalled(*target))
+                               instance->openConsole(*target);
+                           else
+                               instance->installConsole(*target);
+                       });
+                   }},
+                  false);
+    }
+
+    addChoice({"", "emu/more_soon"_i18n, "", nullptr}, false)->disable();
+
+    dialog->addButton("common/cancel"_i18n, [] {});
+    dialog->open();
+#else
+    openAddHost();
+#endif
+}
+
+#if defined(PLATFORM_SWITCH)
+
+std::vector<HomeOption> HomeView::consoleOptions(ConsoleCard* card) {
+    const emu::Console* console = &card->console();
+    std::vector<HomeOption> options;
+    options.push_back(
+        {"", "emu/games"_i18n,
+         card->gameCount() < 0 ? "" : std::to_string(card->gameCount()),
+         [this, console] { openConsole(*console); }});
+    if (card->action() == emu::RunnerAction::Update && card->latest())
+        options.push_back({"", "emu/update"_i18n,
+                           "v" + card->latest()->version,
+                           [this, console] { installConsole(*console); }});
+    options.push_back({"", "emu/rescan"_i18n, "",
+                       [card] { card->refresh(); }});
+    HomeOption remove{"", "emu/remove"_i18n, "",
+                      [this, console] { removeConsole(*console); }};
+    remove.danger = true;
+    options.push_back(remove);
+    return options;
+}
+
+void HomeView::installConsole(const emu::Console& target) {
+    if (installing.exchange(true))
+        return;
+    const emu::Console* console = &target;
+    const bool first = !runnerInstalled(target);
+    const std::string title = brls::getStr(
+        first ? "emu/installing" : "emu/updating", target.name);
+
+    // Touched from the download thread (cancel, percent) and the UI thread.
+    struct State {
+        std::atomic<bool> cancel{false};
+        std::atomic<bool> closed{false};
+        std::atomic<int> percent{-1};
+    };
+    auto state = std::make_shared<State>();
+
+    Label* text = nullptr;
+    Dialog* loader = createLoadingDialog(
+        title, [state] { state->cancel.store(true); }, &text);
+    loader->open();
+
+    // UI thread only. The dialog and its label are freed once it is
+    // cancelled or closed, so this is checked before touching either.
+    auto dialogAlive = [state, loader] {
+        return !state->cancel.load() && !state->closed.load() &&
+               !isDialogClosing(loader);
+    };
+    // Closes the dialog, then runs `then` (an error, a toast, the shelf).
+    // A cancelled install ends silently.
+    auto finish = [state, loader, dialogAlive](std::function<void()> then) {
+        brls::sync([state, loader, dialogAlive, then] {
+            installing.store(false);
+            if (!dialogAlive())
+                return;
+            state->closed.store(true);
+            loader->close(then ? then : std::function<void()>([] {}));
+        });
+    };
+
+    brls::async([state, loader, text, console, title, first, dialogAlive,
+                 finish] {
+        const emu::ConsolePaths paths = emu::pathsFor(*console);
+        std::string error;
+        std::optional<emu::Manifest> latest = emu::fetchLatest(*console, error);
+        if (state->cancel.load()) {
+            finish(nullptr);
+            return;
+        }
+        if (!latest) {
+            finish([console, error] {
+                showError(brls::getStr("emu/install_error", console->name, error));
+            });
+            return;
+        }
+
+        const emu::Manifest manifest = *latest;
+        brls::sync([console, manifest] {
+            latestManifests()[console->slug] = manifest;
+        });
+
+        switch (emu::decide(emu::readInstalled(paths.installed), manifest,
+                            console->protocol)) {
+        case emu::RunnerAction::NeedsNewerEquinox:
+            finish([] { showAlert("emu/needs_newer"_i18n); });
+            return;
+        case emu::RunnerAction::UpToDate:
+            finish([console] {
+                Application::notify("emu/up_to_date"_i18n);
+                if (instance)
+                    instance->refreshConsole(*console);
+            });
+            return;
+        default:
+            break;
+        }
+
+        // "Snes9x · v1.0.0 · 11,4 MB · 62%", redrawn once per whole percent.
+        const std::string prefix = emuRunnerName(manifest) + "  ·  v" +
+                                   manifest.version + "  ·  " +
+                                   emuSizeText(manifest.size) + "  ·  ";
+        auto progress = [state, text, title, prefix, dialogAlive](
+                            uint64_t done, uint64_t total) {
+            if (state->cancel.load())
+                return false;
+            const int percent =
+                total > 0 ? (int)std::min<uint64_t>(100, done * 100 / total) : 0;
+            if (state->percent.exchange(percent) != percent) {
+                const std::string line =
+                    title + "\n" + prefix + std::to_string(percent) + "%";
+                brls::sync([text, line, dialogAlive] {
+                    if (dialogAlive())
+                        text->setText(line);
+                });
+            }
+            return true;
+        };
+        progress(0, manifest.size);
+
+        const emu::InstallResult result =
+            emu::installRunner(*console, manifest, progress);
+        if (!result.ok) {
+            if (result.cancelled || state->cancel.load())
+                finish(nullptr);
+            else
+                finish([console, error = result.error] {
+                    showError(brls::getStr("emu/install_error", console->name,
+                                           error));
+                });
+            return;
+        }
+        // Installed, even if Cancel was pressed as the download ended: the
+        // shelf follows what is on the SD card either way.
+        brls::sync([console, first, dialogAlive, state, loader] {
+            installing.store(false);
+            if (!instance)
+                return;
+            if (!dialogAlive()) {
+                if (first)
+                    instance->rebuildHosts();
+                else
+                    instance->refreshConsole(*console);
+                return;
+            }
+            state->closed.store(true);
+            loader->close([console, first] {
+                if (instance)
+                    instance->consoleInstalled(*console, first);
+            });
+        });
+    });
+}
+
+void HomeView::consoleInstalled(const emu::Console& console, bool first) {
+    emu::ensureFolders(emu::pathsFor(console));
+    if (!first) {
+        refreshConsole(console);
+        Application::notify("emu/updated"_i18n);
+        return;
+    }
+
+    // Land on the new card, then open its shelf.
+    int index = (int)hostCards.size();
+    for (const emu::Console& other : emu::consoles()) {
+        if (&other == &console)
+            break;
+        if (runnerInstalled(other))
+            index++;
+    }
+    rebuildHosts(index);
+    openConsole(console);
+}
+
+void HomeView::refreshConsole(const emu::Console& console) {
+    auto latest = latestManifests().find(console.slug);
+    for (ConsoleCard* card : consoleCards) {
+        if (&card->console() != &console)
+            continue;
+        if (latest != latestManifests().end())
+            card->setLatest(latest->second);
+        card->refresh();
+    }
+}
+
+void HomeView::removeConsole(const emu::Console& target) {
+    const emu::Console* console = &target;
+    auto* confirm =
+        new Dialog(brls::getStr("emu/remove_message", target.name));
+    confirm->addButton("common/cancel"_i18n, [] {});
+    confirm->addButton("common/remove"_i18n, [console] {
+        if (installing.load())
+            return;
+        emu::removeRunner(*console);
+        latestManifests().erase(console->slug);
+        if (instance)
+            instance->rebuildHosts();
+    });
+    confirm->open();
+}
+
+void HomeView::checkConsoleUpdates() {
+    if (consoleCards.empty() || checkingUpdates.exchange(true))
+        return;
+
+    std::vector<const emu::Console*> targets;
+    for (ConsoleCard* card : consoleCards)
+        targets.push_back(&card->console());
+
+    brls::async([targets] {
+        for (const emu::Console* console : targets) {
+            const emu::ConsolePaths paths = emu::pathsFor(*console);
+            const auto installed = emu::readInstalled(paths.installed);
+            const int64_t now = (int64_t)std::time(nullptr);
+            if (!installed || !emu::shouldCheck(installed->lastCheck, now))
+                continue;
+
+            std::string error;
+            const auto latest = emu::fetchLatest(*console, error);
+            if (!latest)
+                continue; // offline: tried again next time
+
+            // Read again: an install may have replaced it meanwhile.
+            if (!installing.load()) {
+                if (auto fresh = emu::readInstalled(paths.installed)) {
+                    fresh->lastCheck = now;
+                    emu::writeInstalled(paths.installed, *fresh);
+                }
+            }
+
+            const emu::Manifest manifest = *latest;
+            brls::sync([console, manifest] {
+                latestManifests()[console->slug] = manifest;
+                if (!instance)
+                    return;
+                for (ConsoleCard* card : instance->consoleCards)
+                    if (&card->console() == console)
+                        card->setLatest(manifest);
+            });
+        }
+        checkingUpdates.store(false);
+    });
+}
+
+#else
+
+void HomeView::checkConsoleUpdates() {}
+
+#endif // PLATFORM_SWITCH
+
 void HomeView::willAppear(bool resetState) {
     Box::willAppear(resetState);
     presenting = false;
@@ -1151,6 +1589,11 @@ void HomeView::willAppear(bool resetState) {
     if (appeared) {
         for (HostCard* card : hostCards)
             card->refresh();
+#if defined(PLATFORM_SWITCH)
+        // Back from a game or a screen: ROMs may have been added since.
+        for (ConsoleCard* card : consoleCards)
+            card->refresh();
+#endif
     }
     appeared = true;
 

@@ -394,7 +394,7 @@
     },
     "home": {
         "crumb": "INÍCIO",
-        "pcs": "Seus PCs",
+        "pcs": "Dispositivos",
         "favorites": "Favoritos",
         "settings": "Configurações",
         "about": "Sobre",
@@ -406,7 +406,7 @@
         "pcs_running": "{} rodando",
         "pcs_info": "{} PCs pareados",
         "pcs_info_one": "1 PC pareado",
-        "pcs_detail": "Escolha um PC para ver os jogos",
+        "pcs_detail": "Escolha um dispositivo para ver os jogos",
         "pcs_detail_running": "{} está rodando {}",
         "pcs_detail_empty": "Pareie um PC para começar a jogar",
         "fav_status": "{} em {}",
@@ -427,11 +427,37 @@
         "host_remove": "Remover PC",
         "back": "Voltar",
         "exit": "Sair",
-        "exit_message": "Fechar o Equinox?"
+        "exit_message": "Fechar o Equinox?",
+        "consoles_one": "1 console",
+        "consoles_count": "{} consoles",
+        "add_title": "Adicionar",
+        "add_body": "PC ou console"
     },
     "favorites": {
         "all": "Todos",
         "change_pc": "Trocar PC",
         "empty": "Nenhum favorito ainda. Marque jogos com Y na biblioteca."
+    },
+    "emu": {
+        "on_switch": "Neste Switch  ·  {}",
+        "update_available": "Atualização disponível",
+        "needs_newer_short": "Atualize o Equinox",
+        "roms_folder": "ROMs em {}",
+        "games": "Jogos",
+        "update": "Atualizar emulador",
+        "rescan": "Procurar jogos de novo",
+        "remove": "Remover console",
+        "remove_message": "Remover o {}? Seus jogos, saves e capas continuam no cartão SD.",
+        "add_pc": "PC para stream",
+        "add_pc_hint": "Encontre um na sua rede",
+        "add_console_hint": "baixa o emulador ({})",
+        "more_soon": "Mais consoles em breve",
+        "installing": "Instalando {}",
+        "updating": "Atualizando {}",
+        "needs_newer": "Atualize o Equinox para instalar este emulador",
+        "install_error": "Não foi possível instalar o {}.\n\n{}",
+        "updated": "Emulador atualizado",
+        "up_to_date": "O emulador já está atualizado",
+        "decimal_separator": ","
     }
 }

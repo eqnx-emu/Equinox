@@ -394,7 +394,7 @@
     },
     "home": {
         "crumb": "HOME",
-        "pcs": "Your PCs",
+        "pcs": "Devices",
         "favorites": "Favorites",
         "settings": "Settings",
         "about": "About",
@@ -406,7 +406,7 @@
         "pcs_running": "{} running",
         "pcs_info": "{} paired PCs",
         "pcs_info_one": "1 paired PC",
-        "pcs_detail": "Pick a PC to see its games",
+        "pcs_detail": "Pick a device to see its games",
         "pcs_detail_running": "{} is running {}",
         "pcs_detail_empty": "Pair a PC to start playing",
         "fav_status": "{} on {}",
@@ -427,11 +427,37 @@
         "host_remove": "Remove PC",
         "back": "Back",
         "exit": "Exit",
-        "exit_message": "Close Equinox?"
+        "exit_message": "Close Equinox?",
+        "consoles_one": "1 console",
+        "consoles_count": "{} consoles",
+        "add_title": "Add",
+        "add_body": "PC or console"
     },
     "favorites": {
         "all": "All",
         "change_pc": "Change PC",
         "empty": "No favorites yet. Star games in a library with Y."
+    },
+    "emu": {
+        "on_switch": "On this Switch  ·  {}",
+        "update_available": "Update available",
+        "needs_newer_short": "Update Equinox",
+        "roms_folder": "ROMs in {}",
+        "games": "Games",
+        "update": "Update emulator",
+        "rescan": "Look for games again",
+        "remove": "Remove console",
+        "remove_message": "Remove {}? Your games, saves and covers stay on the SD card.",
+        "add_pc": "PC for streaming",
+        "add_pc_hint": "Find one on your network",
+        "add_console_hint": "downloads the emulator ({})",
+        "more_soon": "More consoles soon",
+        "installing": "Installing {}",
+        "updating": "Updating {}",
+        "needs_newer": "Update Equinox to install this emulator",
+        "install_error": "Could not install {}.\n\n{}",
+        "updated": "Emulator updated",
+        "up_to_date": "The emulator is up to date",
+        "decimal_separator": "."
     }
 }
