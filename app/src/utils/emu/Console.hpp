@@ -11,8 +11,8 @@ struct Console {
     std::vector<std::string> extensions;
     std::string libretroSystem;
     std::string repo;
-    int protocol;
-    unsigned cardColorTop, cardColorBottom;
+    int protocol = 0;
+    unsigned cardColorTop = 0, cardColorBottom = 0;
 };
 
 struct ConsolePaths {

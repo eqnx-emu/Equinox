@@ -29,3 +29,14 @@ add_executable(test_emu_console
 target_include_directories(test_emu_console PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
     "${MOONLIGHT_ROOT}/extern")
+
+find_library(JANSSON_LIB jansson)
+find_library(MBEDCRYPTO_LIB mbedcrypto)
+add_executable(test_emu_manifest
+    test_emu_manifest.cpp
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/RunnerManifest.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp")
+target_include_directories(test_emu_manifest PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
+target_link_libraries(test_emu_manifest PRIVATE ${JANSSON_LIB} ${MBEDCRYPTO_LIB})

@@ -3,6 +3,7 @@
 
 #include <filesystem>
 #include <string>
+#include <vector>
 
 #include "emu/Console.hpp"
 
@@ -21,7 +22,14 @@ TEST_CASE("snes paths") {
 
 TEST_CASE("console lookup") {
     REQUIRE(emu::findConsole("snes") != nullptr);
-    CHECK(emu::findConsole("snes")->name == "Super Nintendo");
+    const emu::Console* snes = emu::findConsole("snes");
+    CHECK(snes->name == "Super Nintendo");
+    CHECK(snes->extensions == std::vector<std::string>{".sfc", ".smc", ".zip"});
+    CHECK(snes->libretroSystem == "Nintendo - Super Nintendo Entertainment System");
+    CHECK(snes->repo == "luizfbalves/equinox-snes9x");
+    CHECK(snes->protocol == 1);
+    CHECK(snes->cardColorTop == 0x3a2f52);
+    CHECK(snes->cardColorBottom == 0x1b1828);
     CHECK(emu::findConsole("nes") == nullptr);
     CHECK(emu::consoles().size() == 1);
 }
