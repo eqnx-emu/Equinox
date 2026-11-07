@@ -372,6 +372,11 @@ void ConsoleShelfView::createDataQueue() {
 
 void ConsoleShelfView::showGames(std::vector<Game> found) {
     generation++;
+    // Nothing tied to the old numbering may outlive it.
+    cancelData();
+    failure.reset();
+    stoppedIndex.reset();
+    listPanel->setBatchStopped(std::nullopt);
 
     View* focus = Application::getCurrentFocus();
     const bool focusHere = !focus || isInside(focus, this);
@@ -588,7 +593,8 @@ void ConsoleShelfView::keepFocus() {
 }
 
 void ConsoleShelfView::download(size_t index) {
-    if (!dataQueue || index >= games.size())
+    // The scan may number the games differently.
+    if (!dataQueue || scanning || index >= games.size())
         return;
     failure.reset();
     dataQueue->enqueue(index, games[index].rom);
@@ -596,7 +602,7 @@ void ConsoleShelfView::download(size_t index) {
 }
 
 void ConsoleShelfView::downloadAll() {
-    if (!dataQueue)
+    if (!dataQueue || scanning)
         return;
     failure.reset();
     listPanel->setBatchStopped(std::nullopt);
