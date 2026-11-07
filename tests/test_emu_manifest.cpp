@@ -103,6 +103,41 @@ TEST_CASE("installed round trip and corruption") {
     fs::remove(p, ec);
 }
 
+TEST_CASE("writeInstalled replaces an existing file") {
+    fs::path p = tempPath("installed_twice.json");
+    std::error_code ec;
+    fs::remove(p, ec);
+    Installed a = inst("1.0.0");
+    a.lastCheck = 10;
+    Installed b = inst("1.0.1");
+    b.lastCheck = 20;
+    REQUIRE(writeInstalled(p.string(), a));
+    REQUIRE(writeInstalled(p.string(), b));
+    auto back = readInstalled(p.string());
+    REQUIRE(back.has_value());
+    CHECK(back->version == "1.0.1");
+    CHECK(back->lastCheck == 20);
+    CHECK_FALSE(fs::exists(p.string() + ".tmp"));
+    fs::remove(p, ec);
+}
+
+TEST_CASE("parseManifest rejects out-of-range protocol") {
+    CHECK_FALSE(parseManifest(R"({"id":"a","console":"snes","version":"1.0.0","protocol":4294967297,"asset":"x","size":1,"sha256":"y"})").has_value());
+}
+
+TEST_CASE("verifyFile accepts an uppercase expected sha") {
+    fs::path p = tempPath("abc_upper.bin");
+    std::error_code ec;
+    {
+        std::ofstream(p, std::ios::binary | std::ios::trunc) << "abc";
+    }
+    Manifest m;
+    m.size = 3;
+    m.sha256 = "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD";
+    CHECK(verifyFile(p.string(), m));
+    fs::remove(p, ec);
+}
+
 TEST_CASE("verifyFile") {
     fs::path p = tempPath("abc.bin");
     std::error_code ec;

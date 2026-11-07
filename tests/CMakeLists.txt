@@ -32,6 +32,12 @@ target_include_directories(test_emu_console PRIVATE
 
 find_library(JANSSON_LIB jansson)
 find_library(MBEDCRYPTO_LIB mbedcrypto)
+if(NOT JANSSON_LIB)
+    message(FATAL_ERROR "jansson not found (needed by test_emu_manifest)")
+endif()
+if(NOT MBEDCRYPTO_LIB)
+    message(FATAL_ERROR "mbedcrypto not found (needed by test_emu_manifest)")
+endif()
 add_executable(test_emu_manifest
     test_emu_manifest.cpp
     "${MOONLIGHT_ROOT}/app/src/utils/emu/RunnerManifest.cpp"

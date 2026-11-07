@@ -4,6 +4,9 @@
 #include <mbedtls/sha256.h>
 #include <mbedtls/version.h>
 
+#include <algorithm>
+#include <cctype>
+#include <climits>
 #include <cstdio>
 #include <filesystem>
 #include <memory>
@@ -89,7 +92,7 @@ std::optional<Manifest> parseManifest(const std::string& json) {
         !getString(root.get(), "sha256", m.sha256) || !getInt(root.get(), "protocol", protocol) ||
         !getInt(root.get(), "size", size))
         return std::nullopt;
-    if (size < 0) return std::nullopt;
+    if (size < 0 || protocol < 0 || protocol > INT_MAX) return std::nullopt;
     m.protocol = static_cast<int>(protocol);
     m.size = static_cast<uint64_t>(size);
     return m;
@@ -134,6 +137,12 @@ bool writeInstalled(const std::string& path, const Installed& installed) {
         return false;
     }
     std::filesystem::rename(tmp, path, ec);
+    if (ec && std::filesystem::exists(path)) {
+        // FAT (libnx) cannot rename over an existing file.
+        std::filesystem::remove(path, ec);
+        ec.clear();
+        std::filesystem::rename(tmp, path, ec);
+    }
     if (ec) {
         std::filesystem::remove(tmp, ec);
         return false;
@@ -190,7 +199,10 @@ bool verifyFile(const std::string& filePath, const Manifest& manifest) {
     auto size = std::filesystem::file_size(filePath, ec);
     if (ec || size != manifest.size) return false;
     std::string actual = sha256Hex(filePath);
-    return !actual.empty() && actual == manifest.sha256;
+    std::string expected = manifest.sha256;
+    std::transform(expected.begin(), expected.end(), expected.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return !actual.empty() && actual == expected;
 }
 
 std::string manifestUrl(const Console& console) {
