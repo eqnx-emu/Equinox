@@ -192,6 +192,18 @@ bool Settings::has_any_favorite() {
     });
 }
 
+int64_t Settings::last_played(const std::string& console, const std::string& romFile) const {
+    auto it = m_local_played.find(console);
+    if (it == m_local_played.end())
+        return 0;
+    auto game = it->second.find(romFile);
+    return game == it->second.end() ? 0 : game->second;
+}
+
+void Settings::set_last_played(const std::string& console, const std::string& romFile, int64_t when) {
+    m_local_played[console][romFile] = when;
+}
+
 void Settings::load() {
     loadBaseLayouts();
 
@@ -272,6 +284,23 @@ void Settings::load() {
         }
         
         if (json_t* settings = json_object_get(root, "settings")) {
+            if (json_t* played = json_object_get(settings, "local_played")) {
+                if (json_typeof(played) == JSON_OBJECT) {
+                    const char* console;
+                    json_t* games;
+                    json_object_foreach(played, console, games) {
+                        if (json_typeof(games) != JSON_OBJECT)
+                            continue;
+                        const char* file;
+                        json_t* when;
+                        json_object_foreach(games, file, when) {
+                            if (json_typeof(when) == JSON_INTEGER)
+                                m_local_played[console][file] = (int64_t)json_integer_value(when);
+                        }
+                    }
+                }
+            }
+
             if (json_t* resolution = json_object_get(settings, "resolution")) {
                 if (json_typeof(resolution) == JSON_INTEGER) {
                     m_resolution = (int)json_integer_value(resolution);
@@ -718,6 +747,18 @@ void Settings::save() {
                 json_object_set_new(settings, "guide_key_buttons", guideKeyButtons);
             }
             
+            if (json_t* played = json_object()) {
+                for (const auto& console : m_local_played) {
+                    json_t* games = json_object();
+                    if (!games)
+                        continue;
+                    for (const auto& game : console.second)
+                        json_object_set_new(games, game.first.c_str(), json_integer((json_int_t)game.second));
+                    json_object_set_new(played, console.first.c_str(), games);
+                }
+                json_object_set_new(settings, "local_played", played);
+            }
+
             json_object_set_new(root, "settings", settings);
         }
 

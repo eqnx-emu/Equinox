@@ -465,6 +465,18 @@
         "error_folders": "Could not create the folders in sdmc:/equinox. Check the SD card.",
         "error_mismatch": "The download arrived damaged. Try again.",
         "error_move": "Could not put the emulator in place. Check the SD card.",
-        "error_installed": "Could not save the emulator version. Check the SD card."
+        "error_installed": "Could not save the emulator version. Check the SD card.",
+        "play": "Play",
+        "rescan_short": "Look again",
+        "empty_title": "No games yet",
+        "empty_body": "Put your games ({}) in this folder on the SD card:",
+        "empty_covers": "Covers show up on their own.",
+        "never_played": "never played",
+        "played_today": "played today",
+        "played_yesterday": "played yesterday",
+        "played_days": "played {} days ago",
+        "not_installed": "Emulator not installed",
+        "rom_missing": "This game is no longer on the SD card.",
+        "cannot_launch": "Could not open the game from here. Open Equinox from the Homebrew Menu and try again."
     }
 }

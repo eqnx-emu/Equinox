@@ -19,3 +19,8 @@ bool httpGetToString(const std::string& url, std::string& out, long timeoutSec,
 // caller to remove.
 bool httpGetToFile(const std::string& url, const std::string& path, long timeoutSec,
                    const Progress& progress, std::string& error);
+
+// Same, and `httpStatus` receives the HTTP status the server answered with,
+// or 0 when there was no answer (offline, DNS, TLS, timeout).
+bool httpGetToFile(const std::string& url, const std::string& path, long timeoutSec,
+                   const Progress& progress, std::string& error, long& httpStatus);

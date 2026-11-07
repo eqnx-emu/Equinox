@@ -13,6 +13,9 @@
 #include <Settings.hpp>
 
 #if defined(PLATFORM_SWITCH)
+#include "console_shelf_view.hpp"
+#include "emu/CoverStore.hpp"
+#include "emu/EmuLauncher.hpp"
 #include "emu/PathUtf8.hpp"
 #include "emu/RunnerInstaller.hpp"
 #endif
@@ -1281,9 +1284,12 @@ std::vector<HomeOption> HomeView::hostOptions(HostCard* card) {
 
 void HomeView::openConsole(const emu::Console& console,
                            const std::string& selectRom) {
+#if defined(PLATFORM_SWITCH)
+    presentWithHeader(this, new ConsoleShelfView(console, selectRom));
+#else
+    (void)console;
     (void)selectRom;
-    // Task 7: push ConsoleShelfView
-    Application::notify(console.name);
+#endif
 }
 
 void HomeView::showAddChoices() {
@@ -1378,8 +1384,14 @@ std::vector<HomeOption> HomeView::consoleOptions(ConsoleCard* card) {
         options.push_back({"", "emu/update"_i18n,
                            "v" + card->latest()->version,
                            [this, console] { installConsole(*console); }});
-    options.push_back({"", "emu/rescan"_i18n, "",
-                       [card] { card->refresh(); }});
+    // Covers libretro lacked are tried again too.
+    options.push_back({"", "emu/rescan"_i18n, "", [card, console] {
+                           const emu::ConsolePaths paths =
+                               emu::pathsFor(*console);
+                           brls::async(
+                               [paths] { emu::clearCoverMisses(paths); });
+                           card->refresh();
+                       }});
     HomeOption remove{"", "emu/remove"_i18n, "",
                       [this, console] { removeConsole(*console); }};
     remove.danger = true;
@@ -1572,6 +1584,30 @@ void HomeView::removeConsole(const emu::Console& target) {
     confirm->open();
 }
 
+void HomeView::resumeConsole() {
+    const auto token = emu::takePendingResume();
+    if (!token)
+        return;
+    // Task 8: Origin::Favorites reopens the favorites shelf; for now both
+    // come back to the console's shelf.
+    const emu::Console* console = emu::findConsole(token->console);
+    if (!console || !runnerInstalled(*console))
+        return; // removed meanwhile: just the home screen
+
+    openPcs();
+    for (size_t i = 0; i < consoleCards.size(); i++) {
+        if (&consoleCards[i]->console() != console)
+            continue;
+        const int index = (int)(hostCards.size() + i);
+        pcs.carousel->jumpTo(index);
+        Application::giveFocus(pcs.carousel->getChildren()[index]);
+        break;
+    }
+    updateShelfInfo();
+    // The shelf lands on the first game when this one is gone.
+    openConsole(*console, token->romFile);
+}
+
 void HomeView::checkConsoleUpdates() {
     if (consoleCards.empty() || checkingUpdates.exchange(true))
         return;
@@ -1629,6 +1665,7 @@ void HomeView::checkConsoleUpdates() {
 
 #else
 
+void HomeView::resumeConsole() {}
 void HomeView::checkConsoleUpdates() {}
 
 #endif // PLATFORM_SWITCH
@@ -1651,12 +1688,21 @@ void HomeView::willAppear(bool resetState) {
             card->refresh();
 #endif
     }
+    const bool first = !appeared;
     appeared = true;
 
     updateHomeCards();
     updateShelfInfo();
     if (entered)
         fillPanel();
+
+    // Back from a game: straight to its console's shelf, once the home
+    // screen is in place.
+    if (first)
+        brls::sync([] {
+            if (instance)
+                instance->resumeConsole();
+        });
 }
 
 void HomeView::draw(NVGcontext* vg, float x, float y, float width,

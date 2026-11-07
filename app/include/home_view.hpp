@@ -173,4 +173,7 @@ class HomeView : public brls::Box {
     // At most once a day, asks whether the installed emulators have a newer
     // version. Silent when offline.
     void checkConsoleUpdates();
+    // Started by the runner on its way back: opens the console's shelf on
+    // the game that was played (see emu::setPendingResume).
+    void resumeConsole();
 };

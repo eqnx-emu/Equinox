@@ -465,6 +465,18 @@
         "error_folders": "Não deu para criar as pastas em sdmc:/equinox. Confira o cartão SD.",
         "error_mismatch": "O download chegou corrompido. Tente de novo.",
         "error_move": "Não deu para colocar o emulador no lugar. Confira o cartão SD.",
-        "error_installed": "Não deu para gravar a versão do emulador. Confira o cartão SD."
+        "error_installed": "Não deu para gravar a versão do emulador. Confira o cartão SD.",
+        "play": "Jogar",
+        "rescan_short": "Procurar de novo",
+        "empty_title": "Nenhum jogo ainda",
+        "empty_body": "Coloque seus jogos ({}) nesta pasta do cartão SD:",
+        "empty_covers": "As capas aparecem sozinhas.",
+        "never_played": "nunca jogado",
+        "played_today": "jogado hoje",
+        "played_yesterday": "jogado ontem",
+        "played_days": "jogado há {} dias",
+        "not_installed": "Emulador não instalado",
+        "rom_missing": "Este jogo não está mais no cartão SD.",
+        "cannot_launch": "Não deu para abrir o jogo daqui. Abra o Equinox pelo Homebrew Menu e tente de novo."
     }
 }

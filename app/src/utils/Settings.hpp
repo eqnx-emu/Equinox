@@ -3,6 +3,7 @@
 #include "Singleton.hpp"
 #include <borealis.hpp>
 #include <map>
+#include <cstdint>
 #include <cstdio>
 #include <string>
 #include <utility>
@@ -134,6 +135,11 @@ class Settings : public Singleton<Settings> {
     void remove_favorite(const Host& host, int app_id);
     bool is_favorite(const Host& host, int app_id);
     bool has_any_favorite();
+
+    // When a console game was last opened (seconds since the epoch), 0 if
+    // never. Saved as "local_played": {"snes": {"<rom file>": <epoch>}}.
+    int64_t last_played(const std::string& console, const std::string& romFile) const;
+    void set_last_played(const std::string& console, const std::string& romFile, int64_t when);
 
     [[nodiscard]] int resolution() const { return m_resolution; }
     void set_resolution(int resolution) { m_resolution = resolution; }
@@ -382,6 +388,7 @@ class Settings : public Singleton<Settings> {
     std::string m_gamepad_mapping_path;
 
     std::vector<Host> m_hosts;
+    std::map<std::string, std::map<std::string, int64_t>> m_local_played;
     int m_resolution = 720;
     int m_native_resolution_scale = 100;
     int m_fps = 60;

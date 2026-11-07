@@ -33,7 +33,7 @@ int onProgress(void* user, curl_off_t total, curl_off_t done, curl_off_t, curl_o
 // GET `url` over verified TLS, following redirects (release assets redirect
 // to GitHub's object storage).
 bool httpGet(const std::string& url, curl_write_callback write, void* user, long timeout,
-             const Progress* progress, std::string& error) {
+             const Progress* progress, std::string& error, long* status = nullptr) {
     CURL* curl = curl_easy_init();
     if (!curl) {
         error = "curl_easy_init failed";
@@ -65,6 +65,11 @@ bool httpGet(const std::string& url, curl_write_callback write, void* user, long
     }
 
     CURLcode code = curl_easy_perform(curl);
+    if (status) {
+        long response = 0;
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
+        *status = response;
+    }
     if (code == CURLE_ABORTED_BY_CALLBACK)
         error = "cancelled";
     else if (code != CURLE_OK)
@@ -85,12 +90,19 @@ bool httpGetToString(const std::string& url, std::string& out, long timeoutSec,
 
 bool httpGetToFile(const std::string& url, const std::string& path, long timeoutSec,
                    const Progress& progress, std::string& error) {
+    long status = 0;
+    return httpGetToFile(url, path, timeoutSec, progress, error, status);
+}
+
+bool httpGetToFile(const std::string& url, const std::string& path, long timeoutSec,
+                   const Progress& progress, std::string& error, long& httpStatus) {
+    httpStatus = 0;
     std::ofstream file(emu::fromUtf8(path), std::ios::binary | std::ios::trunc);
     if (!file) {
         error = "could not write " + path;
         return false;
     }
-    bool ok = httpGet(url, writeToFile, &file, timeoutSec, &progress, error);
+    bool ok = httpGet(url, writeToFile, &file, timeoutSec, &progress, error, &httpStatus);
     file.close();
     if (ok && file.fail()) {
         error = "could not write " + path;
