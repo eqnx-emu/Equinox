@@ -4,6 +4,7 @@
 #include <cctype>
 #include <charconv>
 #include <cstring>
+#include <utility>
 
 namespace emu {
 
@@ -110,6 +111,19 @@ std::string runnerArgs(const Console& console, const ConsolePaths& paths, const 
     if (!cover.empty()) line += " --cover " + quoted(cover);
     if (!video.empty()) line += " --video " + quoted(video);
     return line;
+}
+
+std::optional<std::string> launchLine(const std::string& runner, const Console& console,
+                                      const ConsolePaths& paths, const RomEntry& rom,
+                                      const std::string& returnTo, const std::string& token,
+                                      const std::string& cover, const std::string& video) {
+    const std::string head = "\"" + runner + "\" ";
+    for (const auto& [c, v] : {std::pair{cover, video}, std::pair{std::string(), video},
+                               std::pair{std::string(), std::string()}}) {
+        std::string line = head + runnerArgs(console, paths, rom, returnTo, token, c, v);
+        if (line.size() <= kMaxLaunchLine) return line;
+    }
+    return std::nullopt;
 }
 
 std::optional<std::string> resumeArg(int argc, const char* const* argv) {

@@ -1,5 +1,8 @@
 #include "emu/VideoDefaults.hpp"
 
+#include "emu/PathUtf8.hpp"
+#include "emu/ReplaceFile.hpp"
+
 #include <jansson.h>
 
 #include <algorithm>
@@ -44,7 +47,21 @@ bool readFile(const std::string& path, std::string& out) {
 
 std::string videoDefaultsPath(const ConsolePaths& paths) { return paths.emulator + "/video.json"; }
 
+void recoverVideoDefaults(const std::string& path) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const fs::path target = fromUtf8(path);
+    if (fs::exists(target, ec) || ec) return;
+    for (const char* suffix : {".bak", ".tmp"}) {
+        const fs::path side = fromUtf8(path + suffix);
+        if (!fs::is_regular_file(side, ec)) continue;
+        fs::rename(side, target, ec);
+        return;
+    }
+}
+
 VideoDefaults readVideoDefaults(const std::string& path) {
+    recoverVideoDefaults(path);
     VideoDefaults out;
     std::string text;
     if (!readFile(path, text)) return out;
@@ -66,22 +83,15 @@ bool writeVideoDefaults(const std::string& path, const VideoDefaults& defaults) 
                            defaults.border.c_str()));
     if (!root) return false;
 
-    std::string tmp = path + ".tmp";
+    const std::string tmp = path + ".tmp";
     std::error_code ec;
     if (json_dump_file(root.get(), tmp.c_str(), JSON_INDENT(2)) != 0) {
-        std::filesystem::remove(tmp, ec);
+        std::filesystem::remove(fromUtf8(tmp), ec);
         return false;
     }
-    std::filesystem::rename(tmp, path, ec);
-    std::error_code existsEc;
-    if (ec && std::filesystem::exists(path, existsEc)) {
-        // FAT (libnx) cannot rename over an existing file.
-        std::filesystem::remove(path, ec);
-        ec.clear();
-        std::filesystem::rename(tmp, path, ec);
-    }
-    if (ec) {
-        std::filesystem::remove(tmp, ec);
+    // The old file stays as .bak until the new one is in place.
+    if (!replaceKeepingBackup(fromUtf8(tmp), fromUtf8(path), fromUtf8(path + ".bak"))) {
+        std::filesystem::remove(fromUtf8(tmp), ec);
         return false;
     }
     return true;

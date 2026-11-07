@@ -68,6 +68,7 @@ target_include_directories(test_emu_launch PRIVATE
 add_executable(test_emu_installer
     test_emu_installer.cpp
     "${MOONLIGHT_ROOT}/app/src/utils/emu/RunnerInstaller.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/ReplaceFile.cpp"
     "${MOONLIGHT_ROOT}/app/src/utils/emu/RunnerManifest.cpp"
     "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp")
 target_include_directories(test_emu_installer PRIVATE
@@ -94,6 +95,7 @@ target_link_libraries(test_emu_favorites PRIVATE ${JANSSON_LIB})
 add_executable(test_emu_video
     test_emu_video.cpp
     "${MOONLIGHT_ROOT}/app/src/utils/emu/VideoDefaults.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/ReplaceFile.cpp"
     "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp")
 target_include_directories(test_emu_video PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"

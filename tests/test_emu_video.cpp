@@ -63,6 +63,30 @@ TEST_CASE("write then read round trip") {
     CHECK(readVideoDefaults(path).size == "full");
 }
 
+TEST_CASE("an interrupted write is recovered and a failed one keeps the old file") {
+    const std::string path = tempFile("recover.json");
+    std::filesystem::remove(path + ".bak");
+    std::filesystem::remove(path + ".tmp");
+    // Killed between moving the old file aside and moving the new one in.
+    put(path + ".bak", R"({"size":"8:7"})");
+    put(path + ".tmp", R"({"size":"full"})");
+    CHECK(readVideoDefaults(path).size == "8:7");
+    CHECK(std::filesystem::exists(path));
+
+    // The new file cannot be moved in: the target name is taken by a folder for .bak.
+    std::filesystem::remove(path + ".tmp");
+    std::filesystem::create_directories(path + ".bak/x");
+    VideoDefaults v;
+    v.size = "full";
+    CHECK_FALSE(writeVideoDefaults(path, v));
+    CHECK(readVideoDefaults(path).size == "8:7");
+    CHECK_FALSE(std::filesystem::exists(path + ".tmp"));
+    std::filesystem::remove_all(path + ".bak");
+    REQUIRE(writeVideoDefaults(path, v));
+    CHECK(readVideoDefaults(path).size == "full");
+    CHECK_FALSE(std::filesystem::exists(path + ".bak"));
+}
+
 TEST_CASE("bad files give defaults") {
     checkDefaults(readVideoDefaults(tempFile("missing.json")));
     const std::string path = tempFile("bad.json");
