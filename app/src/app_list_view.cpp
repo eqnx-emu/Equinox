@@ -9,40 +9,6 @@
 #include "BoxArtManager.hpp"
 #include "helper.hpp"
 
-#include <borealis/extern/nanovg/stb_image.h>
-
-namespace {
-// Average colour of the top and bottom halves of a cover image. Runs off
-// the main thread.
-bool coverColors(const std::string& path, NVGcolor& top, NVGcolor& bottom) {
-    int w = 0, h = 0, n = 0;
-    unsigned char* px = stbi_load(path.c_str(), &w, &h, &n, 4);
-    if (!px)
-        return false;
-    double sum[2][3] = {};
-    long count[2] = {};
-    const int step = std::max(1, std::min(w, h) / 48);
-    for (int yy = 0; yy < h; yy += step) {
-        const int half = yy < h / 2 ? 0 : 1;
-        for (int xx = 0; xx < w; xx += step) {
-            const unsigned char* p = px + 4 * (yy * w + xx);
-            for (int c = 0; c < 3; c++)
-                sum[half][c] += p[c];
-            count[half]++;
-        }
-    }
-    stbi_image_free(px);
-    auto avg = [&](int half) {
-        const double k = count[half] ? 1.0 / (255.0 * count[half]) : 0;
-        return nvgRGBf((float)(sum[half][0] * k), (float)(sum[half][1] * k),
-                       (float)(sum[half][2] * k));
-    };
-    top = avg(0);
-    bottom = avg(1);
-    return true;
-}
-} // namespace
-
 AppListView::AppListView(const Host& host) : host(host) {
     this->inflateFromXMLRes("xml/views/app_list_view.xml");
 
@@ -300,26 +266,16 @@ void AppListView::setCurrentApp(const AppInfo& app) {
     updateAppletFrameItem();
 }
 
-AppListView::~AppListView() {
-    if (backdropHost)
-        backdropHost->setBackdrop(nullptr);
-}
+AppListView::~AppListView() = default;
 
 void AppListView::willDisappear(bool resetState) {
     Box::willDisappear(resetState);
-    if (backdropHost)
-        backdropHost->setBackdrop(nullptr);
-    backdropHost = nullptr;
+    ambient.detach();
 }
 
 void AppListView::willAppear(bool resetState) {
     Box::willAppear(resetState);
-    backdropHost = dynamic_cast<BackdropFrame*>(getAppletFrame());
-    if (backdropHost)
-        backdropHost->setBackdrop(
-            [this](NVGcontext* vg, float x, float y, float w, float h) {
-                paintAmbient(vg, x, y, w, h);
-            });
+    ambient.attach(this);
     updateAppList();
 }
 
@@ -350,72 +306,13 @@ void AppListView::onAppSelected(int index) {
     detailsFade.start();
     dots->setState(apps.size(), index);
 
-    // Glow from the cover colours; computed once per game, off the UI thread.
-    const int appId = app.app_id;
-    auto cached = ambientCache.find(appId);
-    if (cached != ambientCache.end()) {
-        showAmbient(cached->second);
-        return;
-    }
-    showAmbient(Ambient{});
-    if (!BoxArtManager::instance().has_boxart(host, appId))
-        return;
-    const std::string path = BoxArtManager::get_texture_path(host, appId);
-    ASYNC_RETAIN
-    brls::async([ASYNC_TOKEN, path, appId]() {
-        Ambient ambient;
-        ambient.valid = coverColors(path, ambient.top, ambient.bottom);
-        brls::sync([ASYNC_TOKEN, appId, ambient]() {
-            ASYNC_RELEASE
-            ambientCache[appId] = ambient;
-            const int sel = carousel->selectedIndex();
-            if (sel >= 0 && sel < (int)apps.size() &&
-                apps[sel].app_id == appId)
-                showAmbient(ambient);
-        });
-    });
-}
-
-void AppListView::showAmbient(const Ambient& ambient) {
-    if (!ambient.valid && !ambientShown.valid)
-        return;
-    ambientPrevious = ambientShown;
-    ambientShown = ambient;
-    ambientFade.reset(0.0f);
-    ambientFade.addStep(1.0f, 650, EasingFunction::quadraticInOut);
-    ambientFade.start();
-}
-
-void AppListView::drawAmbient(NVGcontext* vg, const Ambient& ambient,
-                              float alpha, float x, float y, float width,
-                              float height) {
-    if (!ambient.valid || alpha <= 0.01f)
-        return;
-    auto glow = [&](float cx, float cy, float r, NVGcolor c, float a) {
-        nvgBeginPath(vg);
-        nvgRect(vg, x, y, width, height);
-        nvgFillPaint(vg, nvgRadialGradient(vg, cx, cy, 0, r,
-                                           nvgRGBAf(c.r, c.g, c.b, a * alpha),
-                                           nvgRGBAf(c.r, c.g, c.b, 0)));
-        nvgFill(vg);
-    };
-    glow(x + width * 0.5f, y + height * 0.32f, width * 0.42f, ambient.top, 0.28f);
-    glow(x + width * 0.36f, y + height * 0.62f, width * 0.36f, ambient.bottom, 0.2f);
-    glow(x + width * 0.66f, y + height * 0.58f, width * 0.3f, ambient.bottom, 0.14f);
-}
-
-void AppListView::paintAmbient(NVGcontext* vg, float x, float y,
-                               float width, float height) {
-    const float fade = ambientFade.getValue();
-    drawAmbient(vg, ambientPrevious, 1.0f - fade, x, y, width, height);
-    drawAmbient(vg, ambientShown, fade, x, y, width, height);
+    ambient.select(host, app.app_id);
 }
 
 void AppListView::draw(NVGcontext* vg, float x, float y, float width,
                        float height, Style style, FrameContext* ctx) {
     // Without a BackdropFrame the glow stays inside the content area.
-    if (!backdropHost)
-        paintAmbient(vg, x, y, width, height);
+    ambient.drawFallback(vg, x, y, width, height);
 
     const float details = detailsFade.getValue();
     titleLabel->setAlpha(details);

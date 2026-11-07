@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "cover_ambient.hpp"
 #include "cover_carousel.hpp"
 #include <Settings.hpp>
 #include <borealis.hpp>
@@ -21,6 +22,11 @@ class FavoritesView : public brls::Box {
   public:
     // hostIndex: index in Settings::hosts() to show, or -1 for all PCs.
     explicit FavoritesView(int hostIndex = -1);
+
+    void willAppear(bool resetState) override;
+    void willDisappear(bool resetState) override;
+    void draw(NVGcontext* vg, float x, float y, float width, float height,
+              brls::Style style, brls::FrameContext* ctx) override;
 
   private:
     struct Entry {
@@ -46,6 +52,8 @@ class FavoritesView : public brls::Box {
     brls::Label* meta = nullptr;
     brls::Label* empty = nullptr;
     CarouselDots* dots = nullptr;
+    // Glow in the colours of the focused cover, as in a PC's library.
+    CoverAmbient ambient;
 
     void rebuild(int selectIndex);
     void stepFilter(int direction);

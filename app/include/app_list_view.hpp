@@ -8,7 +8,7 @@
 #pragma once
 
 #include "app_cell.hpp"
-#include "backdrop_frame.hpp"
+#include "cover_ambient.hpp"
 #include "cover_carousel.hpp"
 #include "loading_overlay.hpp"
 #include <Settings.hpp>
@@ -53,23 +53,9 @@ class AppListView : public Box {
     BRLS_BIND(Box, container, "container");
 
     // Colours taken from the focused game's cover, glowing behind the shelf.
-    struct Ambient {
-        NVGcolor top;
-        NVGcolor bottom;
-        bool valid = false;
-    };
-    std::map<int, Ambient> ambientCache;
-    Ambient ambientShown, ambientPrevious;
-    Animatable ambientFade = 1.0f;
+    CoverAmbient ambient;
     Animatable detailsFade = 1.0f;
-    // Frame that paints the glow behind header and footer too, if any.
-    BackdropFrame* backdropHost = nullptr;
-    void paintAmbient(NVGcontext* vg, float x, float y, float width,
-                      float height);
     void onAppSelected(int index);
-    void showAmbient(const Ambient& ambient);
-    void drawAmbient(NVGcontext* vg, const Ambient& ambient, float alpha,
-                     float x, float y, float width, float height);
 
     void setCurrentApp(const AppInfo& app);
     void terninateApp();
