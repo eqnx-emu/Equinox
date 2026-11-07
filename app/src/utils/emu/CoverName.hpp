@@ -10,6 +10,8 @@ namespace emu {
 // Libretro thumbnail names to try, best first, without repeats. Characters
 // that libretro replaces with '_' are already replaced.
 std::vector<std::string> coverNameCandidates(const std::string& title);
+// Percent-encodes everything but A-Z a-z 0-9 - _ . ~
+std::string urlEncode(const std::string& s);
 std::string coverUrl(const Console& console, const std::string& candidate);
 std::string coverPath(const ConsolePaths& paths, const std::string& title);  // <covers>/<title>.png
 

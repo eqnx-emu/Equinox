@@ -120,3 +120,13 @@ target_include_directories(test_emu_meta PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
     "${MOONLIGHT_ROOT}/extern")
 target_link_libraries(test_emu_meta PRIVATE ${JANSSON_LIB})
+
+add_executable(test_emu_screenscraper
+    test_emu_screenscraper.cpp
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/ScreenScraper.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/CoverName.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp")
+target_include_directories(test_emu_screenscraper PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
+target_link_libraries(test_emu_screenscraper PRIVATE ${JANSSON_LIB})

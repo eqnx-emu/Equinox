@@ -70,7 +70,7 @@ std::vector<std::string> coverNameCandidates(const std::string& title) {
     return out;
 }
 
-static std::string urlEncode(const std::string& s) {
+std::string urlEncode(const std::string& s) {
     static const char* hex = "0123456789ABCDEF";
     std::string r;
     for (unsigned char c : s) {
