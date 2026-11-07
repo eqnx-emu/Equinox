@@ -26,6 +26,8 @@
 #include "backdrop_frame.hpp"
 #include "home_view.hpp"
 #include "settings_tab.hpp"
+#include "splash_view.hpp"
+#include "metrics_hud.hpp"
 #include "views/boolean_slider_cell.hpp"
 
 #include "MoonlightSession.hpp"
@@ -184,6 +186,7 @@ int main(int argc, char* argv[]) {
     // Register custom views (including tabs, which are views)
     brls::Application::registerXMLView("BooleanSliderCell", BooleanSliderCell::create);
     brls::Application::registerXMLView("LinkCell", LinkCell::create);
+    brls::Application::registerXMLView("MetricsPreview", MetricsPreview::create);
 
     brls::Application::registerXMLView("HomeView", HomeView::create);
     brls::Application::registerXMLView("BackdropFrame", BackdropFrame::create);
@@ -269,6 +272,7 @@ int main(int argc, char* argv[]) {
     // Create and push the main activity to the stack if cannot run game from arguments
     if (!startFromArgs(argc, argv)) {
         brls::Application::pushActivity(new MainActivity());
+        SplashView::show();
     }
 
     brls::Application::enableDebuggingView(Settings::instance().write_log());
