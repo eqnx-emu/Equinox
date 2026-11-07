@@ -1,4 +1,5 @@
 #include "emu/RomScan.hpp"
+#include "emu/PathUtf8.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -19,7 +20,7 @@ std::vector<RomEntry> scanRoms(const std::string& dir, const Console& console) {
     std::vector<RomEntry> out;
     try {
         std::error_code ec;
-        fs::path base = fs::u8path(dir);
+        fs::path base = fromUtf8(dir);
         fs::directory_iterator it(base, fs::directory_options::skip_permission_denied, ec);
         if (ec) return out;
         const fs::directory_iterator end;
@@ -27,7 +28,7 @@ std::vector<RomEntry> scanRoms(const std::string& dir, const Console& console) {
             try {
                 const fs::directory_entry& entry = *it;
                 std::error_code e2;
-                std::string name = entry.path().filename().u8string();
+                std::string name = toUtf8(entry.path().filename());
                 if (!name.empty() && name[0] != '.' && entry.is_regular_file(e2) && !e2) {
                     std::uintmax_t size = entry.file_size(e2);
                     size_t dot = name.rfind('.');

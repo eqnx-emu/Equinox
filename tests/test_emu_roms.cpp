@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "emu/CoverName.hpp"
+#include "emu/PathUtf8.hpp"
 #include "emu/RomScan.hpp"
 
 namespace fs = std::filesystem;
@@ -26,21 +27,26 @@ TEST_CASE("scanRoms filters and sorts") {
     fs::create_directories(dir / "sub");
     put(dir / "Super Metroid (USA).sfc", "x");
     put(dir / "b.SMC", "x");
-    put(dir / fs::u8path("Pok\xC3\xA9mon d'Or.zip"), "x");
+    put(dir / "B2.ZIP", "x");
+    put(dir / "Super Mario World v1.1.sfc", "x");
+    put(dir / emu::fromUtf8("Pok\xC3\xA9mon d'Or.zip"), "x");
     put(dir / "._Super Metroid (USA).sfc", "x");
     put(dir / ".DS_Store", "x");
     put(dir / "notes.txt", "x");
     put(dir / "vazio.sfc", "");
     put(dir / "sub" / "x.sfc", "x");
 
-    auto roms = emu::scanRoms(dir.u8string(), *snes);
-    REQUIRE(roms.size() == 3);
+    auto roms = emu::scanRoms(emu::toUtf8(dir), *snes);
+    REQUIRE(roms.size() == 5);
     CHECK(roms[0].fileName == "b.SMC");
     CHECK(roms[0].title == "b");
-    CHECK(roms[1].fileName == "Pok\xC3\xA9mon d'Or.zip");
-    CHECK(roms[1].title == "Pok\xC3\xA9mon d'Or");
-    CHECK(roms[2].title == "Super Metroid (USA)");
-    CHECK(fs::exists(fs::u8path(roms[1].path)));
+    CHECK(roms[2].fileName == "Pok\xC3\xA9mon d'Or.zip");
+    CHECK(roms[2].title == "Pok\xC3\xA9mon d'Or");
+    CHECK(roms[0].title == "b");
+    CHECK(roms[1].fileName == "B2.ZIP");
+    CHECK(roms[3].title == "Super Mario World v1.1");
+    CHECK(roms[4].title == "Super Metroid (USA)");
+    CHECK(fs::exists(emu::fromUtf8(roms[2].path)));
 
     std::error_code ec;
     fs::remove_all(dir, ec);
