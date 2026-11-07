@@ -22,6 +22,18 @@ int indexOf(const std::vector<std::string>& ids, const std::string& id) {
     return it == ids.end() ? 0 : (int)(it - ids.begin());
 }
 
+// One label per id, so dropping an id also drops its label:
+// "emu/video/<row>_<id>", with the ':' of ratios such as "8:7" as '_'.
+std::vector<std::string> labelsFor(const std::string& row,
+                                   const std::vector<std::string>& ids) {
+    std::vector<std::string> labels;
+    for (std::string id : ids) {
+        std::replace(id.begin(), id.end(), ':', '_');
+        labels.push_back(brls::getStr("emu/video/" + row + "_" + id));
+    }
+    return labels;
+}
+
 class EmuVideoView : public Box {
   public:
     explicit EmuVideoView(const emu::ConsolePaths& paths)
@@ -30,25 +42,14 @@ class EmuVideoView : public Box {
         getAppletFrameItem()->title = "emu/video/title"_i18n;
         setPadding(30, 80, 30, 80);
 
-        addRow("emu/video/size"_i18n,
-               {"emu/video/size_original"_i18n, "emu/video/size_8_7"_i18n,
-                "emu/video/size_4_3"_i18n, "emu/video/size_full"_i18n},
-               emu::kSizeIds, &emu::VideoDefaults::size);
-        addRow("emu/video/smoothing"_i18n,
-               {"emu/video/smooth_pixel"_i18n, "emu/video/smooth_sharp"_i18n,
-                "emu/video/smooth_soft"_i18n},
-               emu::kSmoothIds, &emu::VideoDefaults::smooth);
-        addRow("emu/video/filter"_i18n,
-               {"emu/video/filter_none"_i18n,
-                "emu/video/filter_scanlines"_i18n,
-                "emu/video/filter_ntsc"_i18n},
-               emu::kFilterIds, &emu::VideoDefaults::filter);
-        border = addRow("emu/video/border"_i18n,
-                        {"emu/video/border_equinox"_i18n,
-                         "emu/video/border_cover"_i18n,
-                         "emu/video/border_tv"_i18n,
-                         "emu/video/border_black"_i18n},
-                        emu::kBorderIds, &emu::VideoDefaults::border);
+        addRow("emu/video/size"_i18n, "size", emu::kSizeIds,
+               &emu::VideoDefaults::size);
+        addRow("emu/video/smoothing"_i18n, "smooth", emu::kSmoothIds,
+               &emu::VideoDefaults::smooth);
+        addRow("emu/video/filter"_i18n, "filter", emu::kFilterIds,
+               &emu::VideoDefaults::filter);
+        border = addRow("emu/video/border"_i18n, "border", emu::kBorderIds,
+                        &emu::VideoDefaults::border);
         updateBorder();
     }
 
@@ -57,20 +58,19 @@ class EmuVideoView : public Box {
     emu::VideoDefaults current;
     SelectorCell* border = nullptr;
 
-    SelectorCell* addRow(const std::string& title,
-                         const std::vector<std::string>& labels,
-                         const std::vector<std::string>& ids, Field field) {
+    // `row` names the label keys, see labelsFor.
+    SelectorCell* addRow(const std::string& title, const std::string& row,
+                         std::vector<std::string> ids, Field field) {
         auto* cell = new SelectorCell();
-        const std::vector<std::string>* idList = &ids;
-        cell->init(title, labels, indexOf(ids, current.*field),
-                   [this, cell, idList, field](int selected) {
-                       if (selected < 0 || selected >= (int)idList->size())
+        cell->init(title, labelsFor(row, ids), indexOf(ids, current.*field),
+                   [this, cell, ids, field](int selected) {
+                       if (selected < 0 || selected >= (int)ids.size())
                            return;
                        emu::VideoDefaults next = current;
-                       next.*field = (*idList)[selected];
+                       next.*field = ids[selected];
                        if (!emu::writeVideoDefaults(path, next)) {
                            Application::notify("emu/video/save_failed"_i18n);
-                           cell->setSelection(indexOf(*idList, current.*field),
+                           cell->setSelection(indexOf(ids, current.*field),
                                               true);
                            return;
                        }

@@ -3,6 +3,7 @@
 #include <jansson.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <filesystem>
 #include <memory>
 #include <system_error>
@@ -28,14 +29,29 @@ void pick(json_t* obj, const char* key, const std::vector<std::string>& allowed,
     if (std::find(allowed.begin(), allowed.end(), value) != allowed.end()) out = value;
 }
 
+bool readFile(const std::string& path, std::string& out) {
+    std::FILE* f = std::fopen(path.c_str(), "rb");
+    if (!f) return false;
+    char buf[4096];
+    size_t n;
+    while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) out.append(buf, n);
+    const bool ok = !std::ferror(f);
+    std::fclose(f);
+    return ok;
+}
+
 }  // namespace
 
 std::string videoDefaultsPath(const ConsolePaths& paths) { return paths.emulator + "/video.json"; }
 
 VideoDefaults readVideoDefaults(const std::string& path) {
     VideoDefaults out;
+    std::string text;
+    if (!readFile(path, text)) return out;
+    // Jansson rejects a leading BOM, which some editors add.
+    if (text.compare(0, 3, "\xEF\xBB\xBF") == 0) text.erase(0, 3);
     json_error_t err;
-    JsonPtr root(json_load_file(path.c_str(), 0, &err));
+    JsonPtr root(json_loadb(text.data(), text.size(), 0, &err));
     if (!root || !json_is_object(root.get())) return out;
     pick(root.get(), "size", kSizeIds, out.size);
     pick(root.get(), "smooth", kSmoothIds, out.smooth);

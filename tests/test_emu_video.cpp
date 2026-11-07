@@ -1,9 +1,13 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <utility>
+
+#include <jansson.h>
 
 #include "emu/Console.hpp"
 #include "emu/VideoDefaults.hpp"
@@ -70,6 +74,12 @@ TEST_CASE("bad files give defaults") {
     checkDefaults(readVideoDefaults(path));
 }
 
+TEST_CASE("a leading UTF-8 BOM is accepted") {
+    const std::string path = tempFile("bom.json");
+    put(path, "\xEF\xBB\xBF{\"size\":\"full\"}");
+    CHECK(readVideoDefaults(path).size == "full");
+}
+
 TEST_CASE("unknown values fall back per field") {
     const std::string path = tempFile("partial.json");
     put(path, "{\"size\":\"huge\",\"smooth\":\"soft\",\"filter\":7,\"border\":\"black\"}");
@@ -85,4 +95,28 @@ TEST_CASE("menu id lists") {
     CHECK(kSmoothIds == std::vector<std::string>{"pixel", "sharp", "soft"});
     CHECK(kFilterIds == std::vector<std::string>{"none", "scanlines", "ntsc"});
     CHECK(kBorderIds == std::vector<std::string>{"equinox", "cover", "tv", "black"});
+}
+
+// emu_video_view labels each id with "emu/video/<row>_<id>", ':' read as '_'.
+TEST_CASE("every menu id has a label in every language") {
+    const std::pair<const char*, const std::vector<std::string>*> rows[] = {
+        {"size", &kSizeIds}, {"smooth", &kSmoothIds}, {"filter", &kFilterIds}, {"border", &kBorderIds}};
+    int languages = 0;
+    for (const auto& dir : std::filesystem::directory_iterator(EQX_I18N_DIR)) {
+        const std::string file = (dir.path() / "main.json").string();
+        json_error_t err;
+        json_t* root = json_load_file(file.c_str(), 0, &err);
+        REQUIRE_MESSAGE(root != nullptr, file);
+        json_t* video = json_object_get(json_object_get(root, "emu"), "video");
+        for (const auto& [row, ids] : rows) {
+            for (std::string id : *ids) {
+                std::replace(id.begin(), id.end(), ':', '_');
+                const std::string key = std::string(row) + "_" + id;
+                CHECK_MESSAGE(json_is_string(json_object_get(video, key.c_str())), file, " ", key);
+            }
+        }
+        json_decref(root);
+        ++languages;
+    }
+    CHECK(languages > 1);
 }
