@@ -185,6 +185,7 @@ find_package(CURL REQUIRED)
 find_package(Jansson REQUIRED)
 find_package(EXPAT REQUIRED)
 find_package(PNG REQUIRED)
+find_package(ZLIB REQUIRED)
 
 find_library(OPUS_LIBRARY opus)
 message("opus: ${OPUS_LIBRARY}")
@@ -241,6 +242,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         ${ZSTD_LIBRARY}
         ${OPUS_LIBRARY}
         PNG::PNG
+        ZLIB::ZLIB
         ${MOONLIGHT_APP_FFMPEG_LIBS}
         ${MOONLIGHT_APP_SDL_LIBS}
         ${APP_PLATFORM_LIB}

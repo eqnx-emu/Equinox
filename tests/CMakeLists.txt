@@ -90,3 +90,16 @@ target_include_directories(test_emu_favorites PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
     "${MOONLIGHT_ROOT}/extern")
 target_link_libraries(test_emu_favorites PRIVATE ${JANSSON_LIB})
+
+find_library(Z_LIB z)
+if(NOT Z_LIB)
+    message(FATAL_ERROR "zlib not found (needed by test_emu_crc)")
+endif()
+add_executable(test_emu_crc
+    test_emu_crc.cpp
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/RomCrc.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp")
+target_include_directories(test_emu_crc PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
+target_link_libraries(test_emu_crc PRIVATE ${Z_LIB})
