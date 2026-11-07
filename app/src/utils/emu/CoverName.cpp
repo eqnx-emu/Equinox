@@ -45,8 +45,14 @@ std::vector<std::string> coverNameCandidates(const std::string& title) {
     c3 = replaceAll(c3, "(U)", "(USA)");
     c3 = replaceAll(c3, "(E)", "(Europe)");
     c3 = replaceAll(c3, "(J)", "(Japan)");
-    const std::string cands[] = {tidy(title), tidy(noBrackets), c3,
-                                 tidy(stripBlocks(noBrackets, '(', ')'))};
+    const std::string bare = tidy(stripBlocks(noBrackets, '(', ')'));
+    std::vector<std::string> cands = {tidy(title), tidy(noBrackets), c3, bare};
+    // libretro names every cover with its No-Intro region, so a plain
+    // "Super Mario World" only matches as "Super Mario World (USA)".
+    if (title.find('(') == std::string::npos && !bare.empty()) {
+        for (const char* region : {" (USA)", " (USA, Europe)", " (World)", " (Europe)", " (Japan)"})
+            cands.push_back(bare + region);
+    }
 
     static const std::string bad = "&*/:`<>?\\|\"";
     std::vector<std::string> out;

@@ -61,11 +61,18 @@ TEST_CASE("cover candidates") {
     CHECK(emu::coverNameCandidates("Super Mario World (U) [!]") ==
           std::vector<std::string>{"Super Mario World (U) [!]", "Super Mario World (U)",
                                    "Super Mario World (USA)", "Super Mario World"});
-    CHECK(emu::coverNameCandidates("Super Metroid") == std::vector<std::string>{"Super Metroid"});
-    CHECK(emu::coverNameCandidates("Star Fox: Assault?") ==
-          std::vector<std::string>{"Star Fox_ Assault_"});
-    CHECK(emu::coverNameCandidates("a&b*c/d:e`f<g>h?i\\j|k\"l") ==
-          std::vector<std::string>{"a_b_c_d_e_f_g_h_i_j_k_l"});
+    // libretro always names the region: a plain name gets the common ones.
+    CHECK(emu::coverNameCandidates("Super Metroid") ==
+          std::vector<std::string>{"Super Metroid", "Super Metroid (USA)",
+                                   "Super Metroid (USA, Europe)", "Super Metroid (World)",
+                                   "Super Metroid (Europe)", "Super Metroid (Japan)"});
+    CHECK(emu::coverNameCandidates("Star Fox: Assault?")[0] == "Star Fox_ Assault_");
+    CHECK(emu::coverNameCandidates("Star Fox: Assault?")[1] == "Star Fox_ Assault_ (USA)");
+    CHECK(emu::coverNameCandidates("a&b*c/d:e`f<g>h?i\\j|k\"l")[0] ==
+          "a_b_c_d_e_f_g_h_i_j_k_l");
+    // A title that already names its region gets no guessed ones.
+    CHECK(emu::coverNameCandidates("Super Mario World (USA)") ==
+          std::vector<std::string>{"Super Mario World (USA)", "Super Mario World"});
 }
 
 TEST_CASE("cover url and path") {
