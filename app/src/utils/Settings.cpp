@@ -440,6 +440,30 @@ void Settings::load() {
                 m_write_log = json_typeof(write_log) == JSON_TRUE;
             }
 
+            if (json_t* library_view = json_object_get(settings, "library_view")) {
+                if (json_typeof(library_view) == JSON_INTEGER)
+                    set_library_view((int)json_integer_value(library_view));
+            }
+
+            if (json_t* library_sort = json_object_get(settings, "library_sort")) {
+                if (json_typeof(library_sort) == JSON_INTEGER)
+                    set_library_sort((int)json_integer_value(library_sort));
+            }
+
+            if (json_t* reduce_motion = json_object_get(settings, "reduce_motion")) {
+                m_reduce_motion = json_typeof(reduce_motion) == JSON_TRUE;
+            }
+
+            if (json_t* ss_user = json_object_get(settings, "screenscraper_user")) {
+                if (json_typeof(ss_user) == JSON_STRING)
+                    m_screenscraper_user = json_string_value(ss_user);
+            }
+
+            if (json_t* ss_password = json_object_get(settings, "screenscraper_password")) {
+                if (json_typeof(ss_password) == JSON_STRING)
+                    m_screenscraper_password = json_string_value(ss_password);
+            }
+
             if (json_t* show_metrics = json_object_get(settings, "show_metrics")) {
                 m_show_metrics = json_typeof(show_metrics) == JSON_TRUE;
             }
@@ -718,6 +742,11 @@ void Settings::save() {
             json_object_set_new(settings, "sops", m_sops ? json_true() : json_false());
             json_object_set_new(settings, "play_audio", m_play_audio ? json_true() : json_false());
             json_object_set_new(settings, "write_log", m_write_log ? json_true() : json_false());
+            json_object_set_new(settings, "library_view", json_integer(m_library_view));
+            json_object_set_new(settings, "library_sort", json_integer(m_library_sort));
+            json_object_set_new(settings, "reduce_motion", m_reduce_motion ? json_true() : json_false());
+            json_object_set_new(settings, "screenscraper_user", json_string(m_screenscraper_user.c_str()));
+            json_object_set_new(settings, "screenscraper_password", json_string(m_screenscraper_password.c_str()));
             json_object_set_new(settings, "show_metrics", m_show_metrics ? json_true() : json_false());
             json_object_set_new(settings, "metrics_mask", json_integer(m_metrics_mask));
             json_object_set_new(settings, "metrics_position", json_integer(m_metrics_position));

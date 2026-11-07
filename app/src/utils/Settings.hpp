@@ -152,6 +152,22 @@ class Settings : public Singleton<Settings> {
     int64_t last_played(const std::string& console, const std::string& romFile) const;
     void set_last_played(const std::string& console, const std::string& romFile, int64_t when);
 
+    // Library layout: 0 cartridge shelf, 1 list.
+    [[nodiscard]] int library_view() const { return m_library_view; }
+    void set_library_view(int view) { m_library_view = view == 1 ? 1 : 0; }
+
+    // Value of emu::LibrarySort.
+    [[nodiscard]] int library_sort() const { return m_library_sort; }
+    void set_library_sort(int sort) { m_library_sort = sort >= 0 && sort <= 4 ? sort : 0; }
+
+    [[nodiscard]] bool reduce_motion() const { return m_reduce_motion; }
+    void set_reduce_motion(bool reduce) { m_reduce_motion = reduce; }
+
+    [[nodiscard]] const std::string& screenscraper_user() const { return m_screenscraper_user; }
+    void set_screenscraper_user(const std::string& user) { m_screenscraper_user = user; }
+    [[nodiscard]] const std::string& screenscraper_password() const { return m_screenscraper_password; }
+    void set_screenscraper_password(const std::string& password) { m_screenscraper_password = password; }
+
     [[nodiscard]] int resolution() const { return m_resolution; }
     void set_resolution(int resolution) { m_resolution = resolution; }
 
@@ -401,6 +417,11 @@ class Settings : public Singleton<Settings> {
     std::vector<Host> m_hosts;
     std::map<std::string, std::map<std::string, int64_t>> m_local_played;
     std::vector<LocalFavorite> m_local_favorites;
+    int m_library_view = 0;
+    int m_library_sort = 0;
+    bool m_reduce_motion = false;
+    std::string m_screenscraper_user;
+    std::string m_screenscraper_password;
     int m_resolution = 720;
     int m_native_resolution_scale = 100;
     int m_fps = 60;
