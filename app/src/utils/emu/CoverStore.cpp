@@ -34,6 +34,11 @@ bool markCoverMissed(const ConsolePaths& paths, const std::string& title, const 
     return !file.fail();
 }
 
+void clearCoverMiss(const ConsolePaths& paths, const std::string& title) {
+    std::error_code ec;
+    fs::remove(fromUtf8(coverMissPath(paths, title)), ec);
+}
+
 void clearCoverMisses(const ConsolePaths& paths) {
     std::error_code ec;
     fs::remove_all(fromUtf8(coverMissDir(paths)), ec);

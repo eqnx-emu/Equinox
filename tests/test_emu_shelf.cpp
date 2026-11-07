@@ -36,6 +36,24 @@ TEST_CASE("cover misses are kept per version and cleared") {
     fs::remove_all(dir, ec);
 }
 
+TEST_CASE("one cover miss can be cleared on its own") {
+    fs::path dir = fs::temp_directory_path() /
+                   ("equinox_covers_one_" +
+                    std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    emu::ConsolePaths paths;
+    paths.covers = emu::toUtf8(dir);
+
+    REQUIRE(emu::markCoverMissed(paths, "A", "1.9.0"));
+    REQUIRE(emu::markCoverMissed(paths, "B", "1.9.0"));
+    emu::clearCoverMiss(paths, "A");
+    CHECK_FALSE(emu::coverMissed(paths, "A", "1.9.0"));
+    CHECK(emu::coverMissed(paths, "B", "1.9.0"));
+    emu::clearCoverMiss(paths, "never marked");
+
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
 TEST_CASE("png check and replace") {
     fs::path dir = fs::temp_directory_path() /
                    ("equinox_png_" +

@@ -108,10 +108,20 @@ class ConsoleShelfView : public brls::Box {
     void showGames(std::vector<Game> found);
     void onCurrent(std::optional<size_t> index);
     void play(size_t index);
+    // The game as it was when play() started: the list may be rebuilt while
+    // the launch waits.
+    struct LaunchTarget {
+        size_t index;
+        emu::RomEntry rom;
+        uint64_t generation;
+    };
     // Polls (on the UI thread) until the network is free, then launches;
     // gives up after a few seconds.
-    void waitForCovers(size_t index, int attempt);
-    void launch(size_t index);
+    void waitForCovers(const LaunchTarget& target, int attempt);
+    void launch(const LaunchTarget& target);
+    // The launch did not happen: closes the "Opening" dialog, lets the covers
+    // resume and, with releaseGate, frees the network gate it held.
+    void endLaunch(bool releaseGate, bool notify);
     brls::Dialog* stopLoader = nullptr;
 
     const emu::GameInfo* infoFor(const Game& game) const;
@@ -148,6 +158,9 @@ class ConsoleShelfView : public brls::Box {
     // Downloads the missing covers, nearest to `first` first.
     void fetchCovers(size_t first);
     void stopCovers();
+    std::shared_ptr<CoverQueue> newCoverQueue();
+    // The game's data brought a canonical name: tries its cover once more.
+    void retryCover(size_t index);
     static void runNextCover(std::shared_ptr<CoverQueue> queue);
     static void fetchOneCover(std::shared_ptr<CoverQueue> queue);
     void coverArrived(uint64_t forGeneration, size_t index,

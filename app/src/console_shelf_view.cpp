@@ -45,8 +45,9 @@ struct ConsoleShelfView::CoverQueue {
     };
 
     std::atomic<bool> stop{false};
-    std::vector<Job> jobs;
-    size_t next = 0; // UI thread only
+    std::vector<Job> jobs; // UI thread only: jobs can be added while it runs
+    size_t next = 0;       // UI thread only
+    Job running;           // copy of jobs[next], written before its task starts
     const emu::Console* console = nullptr;
     emu::ConsolePaths where;
     uint64_t generation = 0;
@@ -392,15 +393,16 @@ void ConsoleShelfView::showGames(std::vector<Game> found) {
     for (size_t i = 0; i < games.size(); i++) {
         auto* cell = new GameRowCell(consoleRef, i);
         // Played once the press is handled: launching closes the app.
-        cell->onPlay = [this, i] {
+        const uint64_t forGeneration = generation;
+        cell->onPlay = [this, i, forGeneration] {
             if (current != i)
                 return;
             if (Application::getInputType() == InputType::TOUCH &&
                 getCPUTimeUsec() - currentAt < kTapPlayUsec)
                 return;
             std::shared_ptr<bool> token = alive;
-            brls::sync([this, token, i] {
-                if (*token)
+            brls::sync([this, token, i, forGeneration] {
+                if (*token && forGeneration == generation)
                     play(i);
             });
         };
@@ -433,7 +435,9 @@ void ConsoleShelfView::showGames(std::vector<Game> found) {
         listPanel->focusGame(index);
     applyProgress();
 
-    fetchCovers(current.value_or(index));
+    // A launch waiting for the network restarts them if it gives up.
+    if (!launching)
+        fetchCovers(current.value_or(index));
 }
 
 const emu::GameInfo* ConsoleShelfView::infoFor(const Game& game) const {
@@ -670,6 +674,7 @@ void ConsoleShelfView::dataFinished(size_t index, const emu::DataOutcome& outcom
             applyAmbient();
             applyActions();
         }
+        retryCover(index);
     }
     applyProgress();
 }
@@ -685,54 +690,44 @@ void ConsoleShelfView::dataStopped(emu::DataStop stop) {
 }
 
 void ConsoleShelfView::play(size_t index) {
-    if (launching || index >= games.size())
+    // A scan in progress is about to renumber the games.
+    if (launching || scanning || index >= games.size())
         return;
     launching = true;
     // Nothing may be downloading or writing to the SD card while the app
     // hands over: the game starts only once the network gate is free.
     cancelData();
     stopCovers();
-    waitForCovers(index, 0);
+    waitForCovers({index, games[index].rom, generation}, 0);
 }
 
-void ConsoleShelfView::waitForCovers(size_t index, int attempt) {
+void ConsoleShelfView::waitForCovers(const LaunchTarget& target, int attempt) {
+    if (target.generation != generation) {
+        endLaunch(false, false);
+        return;
+    }
     if (emu::netTryAcquire()) {
         // Held until the app quits, or released below if it does not.
         if (stopLoader) {
             Dialog* loader = stopLoader;
             stopLoader = nullptr;
             std::shared_ptr<bool> token = alive;
-            loader->close([this, token, index] {
+            loader->close([this, token, target] {
                 if (!*token) {
                     emu::netRelease();
                     return;
                 }
-                launch(index);
+                launch(target);
             });
         } else {
-            launch(index);
+            launch(target);
         }
         return;
     }
 
     if (attempt >= kStopPolls) {
         brls::Logger::warning("ConsoleShelf: download did not stop");
-        Dialog* loader = stopLoader;
-        stopLoader = nullptr;
-        launching = false;
-        auto giveUp = [this, index] {
-            Application::notify("emu/try_again"_i18n);
-            fetchCovers(index);
-        };
-        if (loader) {
-            std::shared_ptr<bool> token = alive;
-            loader->close([token, giveUp] {
-                if (*token)
-                    giveUp();
-            });
-        } else {
-            giveUp();
-        }
+        endLaunch(false, true);
         return;
     }
 
@@ -742,23 +737,48 @@ void ConsoleShelfView::waitForCovers(size_t index, int attempt) {
         stopLoader->open();
     }
     std::shared_ptr<bool> token = alive;
-    brls::delay(kStopPollMs, [this, token, index, attempt] {
+    brls::delay(kStopPollMs, [this, token, target, attempt] {
         if (*token)
-            waitForCovers(index, attempt + 1);
+            waitForCovers(target, attempt + 1);
     });
 }
 
-void ConsoleShelfView::launch(size_t index) {
-    if (emu::launchRom(consoleRef, games[index].rom, emu::Origin::Shelf, -1))
+void ConsoleShelfView::launch(const LaunchTarget& target) {
+    // The list was rebuilt while waiting: the game may not be where it was.
+    if (target.generation != generation) {
+        endLaunch(true, false);
+        return;
+    }
+    if (emu::launchRom(consoleRef, target.rom, emu::Origin::Shelf, -1))
         return; // quitting; the network gate stays taken
     emu::netRelease();
     launching = false;
 
     // The game may have been deleted since the shelf was filled.
-    if (!fileExists(games[index].rom.path))
+    if (!fileExists(target.rom.path))
         rescan(false);
     else
-        fetchCovers(index);
+        fetchCovers(target.index);
+}
+
+void ConsoleShelfView::endLaunch(bool releaseGate, bool notify) {
+    if (releaseGate)
+        emu::netRelease();
+    launching = false;
+    Dialog* loader = stopLoader;
+    stopLoader = nullptr;
+    std::shared_ptr<bool> token = alive;
+    auto resume = [this, token, notify] {
+        if (!*token)
+            return;
+        if (notify)
+            Application::notify("emu/try_again"_i18n);
+        fetchCovers(current.value_or(0));
+    };
+    if (loader)
+        loader->close(resume);
+    else
+        resume();
 }
 
 void ConsoleShelfView::stopCovers() {
@@ -770,7 +790,7 @@ void ConsoleShelfView::stopCovers() {
 void ConsoleShelfView::fetchCovers(size_t first) {
     stopCovers();
 
-    auto queue = std::make_shared<CoverQueue>();
+    auto queue = newCoverQueue();
     for (size_t i = 0; i < games.size(); i++) {
         const Game& game = games[i];
         if (game.hasCover || game.missed)
@@ -790,11 +810,49 @@ void ConsoleShelfView::fetchCovers(size_t first) {
                          return distance(a.index) < distance(b.index);
                      });
 
+    covers = queue;
+    runNextCover(queue);
+}
+
+std::shared_ptr<ConsoleShelfView::CoverQueue> ConsoleShelfView::newCoverQueue() {
+    auto queue = std::make_shared<CoverQueue>();
     queue->console = &consoleRef;
     queue->where = paths;
     queue->generation = generation;
     queue->view = this;
     queue->alive = alive;
+    return queue;
+}
+
+void ConsoleShelfView::retryCover(size_t index) {
+    const Game& game = games[index];
+    if (launching || game.hasCover || !game.hasData || game.meta.canonical.empty())
+        return;
+    // Only worth it when the data brought a name that was not tried yet.
+    if (emu::thumbNameCandidates(game.meta.canonical, game.rom.title).size() <=
+        emu::coverNameCandidates(game.rom.title).size())
+        return;
+
+    emu::clearCoverMiss(paths, game.rom.title);
+    games[index].missed = false;
+    const CoverQueue::Job job{index, game.rom.title, game.meta.canonical,
+                              emu::coverPath(paths, game.rom.title)};
+    if (covers && covers->next < covers->jobs.size()) {
+        // Waiting in the running queue: it just learned the name. The job
+        // at `next` may already be on the pool with the old one, so that
+        // game goes again at the end.
+        for (size_t i = covers->next + 1; i < covers->jobs.size(); i++) {
+            if (covers->jobs[i].index == index) {
+                covers->jobs[i].canonical = job.canonical;
+                return;
+            }
+        }
+        covers->jobs.push_back(job);
+        return;
+    }
+    stopCovers();
+    auto queue = newCoverQueue();
+    queue->jobs.push_back(job);
     covers = queue;
     runNextCover(queue);
 }
@@ -804,6 +862,13 @@ void ConsoleShelfView::runNextCover(std::shared_ptr<CoverQueue> queue) {
     if (queue->stop.load() || !*queue->alive ||
         queue->next >= queue->jobs.size())
         return;
+    // A game's data waits for the same network gate and polls it less often
+    // than covers take it: covers give way until the data queue is idle.
+    if (queue->view->dataQueue && queue->view->dataQueue->running()) {
+        brls::delay(kBusyRetryMs, [queue] { runNextCover(queue); });
+        return;
+    }
+    queue->running = queue->jobs[queue->next];
     brls::async([queue] { fetchOneCover(queue); });
 }
 
@@ -822,7 +887,7 @@ void ConsoleShelfView::fetchOneCover(std::shared_ptr<CoverQueue> queue) {
         return;
     }
 
-    const CoverQueue::Job job = queue->jobs[queue->next];
+    const CoverQueue::Job job = queue->running;
     const Progress keepGoing = [queue](uint64_t, uint64_t) {
         return !queue->stop.load();
     };
@@ -885,8 +950,11 @@ void ConsoleShelfView::coverArrived(uint64_t forGeneration, size_t index,
                                     const std::string& path) {
     if (forGeneration != generation || index >= cells.size())
         return;
+    // The same game can be fetched twice (its data brought a new name); the
+    // cell takes one cover only.
+    if (games[index].hasCover)
+        return;
     games[index].hasCover = true;
-    // Only missing covers are fetched, so this is the cell's first one.
     cells[index]->setCover(path);
     if (current == index)
         applyAmbient();

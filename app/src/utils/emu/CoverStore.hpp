@@ -13,6 +13,8 @@ std::string coverMissDir(const ConsolePaths& paths);
 std::string coverMissPath(const ConsolePaths& paths, const std::string& title);
 bool coverMissed(const ConsolePaths& paths, const std::string& title, const std::string& version);
 bool markCoverMissed(const ConsolePaths& paths, const std::string& title, const std::string& version);
+// One game's miss, when its data brought a name libretro has not been asked for yet.
+void clearCoverMiss(const ConsolePaths& paths, const std::string& title);
 // "Look for games again": every cover is tried once more.
 void clearCoverMisses(const ConsolePaths& paths);
 
