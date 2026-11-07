@@ -2,26 +2,37 @@
 //  console_shelf_view.hpp
 //  Equinox
 //
-//  A console's games as a cover shelf, like a PC's library. Covers come
-//  from libretro, one at a time, while the shelf is open. A plays, X looks
-//  for games again, B goes back.
+//  A console's games as a library: the list on the left, the picked game's
+//  details on the right. Covers come from libretro, one at a time, while the
+//  library is open; the rest of a game's data only when asked for. A plays,
+//  Y stars, X downloads the game's data, ZL looks for games again, B goes
+//  back.
 //
 
 #pragma once
 
 #include "cover_ambient.hpp"
-#include "cover_carousel.hpp"
 #include "emu/Console.hpp"
+#include "emu/GameDataJob.hpp"
+#include "emu/GameDb.hpp"
+#include "emu/GameMeta.hpp"
 #include "emu/LaunchLine.hpp"
+#include "emu/Library.hpp"
 #include "emu/RomScan.hpp"
-#include "rom_cell.hpp"
 #include <borealis.hpp>
 
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
+
+class GameDataQueue;
+class GameDetailsPanel;
+class GameListPanel;
+class GameRowCell;
+struct GameDetails;
 
 // Opens a console game from outside its shelf (Favorites) once no cover is
 // downloading, like the shelf does: polls the shared cover-busy flag on the UI
@@ -49,6 +60,10 @@ class ConsoleShelfView : public brls::Box {
         emu::RomEntry rom;
         bool hasCover = false;
         bool missed = false; // libretro had no cover, as of this version
+        // A meta that still describes the ROM on the card.
+        bool hasData = false;
+        emu::GameMeta meta;
+        std::string snapPath, titlePath; // empty when the file is not there
     };
     // Shared with the cover tasks on the async pool.
     struct CoverQueue;
@@ -59,7 +74,9 @@ class ConsoleShelfView : public brls::Box {
     std::string restoreRom;
 
     std::vector<Game> games;
-    std::vector<RomCell*> cells;
+    std::vector<GameRowCell*> cells; // owned by listPanel
+    std::optional<size_t> current;   // the game the details show
+    brls::Time currentAt = 0;
     // Bumped on each rebuild, so covers for the old cells are dropped.
     uint64_t generation = 0;
     bool scanning = false;
@@ -68,36 +85,56 @@ class ConsoleShelfView : public brls::Box {
     // the UI thread before touching the view.
     std::shared_ptr<bool> alive = std::make_shared<bool>(true);
     std::shared_ptr<CoverQueue> covers;
-    // The cell showing "Fetching cover...", or -1. Only the cover being
-    // downloaded right now; cleared whenever the queue stops.
-    int fetchingIndex = -1;
-    void showFetching(int index);
 
-    brls::Box* shelf = nullptr;
+    // Set by the first scan, together with dataQueue.
+    std::shared_ptr<const emu::GameDb> db;
+    std::unique_ptr<GameDataQueue> dataQueue;
+    std::optional<emu::DataStep> dataStep; // of dataQueue->current()
+    struct Failure {
+        size_t index;
+        emu::DataStop stop;
+    };
+    // Shown on that game's details until a download starts again.
+    std::optional<Failure> failure;
+
+    brls::Box* library = nullptr;
     brls::Box* empty = nullptr;
-    CoverCarousel* carousel = nullptr;
-    brls::Label* titleLabel = nullptr;
-    brls::Label* metaLabel = nullptr;
-    CarouselDots* dots = nullptr;
+    GameListPanel* listPanel = nullptr;
+    GameDetailsPanel* detailsPanel = nullptr;
 
     CoverAmbient ambient;
-    brls::Animatable detailsFade = 1.0f;
 
     void rescan(bool clearMisses);
     void showGames(std::vector<Game> found);
-    void onSelected(int index);
-    void play(int index);
-    // Polls (on the UI thread) until the cover task has finished, then
-    // launches; gives up after a few seconds.
-    void waitForCovers(int index, int attempt);
-    void launch(int index);
+    void onCurrent(std::optional<size_t> index);
+    void play(size_t index);
+    // Polls (on the UI thread) until the network is free, then launches;
+    // gives up after a few seconds.
+    void waitForCovers(size_t index, int attempt);
+    void launch(size_t index);
     brls::Dialog* stopLoader = nullptr;
-    std::string metaText(const Game& game) const;
-    // Y stars or unstars the game; the label follows.
-    void updateFavoriteAction(RomCell* cell);
+
+    const emu::GameInfo* infoFor(const Game& game) const;
+    emu::LibraryItem itemFor(const Game& game) const;
+    GameDetails detailsFor(size_t index) const;
+    void applyRow(size_t index);
+    void applyAmbient();
+    void applyActions();
+    // Rows, the details' action and the download-all area, from the queue.
+    void applyProgress();
+    // The details' button that had the focus may have just gone.
+    void keepFocus();
+
+    void createDataQueue();
+    void download(size_t index);
+    void downloadAll();
+    void cancelData();
+    void dataFinished(size_t index, const emu::DataOutcome& outcome);
+    void dataStopped(emu::DataStop stop);
+    std::optional<size_t> stoppedIndex;
 
     // Downloads the missing covers, nearest to `first` first.
-    void fetchCovers(int first);
+    void fetchCovers(size_t first);
     void stopCovers();
     static void runNextCover(std::shared_ptr<CoverQueue> queue);
     static void fetchOneCover(std::shared_ptr<CoverQueue> queue);

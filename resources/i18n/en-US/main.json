@@ -481,10 +481,6 @@
         "empty_title": "No games yet",
         "empty_body": "Put your games ({}) in this folder on the SD card:",
         "empty_covers": "Covers show up on their own.",
-        "never_played": "never played",
-        "played_today": "played today",
-        "played_yesterday": "played yesterday",
-        "played_days": "played {} days ago",
         "not_installed": "Emulator not installed",
         "rom_missing": "This game is no longer on the SD card.",
         "cannot_launch": "Could not open the game from here. Open Equinox from the Homebrew Menu and try again.",
@@ -496,6 +492,9 @@
         "no_return": "Equinox.nro was not found on the SD card, so the game could not return to Equinox. Put it in sdmc:/switch/Equinox/ and try again."
     },
     "library": {
+        "hint": {
+            "download": "Download data"
+        },
         "list": {
             "count_one": "1 game",
             "count_many": "{} games",

@@ -431,7 +431,10 @@ void GameListPanel::setItems(std::vector<emu::LibraryItem> nextItems,
         onFocusGame(std::nullopt);
 }
 
-void GameListPanel::refreshOrder() {
+void GameListPanel::setItem(size_t index, emu::LibraryItem item) {
+    if (index >= items.size())
+        return;
+    items[index] = std::move(item);
     applyOrder();
 }
 

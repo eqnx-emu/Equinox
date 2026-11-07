@@ -34,8 +34,8 @@ class GameListPanel : public brls::Box {
     // caller's. The query and the sort survive a new set, and the first
     // result becomes the current game (reported through onFocusGame).
     void setItems(std::vector<emu::LibraryItem> items, std::vector<GameRowCell*> cells);
-    // Applies the search and the sort again, e.g. after a year or genre changed.
-    void refreshOrder();
+    // One game's name, year or genre changed; the order follows.
+    void setItem(size_t index, emu::LibraryItem item);
     // 0 cartridge for the picked game and names for the rest, 1 list with thumbnails.
     void setLook(int view);
 

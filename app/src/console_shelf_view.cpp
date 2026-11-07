@@ -15,16 +15,19 @@
 #include "emu/EmuLauncher.hpp"
 #include "emu/NetGate.hpp"
 #include "emu/PathUtf8.hpp"
-#include "emu/PlayedAgo.hpp"
+#include "game_data_queue.hpp"
+#include "game_details_panel.hpp"
+#include "game_list_panel.hpp"
+#include "game_row_cell.hpp"
 #include "helper.hpp"
 
 #include <algorithm>
 #include <atomic>
-#include <cctype>
-#include <cstdlib>
-#include <ctime>
+#include <cmath>
 #include <filesystem>
 #include <functional>
+#include <map>
+#include <mutex>
 #include <system_error>
 
 using namespace brls;
@@ -37,6 +40,7 @@ struct ConsoleShelfView::CoverQueue {
     struct Job {
         size_t index;
         std::string title;
+        std::string canonical; // from the game's data, when it has any
         std::string path;
     };
 
@@ -79,6 +83,45 @@ void removeFile(const std::string& path) {
 }
 
 constexpr int kBusyRetryMs = 200;
+// A tap on a row picks the game; only a tap on the picked one plays.
+constexpr brls::Time kTapPlayUsec = 350000;
+
+std::string existingFile(const std::string& path) {
+    return fileExists(path) ? path : std::string();
+}
+
+// Pool thread. Loaded once per run and never freed: a game's data task may
+// still be reading it after its shelf has closed.
+std::shared_ptr<const emu::GameDb> loadGameDb(const emu::Console& console) {
+    static std::mutex mutex;
+    static std::map<std::string, std::shared_ptr<const emu::GameDb>> loaded;
+    std::lock_guard<std::mutex> lock(mutex);
+    std::shared_ptr<const emu::GameDb>& db = loaded[console.slug];
+    if (!db) {
+        auto fresh = std::make_shared<emu::GameDb>();
+        if (!fresh->loadFile(emu::gameDbPath(console)))
+            brls::Logger::warning("ConsoleShelf: no game database for {}", console.slug);
+        db = fresh;
+    }
+    return db;
+}
+
+// Off the UI thread: the game's data, when it still describes the ROM.
+void readGameData(const emu::ConsolePaths& where, ConsoleShelfView::Game& game) {
+    game.snapPath = existingFile(emu::thumbPath(where, emu::ThumbKind::Snap, game.rom.title));
+    game.titlePath = existingFile(emu::thumbPath(where, emu::ThumbKind::Title, game.rom.title));
+    game.hasData = false;
+    game.meta = {};
+    uint64_t size = 0;
+    int64_t mtime = 0;
+    emu::GameMeta meta;
+    if (emu::romStat(game.rom.path, size, mtime) &&
+        emu::loadMeta(emu::metaPath(where, game.rom.title), meta) &&
+        emu::metaFresh(meta, size, mtime)) {
+        game.hasData = true;
+        game.meta = std::move(meta);
+    }
+}
 
 struct LaunchRequest {
     const emu::Console* console;
@@ -143,13 +186,6 @@ void launchWhenIdle(std::shared_ptr<LaunchRequest> request, int attempt) {
     });
 }
 
-std::string upper(std::string text) {
-    std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) {
-        return (char)std::toupper(c);
-    });
-    return text;
-}
-
 std::string joinExtensions(const std::vector<std::string>& extensions) {
     std::string text;
     for (const std::string& ext : extensions)
@@ -178,52 +214,24 @@ ConsoleShelfView::ConsoleShelfView(const emu::Console& console,
     setHideHighlight(true);
     getAppletFrameItem()->title = console.name;
 
-    // "DISPOSITIVOS › SUPER NINTENDO", the last part lit.
-    auto* crumbRow = new Box(Axis::ROW);
-    crumbRow->setJustifyContent(JustifyContent::CENTER);
-    crumbRow->setAlignItems(AlignItems::CENTER);
-    crumbRow->setHeight(20);
-    auto* crumb = new BoldLabel();
-    crumb->setFontSize(15);
-    crumb->setSingleLine(true);
-    crumb->setTextColor(themeColor("equinox/muted"));
-    crumb->setText(upper("home/pcs"_i18n) + "   ›   ");
-    crumbRow->addView(crumb);
-    auto* lit = new BoldLabel();
-    lit->setFontSize(15);
-    lit->setSingleLine(true);
-    lit->setTextColor(themeColor("equinox/sun"));
-    lit->setText(upper(console.name));
-    crumbRow->addView(lit);
-    addView(crumbRow);
-
-    shelf = new Box(Axis::COLUMN);
-    shelf->setAlignItems(AlignItems::STRETCH);
-    carousel = new CoverCarousel(ShelfStyle::covers());
-    carousel->setMarginTop(6);
-    carousel->onSelect = [this](int index) { onSelected(index); };
-    shelf->addView(carousel);
-
-    titleLabel = new Label();
-    titleLabel->setFontSize(26);
-    titleLabel->setSingleLine(true);
-    titleLabel->setHorizontalAlign(HorizontalAlign::CENTER);
-    titleLabel->setMarginTop(12);
-    shelf->addView(titleLabel);
-
-    metaLabel = new Label();
-    metaLabel->setFontSize(17);
-    metaLabel->setSingleLine(true);
-    metaLabel->setHorizontalAlign(HorizontalAlign::CENTER);
-    metaLabel->setTextColor(Application::getTheme()["brls/header/subtitle"]);
-    metaLabel->setMarginTop(4);
-    shelf->addView(metaLabel);
-
-    dots = new CarouselDots();
-    dots->setMarginTop(14);
-    shelf->addView(dots);
-    shelf->setVisibility(Visibility::GONE);
-    addView(shelf);
+    library = new Box(Axis::ROW);
+    library->setGrow(1);
+    library->setAlignItems(AlignItems::STRETCH);
+    listPanel = new GameListPanel(console);
+    listPanel->onFocusGame = [this](std::optional<size_t> index) {
+        onCurrent(index);
+    };
+    listPanel->onDownloadAll = [this] { downloadAll(); };
+    listPanel->onCancel = [this] { cancelData(); };
+    library->addView(listPanel);
+    detailsPanel = new GameDetailsPanel();
+    detailsPanel->onDownload = [this] {
+        if (current)
+            download(*current);
+    };
+    library->addView(detailsPanel);
+    library->setVisibility(Visibility::GONE);
+    addView(library);
 
     // No games yet: where to put them.
     empty = new Box(Axis::COLUMN);
@@ -267,17 +275,31 @@ ConsoleShelfView::ConsoleShelfView(const emu::Console& console,
     empty->setVisibility(Visibility::GONE);
     addView(empty);
 
-    registerAction("emu/rescan"_i18n, BUTTON_X, [this](View*) {
+    registerAction("library/hint/download"_i18n, BUTTON_X, [this](View*) {
+        if (current)
+            download(*current);
+        return true;
+    });
+    registerAction("app_list/star"_i18n, BUTTON_Y, [this](View*) {
+        if (!current)
+            return true;
+        const emu::RomEntry& rom = games[*current].rom;
+        Settings::instance().toggle_local_favorite(
+            {consoleRef.slug, rom.fileName, rom.title});
+        applyActions();
+        return true;
+    });
+    registerAction("emu/rescan"_i18n, BUTTON_LT, [this](View*) {
         rescan(true);
         return true;
     });
+    applyActions();
 
     rescan(false);
 }
 
 ConsoleShelfView::~ConsoleShelfView() {
     *alive = false;
-    fetchingIndex = -1; // the cells go with the view
     stopCovers();
 }
 
@@ -296,15 +318,19 @@ void ConsoleShelfView::rescan(bool clearMisses) {
         return;
     scanning = true;
     stopCovers();
+    // The rows are about to be numbered again.
+    cancelData();
+    failure.reset();
+    listPanel->setBatchStopped(std::nullopt);
 
-    const int sel = carousel->selectedIndex();
-    if (sel >= 0 && sel < (int)games.size())
-        restoreRom = games[sel].rom.fileName;
+    if (current)
+        restoreRom = games[*current].rom.fileName;
 
     const emu::Console* console = &consoleRef;
     const emu::ConsolePaths where = paths;
     std::shared_ptr<bool> token = alive;
     brls::async([this, token, console, where, clearMisses] {
+        std::shared_ptr<const emu::GameDb> gameDb = loadGameDb(*console);
         emu::ensureFolders(where);
         if (clearMisses)
             emu::clearCoverMisses(where);
@@ -315,159 +341,320 @@ void ConsoleShelfView::rescan(bool clearMisses) {
             game.missed = !game.hasCover &&
                           emu::coverMissed(where, rom.title, APP_VERSION);
             game.rom = std::move(rom);
+            readGameData(where, game);
             found.push_back(std::move(game));
         }
-        brls::sync([this, token, found] {
+        brls::sync([this, token, found, gameDb] {
             if (!*token)
                 return;
             scanning = false;
+            if (!db) {
+                db = gameDb;
+                createDataQueue();
+            }
             showGames(found);
         });
     });
 }
 
+void ConsoleShelfView::createDataQueue() {
+    dataQueue = std::make_unique<GameDataQueue>(consoleRef, paths, db.get());
+    dataQueue->onStep = [this](size_t index, emu::DataStep step) {
+        if (dataQueue->current() == index)
+            dataStep = step;
+        applyProgress();
+    };
+    dataQueue->onFinished = [this](size_t index, const emu::DataOutcome& outcome) {
+        dataFinished(index, outcome);
+    };
+    dataQueue->onStopped = [this](emu::DataStop stop) { dataStopped(stop); };
+}
+
 void ConsoleShelfView::showGames(std::vector<Game> found) {
     generation++;
 
-    // The cells are about to go: keep the focus on this view meanwhile.
     View* focus = Application::getCurrentFocus();
     const bool focusHere = !focus || isInside(focus, this);
-    if (focusHere)
-        Application::giveFocus(this);
 
-    carousel->clearViews();
-    cells.clear();
-    fetchingIndex = -1;
     games = std::move(found);
-
     const bool none = games.empty();
-    shelf->setVisibility(none ? Visibility::GONE : Visibility::VISIBLE);
+
+    std::vector<emu::LibraryItem> items;
+    std::vector<GameRowCell*> nextCells;
+    for (size_t i = 0; i < games.size(); i++) {
+        auto* cell = new GameRowCell(consoleRef, i);
+        // Played once the press is handled: launching closes the app.
+        cell->onPlay = [this, i] {
+            if (current != i)
+                return;
+            if (Application::getInputType() == InputType::TOUCH &&
+                getCPUTimeUsec() - currentAt < kTapPlayUsec)
+                return;
+            std::shared_ptr<bool> token = alive;
+            brls::sync([this, token, i] {
+                if (*token)
+                    play(i);
+            });
+        };
+        if (games[i].hasCover)
+            cell->setCover(emu::coverPath(paths, games[i].rom.title));
+        items.push_back(itemFor(games[i]));
+        nextCells.push_back(cell);
+    }
+    // The panel reports its first result as current while it fills.
+    cells = nextCells;
+    for (size_t i = 0; i < cells.size(); i++)
+        applyRow(i);
+    listPanel->setItems(std::move(items), std::move(nextCells));
+
+    library->setVisibility(none ? Visibility::GONE : Visibility::VISIBLE);
     empty->setVisibility(none ? Visibility::VISIBLE : Visibility::GONE);
-    setActionAvailable(BUTTON_X, !none);
+    setActionAvailable(BUTTON_LT, !none);
     if (none) {
-        ambient.clear();
-        titleLabel->setText("");
-        metaLabel->setText("");
-        dots->setState(0, 0);
+        onCurrent(std::nullopt);
         if (focusHere)
             Application::giveFocus(empty);
-        Application::getGlobalHintsUpdateEvent()->fire();
         return;
     }
 
-    for (size_t i = 0; i < games.size(); i++) {
-        auto* cell = new RomCell(consoleRef, games[i].rom);
-        const int index = (int)i;
-        // A tap on a side cover brings it to the centre; a tap on the
-        // centre one plays.
-        cell->beforeLaunch = [this, index]() {
-            if (carousel->selectedIndex() != index)
-                return false;
-            return Application::getInputType() != InputType::TOUCH ||
-                   getCPUTimeUsec() - carousel->selectedAt() > 350000;
-        };
-        // Played once the press is handled: launching closes the app.
-        cell->onPlay = [this, index] {
-            std::shared_ptr<bool> token = alive;
-            brls::sync([this, token, index] {
-                if (*token)
-                    play(index);
-            });
-        };
-        cell->setFavorite(Settings::instance().is_local_favorite(
-            consoleRef.slug, games[i].rom.fileName));
-        updateFavoriteAction(cell);
-        if (games[i].hasCover)
-            cell->loadCover(emu::coverPath(paths, games[i].rom.title));
-        cells.push_back(cell);
-        carousel->addView(cell);
-    }
-
-    int index = 0;
+    size_t index = 0;
     for (size_t i = 0; i < games.size(); i++)
         if (games[i].rom.fileName == restoreRom)
-            index = (int)i;
-    carousel->jumpTo(index);
+            index = i;
     if (focusHere)
-        Application::giveFocus(cells[index]);
-    onSelected(index);
-    Application::getGlobalHintsUpdateEvent()->fire();
+        listPanel->focusGame(index);
+    applyProgress();
 
-    fetchCovers(index);
+    fetchCovers(current.value_or(index));
 }
 
-void ConsoleShelfView::updateFavoriteAction(RomCell* cell) {
-    const emu::RomEntry& rom = cell->rom();
-    const bool favorite =
-        Settings::instance().is_local_favorite(consoleRef.slug, rom.fileName);
-    cell->registerAction(
-        favorite ? "app_list/unstar"_i18n : "app_list/star"_i18n, BUTTON_Y,
-        [this, cell](View*) {
-            const emu::RomEntry& rom = cell->rom();
-            Settings::instance().toggle_local_favorite(
-                {consoleRef.slug, rom.fileName, rom.title});
-            cell->setFavorite(Settings::instance().is_local_favorite(
-                consoleRef.slug, rom.fileName));
-            // Registering again replaces this action: only its label
-            // changes, after it has returned.
-            std::shared_ptr<bool> token = alive;
-            const uint64_t forGeneration = generation;
-            brls::sync([this, token, cell, forGeneration] {
-                if (*token && forGeneration == generation) {
-                    updateFavoriteAction(cell);
-                    Application::getGlobalHintsUpdateEvent()->fire();
-                }
-            });
-            return true;
-        });
+const emu::GameInfo* ConsoleShelfView::infoFor(const Game& game) const {
+    if (!db || !game.hasData || !game.meta.identified)
+        return nullptr;
+    return db->find(game.meta.crc);
 }
 
-std::string ConsoleShelfView::metaText(const Game& game) const {
-    const int64_t played =
-        Settings::instance().last_played(consoleRef.slug, game.rom.fileName);
-    const int days =
-        emu::daysSincePlayed(played, (int64_t)std::time(nullptr));
-    std::string when;
-    if (days < 0)
-        when = "emu/never_played"_i18n;
-    else if (days == 0)
-        when = "emu/played_today"_i18n;
-    else if (days == 1)
-        when = "emu/played_yesterday"_i18n;
-    else
-        when = brls::getStr("emu/played_days", days);
-    return consoleRef.name + "  ·  " + when;
+emu::LibraryItem ConsoleShelfView::itemFor(const Game& game) const {
+    emu::LibraryItem item;
+    const bool canonical = game.hasData && !game.meta.canonical.empty();
+    item.name = emu::displayName(canonical ? game.meta.canonical : game.rom.title);
+    if (item.name.empty())
+        item.name = game.rom.title;
+    if (const emu::GameInfo* info = infoFor(game)) {
+        item.year = info->year;
+        item.genre = info->genre;
+    }
+    return item;
 }
 
-void ConsoleShelfView::onSelected(int index) {
-    if (index < 0 || index >= (int)games.size())
-        return;
+GameDetails ConsoleShelfView::detailsFor(size_t index) const {
     const Game& game = games[index];
+    GameDetails details;
+    details.name = itemFor(game).name;
+    details.fileName = game.rom.fileName;
+    details.hasData = game.hasData;
+    // Before the download nothing says the game is unknown.
+    details.identified = !game.hasData || game.meta.identified;
+    details.info = infoFor(game);
+    if (game.hasData && game.meta.identified)
+        details.regions = emu::noIntroRegions(game.meta.canonical);
+    details.snapPath = game.snapPath;
+    details.titlePath = game.titlePath;
+    details.snap = game.meta.snap;
+    details.title = game.meta.title;
+    details.synopsis = game.meta.synopsisText;
+    return details;
+}
 
-    titleLabel->setText(game.rom.title);
-    metaLabel->setText(metaText(game));
-    detailsFade.reset(0.0f);
-    detailsFade.addStep(1.0f, 260, EasingFunction::quadraticOut);
-    detailsFade.start();
-    dots->setState(games.size(), index);
+void ConsoleShelfView::applyRow(size_t index) {
+    const Game& game = games[index];
+    const emu::LibraryItem item = itemFor(game);
+    std::string sub;
+    if (!game.hasData) {
+        sub = "emu/no_data"_i18n;
+    } else {
+        if (item.year > 0)
+            sub = std::to_string(item.year);
+        if (!item.genre.empty())
+            sub += (sub.empty() ? "" : " · ") + item.genre;
+    }
+    cells[index]->setGame(item.name, sub,
+                          item.year > 0 ? std::to_string(item.year) : "");
+}
 
-    if (game.hasCover)
+void ConsoleShelfView::onCurrent(std::optional<size_t> index) {
+    if (index && *index >= games.size())
+        index.reset();
+    current = index;
+    currentAt = getCPUTimeUsec();
+    if (!current) {
+        // Nothing matches the search: no game to show.
+        detailsPanel->setVisibility(Visibility::INVISIBLE);
+    } else {
+        detailsPanel->setVisibility(Visibility::VISIBLE);
+        detailsPanel->show(detailsFor(*current), true);
+    }
+    applyAmbient();
+    applyProgress();
+    applyActions();
+}
+
+// The gameplay capture when there is one, else the cover.
+void ConsoleShelfView::applyAmbient() {
+    if (!current) {
+        ambient.clear();
+        return;
+    }
+    const Game& game = games[*current];
+    if (!game.snapPath.empty())
+        ambient.select(game.snapPath);
+    else if (game.hasCover)
         ambient.select(emu::coverPath(paths, game.rom.title));
     else
         ambient.clear();
 }
 
-void ConsoleShelfView::play(int index) {
-    if (launching || index < 0 || index >= (int)games.size())
+void ConsoleShelfView::applyActions() {
+    const bool any = current.has_value();
+    setActionAvailable(BUTTON_X, any);
+    setActionAvailable(BUTTON_Y, any);
+    if (any) {
+        const Game& game = games[*current];
+        updateActionHint(BUTTON_X, game.hasData ? "library/details/update"_i18n
+                                                : "library/hint/download"_i18n);
+        const bool favorite = Settings::instance().is_local_favorite(
+            consoleRef.slug, game.rom.fileName);
+        updateActionHint(BUTTON_Y,
+                         favorite ? "app_list/unstar"_i18n : "app_list/star"_i18n);
+    }
+    Application::getGlobalHintsUpdateEvent()->fire();
+}
+
+void ConsoleShelfView::applyProgress() {
+    const std::optional<size_t> downloading =
+        dataQueue ? dataQueue->current() : std::nullopt;
+    const auto stepOf = [&](size_t i) -> std::optional<emu::DataStep> {
+        if (downloading == i)
+            return dataStep;
+        return std::nullopt;
+    };
+    // Waiting, or picked by the queue but not at its first step yet.
+    const auto waiting = [&](size_t i) {
+        return dataQueue && dataQueue->queued(i) && !stepOf(i);
+    };
+
+    size_t missing = 0;
+    for (size_t i = 0; i < cells.size(); i++) {
+        std::optional<int> percent;
+        if (const auto step = stepOf(i))
+            percent = (int)std::lround(emu::stepProgress(*step) * 100);
+        cells[i]->setDataState(games[i].hasData, percent, waiting(i));
+        if (!games[i].hasData)
+            missing++;
+    }
+
+    if (current) {
+        detailsPanel->setFailed(failure && failure->index == *current
+                                    ? std::optional<emu::DataStop>(failure->stop)
+                                    : std::nullopt);
+        detailsPanel->setProgress(stepOf(*current), waiting(*current));
+    }
+
+    const bool running = dataQueue && dataQueue->running();
+    const size_t total = running ? dataQueue->total() : 0;
+    const size_t done = running ? dataQueue->done() : 0;
+    int percent = 0;
+    if (total > 0) {
+        const float step = dataStep ? emu::stepProgress(*dataStep) : 0.0f;
+        percent = (int)std::lround((done + step) * 100 / total);
+    }
+    std::string name;
+    if (downloading && *downloading < games.size())
+        name = itemFor(games[*downloading]).name;
+    listPanel->setBatch(running, done, total, percent, name, missing);
+    keepFocus();
+}
+
+void ConsoleShelfView::keepFocus() {
+    View* focus = Application::getCurrentFocus();
+    if (!current || !focus || !isInside(focus, detailsPanel))
+        return;
+    for (View* v = focus; v && v != detailsPanel; v = v->getParent()) {
+        if (v->getVisibility() != Visibility::VISIBLE) {
+            listPanel->focusGame(*current);
+            return;
+        }
+    }
+}
+
+void ConsoleShelfView::download(size_t index) {
+    if (!dataQueue || index >= games.size())
+        return;
+    failure.reset();
+    dataQueue->enqueue(index, games[index].rom);
+    applyProgress();
+}
+
+void ConsoleShelfView::downloadAll() {
+    if (!dataQueue)
+        return;
+    failure.reset();
+    listPanel->setBatchStopped(std::nullopt);
+    // The picked game first, then the others.
+    if (current && !games[*current].hasData)
+        dataQueue->enqueue(*current, games[*current].rom);
+    for (size_t i = 0; i < games.size(); i++)
+        if (!games[i].hasData)
+            dataQueue->enqueue(i, games[i].rom);
+    applyProgress();
+}
+
+void ConsoleShelfView::cancelData() {
+    if (dataQueue)
+        dataQueue->cancel();
+    dataStep.reset();
+    applyProgress();
+}
+
+void ConsoleShelfView::dataFinished(size_t index, const emu::DataOutcome& outcome) {
+    dataStep.reset();
+    if (outcome.stop != emu::DataStop::None)
+        stoppedIndex = index;
+    if (index < games.size()) {
+        Game& game = games[index];
+        readGameData(paths, game);
+        applyRow(index);
+        listPanel->setItem(index, itemFor(game));
+        if (current == index) {
+            detailsPanel->show(detailsFor(index), false);
+            applyAmbient();
+            applyActions();
+        }
+    }
+    applyProgress();
+}
+
+void ConsoleShelfView::dataStopped(emu::DataStop stop) {
+    if (stop != emu::DataStop::Cancelled && stoppedIndex) {
+        failure = Failure{*stoppedIndex, stop};
+        listPanel->setBatchStopped(stop);
+    }
+    stoppedIndex.reset();
+    applyProgress();
+}
+
+void ConsoleShelfView::play(size_t index) {
+    if (launching || index >= games.size())
         return;
     launching = true;
     // Nothing may be downloading or writing to the SD card while the app
-    // hands over: the game starts only once the cover task has finished.
+    // hands over: the game starts only once the network gate is free.
+    cancelData();
     stopCovers();
     waitForCovers(index, 0);
 }
 
-void ConsoleShelfView::waitForCovers(int index, int attempt) {
+void ConsoleShelfView::waitForCovers(size_t index, int attempt) {
     if (emu::netTryAcquire()) {
         // Held until the app quits, or released below if it does not.
         if (stopLoader) {
@@ -488,7 +675,7 @@ void ConsoleShelfView::waitForCovers(int index, int attempt) {
     }
 
     if (attempt >= kStopPolls) {
-        brls::Logger::warning("ConsoleShelf: cover task did not stop");
+        brls::Logger::warning("ConsoleShelf: download did not stop");
         Dialog* loader = stopLoader;
         stopLoader = nullptr;
         launching = false;
@@ -520,9 +707,9 @@ void ConsoleShelfView::waitForCovers(int index, int attempt) {
     });
 }
 
-void ConsoleShelfView::launch(int index) {
+void ConsoleShelfView::launch(size_t index) {
     if (emu::launchRom(consoleRef, games[index].rom, emu::Origin::Shelf, -1))
-        return; // quitting; the cover flag stays set
+        return; // quitting; the network gate stays taken
     emu::netRelease();
     launching = false;
 
@@ -537,35 +724,29 @@ void ConsoleShelfView::stopCovers() {
     if (covers)
         covers->stop.store(true);
     covers.reset();
-    showFetching(-1);
 }
 
-// UI thread. -1 hides it.
-void ConsoleShelfView::showFetching(int index) {
-    if (fetchingIndex == index)
-        return;
-    if (fetchingIndex >= 0 && fetchingIndex < (int)cells.size())
-        cells[fetchingIndex]->setFetching(false);
-    fetchingIndex = index;
-    if (index >= 0 && index < (int)cells.size())
-        cells[index]->setFetching(true);
-}
-
-void ConsoleShelfView::fetchCovers(int first) {
+void ConsoleShelfView::fetchCovers(size_t first) {
     stopCovers();
 
     auto queue = std::make_shared<CoverQueue>();
-    for (size_t i = 0; i < games.size(); i++)
-        if (!games[i].hasCover && !games[i].missed)
-            queue->jobs.push_back({i, games[i].rom.title,
-                                   emu::coverPath(paths, games[i].rom.title)});
+    for (size_t i = 0; i < games.size(); i++) {
+        const Game& game = games[i];
+        if (game.hasCover || game.missed)
+            continue;
+        queue->jobs.push_back({i, game.rom.title,
+                               game.hasData ? game.meta.canonical : std::string(),
+                               emu::coverPath(paths, game.rom.title)});
+    }
     if (queue->jobs.empty())
         return;
     // The selected game first, then outwards.
+    const auto distance = [first](size_t index) {
+        return index > first ? index - first : first - index;
+    };
     std::stable_sort(queue->jobs.begin(), queue->jobs.end(),
-                     [first](const CoverQueue::Job& a, const CoverQueue::Job& b) {
-                         return std::abs((int)a.index - first) <
-                                std::abs((int)b.index - first);
+                     [&](const CoverQueue::Job& a, const CoverQueue::Job& b) {
+                         return distance(a.index) < distance(b.index);
                      });
 
     queue->console = &consoleRef;
@@ -589,8 +770,8 @@ void ConsoleShelfView::runNextCover(std::shared_ptr<CoverQueue> queue) {
 void ConsoleShelfView::fetchOneCover(std::shared_ptr<CoverQueue> queue) {
     if (queue->stop.load())
         return;
-    // Another shelf's cover, or a launch, has the network: try again soon,
-    // without holding this worker.
+    // Another shelf's cover, a game's data or a launch has the network: try
+    // again soon, without holding this worker.
     if (!emu::netTryAcquire()) {
         brls::delay(kBusyRetryMs, [queue] { runNextCover(queue); });
         return;
@@ -601,14 +782,6 @@ void ConsoleShelfView::fetchOneCover(std::shared_ptr<CoverQueue> queue) {
     }
 
     const CoverQueue::Job job = queue->jobs[queue->next];
-    // Spinner on this game's cell. Posted before the end below, and syncs
-    // run in order, so it cannot outlive the task.
-    brls::sync([queue, job] {
-        if (*queue->alive && !queue->stop.load() &&
-            queue->view->covers == queue &&
-            queue->generation == queue->view->generation)
-            queue->view->showFetching((int)job.index);
-    });
     const Progress keepGoing = [queue](uint64_t, uint64_t) {
         return !queue->stop.load();
     };
@@ -622,7 +795,7 @@ void ConsoleShelfView::fetchOneCover(std::shared_ptr<CoverQueue> queue) {
     bool transient = false, diskError = false;
     const std::vector<std::string> names =
         found ? std::vector<std::string>{}
-              : emu::coverNameCandidates(job.title);
+              : emu::thumbNameCandidates(job.canonical, job.title);
     for (const std::string& name : names) {
         if (queue->stop.load()) {
             transient = true;
@@ -658,9 +831,6 @@ void ConsoleShelfView::fetchOneCover(std::shared_ptr<CoverQueue> queue) {
     brls::sync([queue, job, found, transient] {
         if (!*queue->alive)
             return;
-        if (queue->view->covers == queue &&
-            queue->view->fetchingIndex == (int)job.index)
-            queue->view->showFetching(-1);
         if (found)
             queue->view->coverArrived(queue->generation, job.index, job.path);
         if (transient)
@@ -675,22 +845,16 @@ void ConsoleShelfView::coverArrived(uint64_t forGeneration, size_t index,
     if (forGeneration != generation || index >= cells.size())
         return;
     games[index].hasCover = true;
-    cells[index]->loadCover(path);
-    if (carousel->selectedIndex() == (int)index)
-        ambient.select(path);
+    // Only missing covers are fetched, so this is the cell's first one.
+    cells[index]->setCover(path);
+    if (current == index)
+        applyAmbient();
 }
 
 void ConsoleShelfView::draw(NVGcontext* vg, float x, float y, float width,
                             float height, Style style, FrameContext* ctx) {
     // Without a BackdropFrame the glow stays inside the content area.
     ambient.drawFallback(vg, x, y, width, height);
-
-    const float details = detailsFade.getValue();
-    titleLabel->setAlpha(details);
-    metaLabel->setAlpha(details);
-    titleLabel->setTranslationY(6 * (1 - details));
-    metaLabel->setTranslationY(6 * (1 - details));
-
     Box::draw(vg, x, y, width, height, style, ctx);
 }
 
