@@ -17,7 +17,8 @@
         "link_original": "Original project: Moonlight-Switch",
         "support_title": "Support Equinox",
         "support_text": "Equinox is free. If it helps you, you can buy the developer a coffee: point your phone camera at the code or open the link.",
-        "link_coffee": "Buy me a coffee"
+        "link_coffee": "Buy me a coffee",
+        "gamedb_credit": "Game data: libretro-database (CC BY-SA 4.0)"
     },
     "add_host": {
         "connect": "Connect",
