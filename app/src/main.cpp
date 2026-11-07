@@ -21,11 +21,10 @@
 #include "add_host_tab.hpp"
 #include "bold_label.hpp"
 #include "host_card.hpp"
-#include "hosts_tab.hpp"
 #include "link_cell.hpp"
 #include "main_activity.hpp"
 #include "backdrop_frame.hpp"
-#include "main_tabs_view.hpp"
+#include "home_view.hpp"
 #include "settings_tab.hpp"
 #include "views/boolean_slider_cell.hpp"
 
@@ -45,6 +44,7 @@
 #endif
 #include <main_args.hpp>
 
+using namespace brls;
 using namespace brls::literals; // for _i18n
 
 namespace {
@@ -185,9 +185,8 @@ int main(int argc, char* argv[]) {
     brls::Application::registerXMLView("BooleanSliderCell", BooleanSliderCell::create);
     brls::Application::registerXMLView("LinkCell", LinkCell::create);
 
-    brls::Application::registerXMLView("MainTabs", MainTabs::create);
+    brls::Application::registerXMLView("HomeView", HomeView::create);
     brls::Application::registerXMLView("BackdropFrame", BackdropFrame::create);
-    brls::Application::registerXMLView("HostsTab", HostsTab::create);
     brls::Application::registerXMLView("MonitorView", MonitorView::create);
     brls::Application::registerXMLView("BoldLabel", BoldLabel::create);
     brls::Application::registerXMLView("AddHostTab", AddHostTab::create);
@@ -216,8 +215,8 @@ int main(int argc, char* argv[]) {
     brls::Theme::getLightTheme().addColor("equinox/status_on", nvgRGB(158, 98, 0));
     brls::Theme::getLightTheme().addColor("equinox/online", nvgRGB(34, 139, 72));
     brls::Theme::getLightTheme().addColor("equinox/status_moon", nvgRGB(52, 88, 186));
-    brls::Theme::getDarkTheme().addColor("equinox/card", nvgRGB(35, 40, 73));
-    brls::Theme::getDarkTheme().addColor("equinox/card_inner", nvgRGB(27, 31, 62));
+    brls::Theme::getDarkTheme().addColor("equinox/card", nvgRGB(45, 52, 98));
+    brls::Theme::getDarkTheme().addColor("equinox/card_inner", nvgRGB(34, 39, 78));
     brls::Theme::getDarkTheme().addColor("equinox/muted", nvgRGB(174, 179, 214));
     brls::Theme::getDarkTheme().addColor("equinox/status_on", nvgRGB(244, 184, 96));
     brls::Theme::getDarkTheme().addColor("equinox/online", nvgRGB(124, 214, 138));

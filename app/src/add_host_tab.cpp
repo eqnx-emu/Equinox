@@ -7,10 +7,13 @@
 
 #include "add_host_tab.hpp"
 #include "helper.hpp"
-#include "main_tabs_view.hpp"
+#include "home_view.hpp"
 #include <memory>
 #include <chrono>
 #include <random>
+
+using namespace brls;
+using namespace brls::literals;
 
 #if defined(_WIN32)
 #include <winsock2.h>
@@ -168,7 +171,7 @@ void AddHostTab::connectHost(const Host& host) {
                     if (result.value().paired) {
                         showAlert("add_host/paired_error"_i18n, [pairedHost] {
                             Settings::instance().add_host(pairedHost);
-                            MainTabs::getInstanse()->onHostAdded();
+                            HomeView::hostAdded();
                         });
 
                         return;
@@ -213,7 +216,7 @@ void AddHostTab::connectHost(const Host& host) {
                             dialog->dismiss([result, pairedHost] {
                                 if (result.isSuccess()) {
                                     Settings::instance().add_host(pairedHost);
-                                    MainTabs::getInstanse()->onHostAdded();
+                                    HomeView::hostAdded();
                                     AddHostTab::startSearching();
                                 } else {
                                     showError(result.error(), [] {

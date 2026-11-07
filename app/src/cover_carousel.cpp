@@ -12,34 +12,29 @@
 using namespace brls;
 
 namespace {
-constexpr float kHeight = 340;
-// Scale of the focused cover and of its direct neighbours.
-constexpr float kFocusScale = 1.32f;
-constexpr float kNeighbourScale = 0.84f;
-constexpr float kMinScale = 0.62f;
-// Distance from the centre to the first neighbour, then between neighbours.
-constexpr float kFirstStep = 190;
-constexpr float kStep = 132;
 constexpr float kLift = 6;        // focused cover sits this much higher
 constexpr float kFloat = 2.5f;      // amplitude of the floating motion
 constexpr float kFloatPeriod = 4.8f;
 constexpr int kSlideMs = 460;
-// Reflection that sweeps over a newly focused cover.
-constexpr float kShineDelay = 0.18f;
-constexpr float kShineTime = 0.9f;
-constexpr float kRadius = 12;
+// Entering: the focused item grows a little on its way to the side.
+constexpr int kEnterMs = 520;
+constexpr float kEnterBump = 0.16f;
+constexpr float kEnterBumpTime = 0.6f;
+// Opacity of the entered item's ring while focus is on its options.
+constexpr float kEnteredGlow = 0.55f;
 
 float seconds(Time t) { return (float)t / 1000000.0f; }
 } // namespace
 
-CoverCarousel::CoverCarousel() : Box(Axis::ROW) {
-    setHeight(kHeight);
+CoverCarousel::CoverCarousel(ShelfStyle style)
+    : Box(Axis::ROW), shelf(style) {
+    setHeight(shelf.height);
     setHideHighlight(true);
 
     // Swipe left/right to move through the shelf on the touch screen.
     addGestureRecognizer(new PanGestureRecognizer(
         [this](PanGestureStatus status, Sound* sound) {
-            if (status.state != GestureState::END)
+            if (status.state != GestureState::END || entered)
                 return;
             const float dx = status.position.x - status.startPosition.x;
             if (std::fabs(dx) < 50 || count() == 0)
@@ -56,7 +51,7 @@ void CoverCarousel::addView(View* view) {
     // Every cover sits at the same spot; draw() moves them with translation
     // so focus and touch areas follow the animation without relayouts.
     view->setPositionType(PositionType::ABSOLUTE);
-    view->setPositionTop((kHeight - view->getHeight()) / 2);
+    view->setPositionTop((shelf.height - view->getHeight()) / 2);
     view->setPositionLeft(0);
     view->setHideHighlight(true);
     Box::addView(view);
@@ -67,6 +62,21 @@ void CoverCarousel::clearViews(bool free) {
     selected = 0;
     selectionTime = 0;
     position.reset(0.0f);
+    entered = false;
+    enter.reset(0.0f);
+}
+
+void CoverCarousel::setEntered(bool value, float offsetX) {
+    if (value == entered)
+        return;
+    entered = value;
+    if (value) {
+        enterOffset = offsetX;
+        enterTime = getCPUTimeUsec();
+    }
+    enter.reset(enter.getValue());
+    enter.addStep(value ? 1.0f : 0.0f, kEnterMs, EasingFunction::cubicOut);
+    enter.start();
 }
 
 void CoverCarousel::onChildFocusGained(View* directChild, View* focusedView) {
@@ -112,8 +122,16 @@ void CoverCarousel::draw(NVGcontext* vg, float x, float y, float width,
     const Time now = getCPUTimeUsec();
     const float t = seconds(now);
     const float pos = position.getValue();
-    const float glow = focusGlow.getValue();
+    const float e = enter.getValue();
+    const float glow = std::max(focusGlow.getValue(), kEnteredGlow * e);
     const NVGcolor accent = Application::getTheme()["brls/accent"];
+
+    float bump = 0;
+    if (entered) {
+        const float since = seconds(now - enterTime);
+        if (since < kEnterBumpTime)
+            bump = kEnterBump * std::sin(3.14159265f * since / kEnterBumpTime);
+    }
 
     // Covers more than ~4 steps away are fully faded out. Only the visible
     // window is sorted and drawn; the others just follow along, so a large
@@ -130,7 +148,7 @@ void CoverCarousel::draw(NVGcontext* vg, float x, float y, float width,
         View* cell = children[i];
         cell->setTranslationX(width / 2 - cell->getWidth() / 2 +
                               (d < 0 ? -1.0f : 1.0f) *
-                                  (kFirstStep + (a - 1) * kStep));
+                                  (shelf.firstStep + (a - 1) * shelf.step));
         cell->setTranslationY(0);
     }
 
@@ -152,20 +170,36 @@ void CoverCarousel::draw(NVGcontext* vg, float x, float y, float width,
         // 1 for the focused cover, fading to 0 one step away.
         const float focus = std::max(0.0f, 1.0f - a);
 
-        const float offset =
-            side * (a < 1 ? a * kFirstStep : kFirstStep + (a - 1) * kStep);
-        const float scale =
-            a < 1 ? kFocusScale + (kNeighbourScale - kFocusScale) * a
-                  : std::max(kMinScale, kNeighbourScale - (a - 1) * 0.1f);
+        float offset = side * (a < 1 ? a * shelf.firstStep
+                                     : shelf.firstStep + (a - 1) * shelf.step);
+        float scale =
+            a < 1 ? shelf.focusScale + (shelf.neighbourScale - shelf.focusScale) * a
+                  : std::max(shelf.minScale,
+                             shelf.neighbourScale - (a - 1) * shelf.scaleStep);
         // Neighbours look turned towards the centre: a little narrower.
-        const float squash = 1.0f - std::min(a, 1.0f) * 0.1f;
-        const float alpha =
-            a < 1 ? 1.0f - a * 0.3f : std::max(0.0f, 0.7f - (a - 1) * 0.22f);
+        const float squash = 1.0f - std::min(a, 1.0f) * shelf.squash;
+        float alpha = a < 1 ? 1.0f - a * (1.0f - shelf.neighbourAlpha)
+                            : std::max(0.0f, shelf.neighbourAlpha -
+                                                 (a - 1) * shelf.alphaStep);
         const float bob = std::sin(t * 6.2831853f / kFloatPeriod);
-        const float lift = -(kLift + kFloat * bob) * focus;
+        float lift = -(kLift + kFloat * bob) * focus;
+
+        if (e > 0.001f) {
+            if ((int)i == selected) {
+                offset += (enterOffset - offset) * e;
+                scale += (1.0f - scale) * e + bump;
+                lift = lift * (1 - e) - 8 * e;
+            } else {
+                offset = offset * (1 + 0.6f * e) + side * 300 * e;
+                scale *= 1 - 0.5f * e;
+                alpha *= 1 - e;
+            }
+        }
 
         cell->setTranslationX(width / 2 - cw / 2 + offset);
         cell->setTranslationY(lift);
+        // Also keeps faded-out items out of hit tests.
+        cell->setAlpha(alpha);
         if (alpha <= 0.01f)
             continue;
 
@@ -175,7 +209,7 @@ void CoverCarousel::draw(NVGcontext* vg, float x, float y, float width,
         const float sh = ch * scale;
 
         // Shadow on the ground; smaller while the cover floats up.
-        const float groundY = y + (kHeight + ch * kFocusScale) / 2 + 4;
+        const float groundY = y + (shelf.height + ch * shelf.focusScale) / 2 + 4;
         const float gw = sw * (0.42f - 0.06f * bob * focus);
         nvgSave(vg);
         nvgTranslate(vg, cx, groundY);
@@ -194,7 +228,7 @@ void CoverCarousel::draw(NVGcontext* vg, float x, float y, float width,
             nvgBeginPath(vg);
             nvgRect(vg, cx - sw / 2 - 40, cy - sh / 2 - 40, sw + 80, sh + 80);
             nvgFillPaint(vg, nvgBoxGradient(vg, cx - sw / 2, cy - sh / 2, sw,
-                                            sh, kRadius * scale, 22,
+                                            sh, shelf.radius * scale, 22,
                                             nvgRGBAf(accent.r, accent.g, accent.b, 0.2f * k),
                                             nvgRGBAf(accent.r, accent.g, accent.b, 0)));
             nvgFill(vg);
@@ -205,52 +239,35 @@ void CoverCarousel::draw(NVGcontext* vg, float x, float y, float width,
         nvgScale(vg, scale * squash, scale);
         nvgTranslate(vg, -cx, -cy);
 
-        cell->setAlpha(alpha);
         cell->frame(ctx);
 
         const float left = cx - cw / 2;
         const float top = cy - ch / 2;
 
         // Dim the covers away from the centre.
-        const float dim = std::min(a, 1.0f) * 0.35f;
+        const float dim = std::min(a, 1.0f) * shelf.dim;
         if (dim > 0.01f) {
             nvgBeginPath(vg);
-            nvgRoundedRect(vg, left, top, cw, ch, kRadius);
+            nvgRoundedRect(vg, left, top, cw, ch, shelf.radius);
             nvgFillColor(vg, nvgRGBAf(0.04f, 0.05f, 0.11f, dim * alpha));
             nvgFill(vg);
         }
 
-        if (focus > 0.5f) {
-            // One sweep of light after the cover becomes the focused one.
-            const float s = seconds(now - selectionTime) - kShineDelay;
-            if (s > 0 && s < kShineTime) {
-                const float p = s / kShineTime;
-                const float eased = 1.0f - (1.0f - p) * (1.0f - p);
-                const float band = left - cw * 0.6f + eased * cw * 2.2f;
-                nvgSave(vg);
-                nvgIntersectScissor(vg, left, top, cw, ch);
-                nvgBeginPath(vg);
-                nvgRoundedRect(vg, left, top, cw, ch, kRadius);
-                // Two halves give a soft bright band in the middle.
-                nvgFillPaint(vg, nvgLinearGradient(vg, band - cw * 0.22f, top,
-                                                   band, top + ch * 0.18f,
-                                                   nvgRGBA(255, 255, 255, 0),
-                                                   nvgRGBA(255, 255, 255, 40)));
-                nvgFill(vg);
-                nvgBeginPath(vg);
-                nvgRoundedRect(vg, left, top, cw, ch, kRadius);
-                nvgFillPaint(vg, nvgLinearGradient(vg, band, top + ch * 0.18f,
-                                                   band + cw * 0.22f, top + ch * 0.36f,
-                                                   nvgRGBA(255, 255, 255, 40),
-                                                   nvgRGBA(255, 255, 255, 0)));
-                nvgFill(vg);
-                nvgRestore(vg);
-            }
+        if (shelf.edge > 0) {
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, left + 0.5f, top + 0.5f, cw - 1, ch - 1,
+                           shelf.radius);
+            nvgStrokeColor(vg, nvgRGBAf(0.62f, 0.72f, 1.0f, shelf.edge * alpha));
+            nvgStrokeWidth(vg, 1.5f / scale);
+            nvgStroke(vg);
+        }
 
+        if (focus > 0.5f) {
             // Focus ring.
             if (glow > 0.01f) {
                 nvgBeginPath(vg);
-                nvgRoundedRect(vg, left - 2, top - 2, cw + 4, ch + 4, kRadius + 2);
+                nvgRoundedRect(vg, left - 2, top - 2, cw + 4, ch + 4,
+                               shelf.radius + 2);
                 nvgStrokeColor(vg, nvgRGBAf(accent.r, accent.g, accent.b, glow * focus));
                 nvgStrokeWidth(vg, 3.0f / scale);
                 nvgStroke(vg);

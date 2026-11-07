@@ -15,7 +15,9 @@
 
 class SettingsTab : public brls::Box {
   public:
-    SettingsTab();
+    // group: id of a settings group ("video", "audio", ...) to show alone;
+    // B then leaves the screen instead of going back to the menu.
+    explicit SettingsTab(const std::string& group = "");
     ~SettingsTab();
 
     void updateBitrateHints();
@@ -81,8 +83,10 @@ class SettingsTab : public brls::Box {
         brls::Box* entry;
         brls::Box* content;
         std::string title;
+        std::string id;
     };
     std::vector<Group> groups;
+    bool directGroup = false;
 
     // Quick settings on top of the menu: resolution, FPS and bitrate change
     // in place; the chips below them show a few other current values.

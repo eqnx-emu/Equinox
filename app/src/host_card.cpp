@@ -8,7 +8,7 @@
 #include "app_list_view.hpp"
 #include "capacity_test_view.hpp"
 #include "helper.hpp"
-#include "main_tabs_view.hpp"
+#include "home_view.hpp"
 #include "streaming_view.hpp"
 #include <algorithm>
 #include <atomic>
@@ -32,7 +32,7 @@ bool isOnline(HostCardState state) {
 // MARK: - MonitorView
 
 namespace {
-NVGcolor statusColor(HostCardState state) {
+NVGcolor stateColor(HostCardState state) {
     switch (state) {
     case HostCardState::ONLINE:
     case HostCardState::RUNNING:
@@ -160,7 +160,7 @@ void MonitorView::draw(NVGcontext* vg, float x, float y, float width,
     nvgFill(vg);
     nvgBeginPath(vg);
     nvgCircle(vg, sx + sw - 2, sy + 2, 5);
-    nvgFillColor(vg, a(statusColor(state)));
+    nvgFillColor(vg, a(stateColor(state)));
     nvgFill(vg);
 }
 
@@ -174,14 +174,17 @@ HostCard::HostCard(const Host& host) : host(host) {
 
     this->addGestureRecognizer(new TapGestureRecognizer(this));
     this->registerClickAction([this](View* view) {
-        press([this] { activate(); });
+        press([this] {
+            if (onEnter)
+                onEnter();
+        });
         return true;
     });
 
     registerAction("capacity/action"_i18n, ControllerButton::BUTTON_X,
                    [this](View* view) {
                        if (isOnline(state))
-                           CapacityTestView::open(this->host);
+                           openCapacityTest();
                        return true;
                    });
 
@@ -193,12 +196,6 @@ HostCard::HostCard(const Host& host) : host(host) {
                            wake();
                        else if (state == HostCardState::RUNNING)
                            openLibrary();
-                       return true;
-                   });
-
-    registerAction("hosts/options"_i18n, ControllerButton::BUTTON_START,
-                   [this](View* view) {
-                       openOptions();
                        return true;
                    });
 
@@ -294,15 +291,16 @@ void HostCard::refresh() {
                         return;
 
                     if (apps.isSuccess()) {
-                        gameCount = (int)apps.value().size();
                         favoriteCount = 0;
                         appIds.clear();
-                        for (const AppInfo& app : apps.value())
+                        for (const AppInfo& app : apps.value()) {
+                            if (isHiddenApp(app.name))
+                                continue;
                             appIds.push_back(app.app_id);
-                        for (const AppInfo& app : apps.value())
-                            if (Settings::instance().is_favorite(this->host,
-                                                                 app.app_id))
+                            if (Settings::instance().is_favorite(this->host, app.app_id))
                                 favoriteCount++;
+                        }
+                        gameCount = (int)appIds.size();
                         updateInfo();
                     }
 
@@ -323,6 +321,7 @@ void HostCard::refresh() {
                     runningApp.name = appName;
                     detail->setText(appName);
                     saveSnapshot();
+                    changed();
                 });
         });
 }
@@ -330,6 +329,7 @@ void HostCard::refresh() {
 void HostCard::updateInfo() {
     if (gameCount < 0) {
         info->setText(" ");
+        changed();
         return;
     }
     std::string text = gameCount == 1
@@ -343,42 +343,38 @@ void HostCard::updateInfo() {
     if (supports4K)
         text += "  \u00b7  4K";
     info->setText(text);
+    changed();
 }
 
 void HostCard::applyState(HostCardState newState) {
     state = newState;
     monitor->setState(newState);
 
-    const NVGcolor color = statusColor(newState);
+    const NVGcolor color = stateColor(newState);
     statusDot->setBackgroundColor(color);
     status->setTextColor(color);
     detail->setText(GameStreamClient::instance().active_address(host));
 
-    std::string action = "hints/ok"_i18n;
     switch (newState) {
     case HostCardState::FETCHING:
         status->setText("hosts/status_fetching"_i18n);
         break;
     case HostCardState::ONLINE:
         status->setText("hosts/status_online"_i18n);
-        action = "hosts/action_open"_i18n;
         break;
     case HostCardState::RUNNING:
         status->setText("hosts/running_caption"_i18n);
         detail->setText(runningApp.name.empty() ? "hosts/running_loading"_i18n
                                                 : runningApp.name);
-        action = "hosts/action_resume"_i18n;
         break;
     case HostCardState::ASLEEP:
         status->setText("hosts/status_asleep"_i18n);
-        action = "hosts/action_wake"_i18n;
         break;
     case HostCardState::UNREACHABLE:
         status->setText("hosts/status_unreachable"_i18n);
-        action = "hosts/action_retry"_i18n;
         break;
     }
-    updateActionHint(ControllerButton::BUTTON_A, action);
+    updateActionHint(ControllerButton::BUTTON_A, "hosts/options"_i18n);
 
     setActionAvailable(ControllerButton::BUTTON_X, isOnline(newState));
     setActionAvailable(ControllerButton::BUTTON_Y,
@@ -387,29 +383,11 @@ void HostCard::applyState(HostCardState newState) {
     updateActionHint(ControllerButton::BUTTON_Y,
                      newState == HostCardState::RUNNING ? "hosts/library"_i18n
                                                         : "hosts/wake"_i18n);
-}
-
-void HostCard::activate() {
-    switch (state) {
-    case HostCardState::ONLINE:
-        openLibrary();
-        break;
-    case HostCardState::RUNNING:
-        resumeRunningApp();
-        break;
-    case HostCardState::ASLEEP:
-        wake();
-        break;
-    case HostCardState::UNREACHABLE:
-        refresh();
-        break;
-    case HostCardState::FETCHING:
-        break;
-    }
+    changed();
 }
 
 void HostCard::openLibrary() {
-    MainTabs::presentWithHeader(this, new AppListView(this->host));
+    HomeView::presentWithHeader(this, new AppListView(this->host));
 }
 
 void HostCard::resumeRunningApp() {
@@ -478,33 +456,62 @@ void HostCard::wake() {
         onProgress, cancel);
 }
 
-void HostCard::openOptions() {
-    const Host hostCopy = host;
-    auto* dialog = new Dialog(host.hostname);
+NVGcolor HostCard::statusColor() const { return stateColor(state); }
 
-    dialog->addButton("host/rename"_i18n, [hostCopy] {
-        Application::getPlatform()->getImeManager()->openForText(
-            [hostCopy](const std::string& text) {
-                Host renamed = hostCopy;
-                renamed.hostname = text;
-                Settings::instance().add_host(renamed);
-                MainTabs::getInstanse()->refillTabs();
-            },
-            "host/rename_title"_i18n, "", 60, hostCopy.hostname, 0);
-    });
+void HostCard::openCapacityTest() {
+    if (isOnline(state))
+        CapacityTestView::open(host);
+}
 
-    dialog->addButton("common/remove"_i18n, [hostCopy] {
-        auto* confirm = new Dialog("host/remove_message"_i18n);
-        confirm->addButton("common/cancel"_i18n, [] {});
-        confirm->addButton("common/remove"_i18n, [hostCopy] {
-            Settings::instance().remove_host(hostCopy);
-            MainTabs::getInstanse()->refillTabs();
-        });
-        confirm->open();
-    });
+void HostCard::quitRunningApp() {
+    if (state != HostCardState::RUNNING)
+        return;
 
+    auto* dialog =
+        new Dialog("app_list/terminate_prefix"_i18n + runningApp.name +
+                   "app_list/terminate_postfix"_i18n);
     dialog->addButton("common/cancel"_i18n, [] {});
+    dialog->addButton("app_list/terminate"_i18n, [this] {
+        Dialog* loader = createLoadingDialog("hosts/quitting"_i18n);
+        loader->open();
+        ASYNC_RETAIN
+        GameStreamClient::instance().quit(
+            host, [ASYNC_TOKEN, loader](const GSResult<bool>& result) {
+                ASYNC_RELEASE
+                loader->close([this, result] {
+                    if (!result.isSuccess())
+                        showError(result.error());
+                    runningApp = AppInfo{"", 0};
+                    refresh();
+                });
+            });
+    });
     dialog->open();
+}
+
+void HostCard::rename() {
+    const Host hostCopy = host;
+    Application::getPlatform()->getImeManager()->openForText(
+        [hostCopy](const std::string& text) {
+            if (text.empty())
+                return;
+            Host renamed = hostCopy;
+            renamed.hostname = text;
+            Settings::instance().add_host(renamed);
+            HomeView::hostsChanged();
+        },
+        "host/rename_title"_i18n, "", 60, hostCopy.hostname, 0);
+}
+
+void HostCard::remove() {
+    const Host hostCopy = host;
+    auto* confirm = new Dialog("host/remove_message"_i18n);
+    confirm->addButton("common/cancel"_i18n, [] {});
+    confirm->addButton("common/remove"_i18n, [hostCopy] {
+        Settings::instance().remove_host(hostCopy);
+        HomeView::hostsChanged();
+    });
+    confirm->open();
 }
 
 // MARK: - AddHostCard
@@ -529,7 +536,7 @@ AddHostCard::AddHostCard(bool primary) {
         press([this] {
             auto* screen = new AddHostTab();
             screen->getAppletFrameItem()->title = "hosts/add_screen"_i18n;
-            MainTabs::presentWithHeader(this, screen);
+            HomeView::presentWithHeader(this, screen);
         });
         return true;
     });

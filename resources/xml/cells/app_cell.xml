@@ -1,6 +1,6 @@
 <brls:Box
-    width="150"
-    height="200"
+    width="180"
+    height="240"
     axis="column"
     alignItems="stretch"
     focusable="true"
@@ -19,8 +19,8 @@
     <brls:Box
         detachedX="0"
         detachedY="0"
-        width="142"
-        height="200"
+        width="172"
+        height="240"
         axis="column"
         direction="rightToLeft"
         justifyContent="flexStart"
@@ -49,16 +49,16 @@
         id="unactive_layer"
         detachedX="0"
         detachedY="0"
-        width="150"
-        height="200"
+        width="180"
+        height="240"
         color="#4A4A4AA0"
         cornerRadius="12"/>
 
     <brls:Box
         detachedX="0"
         detachedY="0"
-        width="150"
-        height="200"
+        width="180"
+        height="240"
         axis="column"
         justifyContent="flexEnd">
 

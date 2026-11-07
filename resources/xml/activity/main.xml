@@ -1,8 +1,8 @@
 <BackdropFrame
     iconInterpolation="linear"
     footerHidden="false">
-    <MainTabs
-        id="main_tabs"
+    <HomeView
+        id="home"
         title="@i18n/title"
         icon="@res/img/moonlight_96.png" />
 </BackdropFrame>

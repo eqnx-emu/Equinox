@@ -1,10 +1,13 @@
 <brls:Box
-    width="230"
-    height="150"
+    width="300"
+    height="176"
     axis="column"
     alignItems="stretch"
     focusable="true"
-    padding="16"
+    paddingTop="22"
+    paddingBottom="20"
+    paddingLeft="22"
+    paddingRight="22"
     cornerRadius="16"
     highlightCornerRadius="18"
     hideHighlightBackground="true"
@@ -20,9 +23,9 @@
         id="name"
         width="auto"
         height="auto"
-        marginLeft="6"
-        marginRight="6"
-        fontSize="21"
+        marginLeft="0"
+        marginRight="0"
+        fontSize="23"
         singleLine="true"/>
 
     <brls:Box
@@ -32,8 +35,8 @@
         axis="row"
         alignItems="center"
         marginTop="4"
-        marginLeft="6"
-        marginRight="6">
+        marginLeft="0"
+        marginRight="0">
 
         <brls:Box
             id="status_dot"
@@ -47,7 +50,7 @@
             width="auto"
             height="auto"
             grow="1"
-            fontSize="15"
+            fontSize="16"
             singleLine="true"/>
 
     </brls:Box>
@@ -57,8 +60,8 @@
         width="auto"
         height="auto"
         marginTop="2"
-        marginLeft="6"
-        marginRight="6"
+        marginLeft="0"
+        marginRight="0"
         fontSize="14"
         singleLine="true"
         textColor="@theme/equinox/muted"/>
@@ -67,9 +70,9 @@
         id="info"
         width="auto"
         height="auto"
-        marginTop="10"
-        marginLeft="6"
-        marginRight="6"
+        marginTop="12"
+        marginLeft="0"
+        marginRight="0"
         fontSize="13"
         singleLine="true"
         textColor="@theme/brls/text_disabled"/>
