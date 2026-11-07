@@ -50,7 +50,8 @@ std::string encodeToken(const ResumeToken& token);
 std::optional<ResumeToken> decodeToken(const std::string& text);
 
 std::string runnerArgs(const Console& console, const ConsolePaths& paths, const RomEntry& rom,
-                       const std::string& returnTo, const std::string& token);
+                       const std::string& returnTo, const std::string& token,
+                       const std::string& cover = "", const std::string& video = "");
 
 // Value after "--resume": tokens up to the next "--*" joined by single spaces.
 std::optional<std::string> resumeArg(int argc, const char* const* argv);

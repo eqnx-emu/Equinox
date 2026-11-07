@@ -90,3 +90,12 @@ target_include_directories(test_emu_favorites PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
     "${MOONLIGHT_ROOT}/extern")
 target_link_libraries(test_emu_favorites PRIVATE ${JANSSON_LIB})
+
+add_executable(test_emu_video
+    test_emu_video.cpp
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/VideoDefaults.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp")
+target_include_directories(test_emu_video PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
+target_link_libraries(test_emu_video PRIVATE ${JANSSON_LIB})

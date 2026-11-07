@@ -24,6 +24,24 @@ TEST_CASE("runnerArgs exact line") {
           "--resume \"1|snes|shelf|-1|Super Mario World (U) [!].smc\"");
 }
 
+TEST_CASE("runnerArgs appends cover and video") {
+    const Console* snes = findConsole("snes");
+    REQUIRE(snes != nullptr);
+    ConsolePaths p = pathsFor(*snes);
+    RomEntry r{p.roms + "/Chrono Trigger (USA).sfc", "Chrono Trigger (USA).sfc", "Chrono Trigger (USA)"};
+    const std::string base = runnerArgs(*snes, p, r, "sdmc:/switch/Equinox.nro", "t");
+    CHECK(runnerArgs(*snes, p, r, "sdmc:/switch/Equinox.nro", "t", "", "") == base);
+    CHECK(runnerArgs(*snes, p, r, "sdmc:/switch/Equinox.nro", "t",
+                     "sdmc:/equinox/covers/snes/Chrono Trigger (USA).png",
+                     "sdmc:/equinox/emulators/snes/video.json") ==
+          base + " --cover \"sdmc:/equinox/covers/snes/Chrono Trigger (USA).png\""
+                 " --video \"sdmc:/equinox/emulators/snes/video.json\"");
+    CHECK(runnerArgs(*snes, p, r, "sdmc:/switch/Equinox.nro", "t", "", "a\"b.json") ==
+          base + " --video \"ab.json\"");
+    CHECK(runnerArgs(*snes, p, r, "sdmc:/switch/Equinox.nro", "t", "c\"d.png") ==
+          base + " --cover \"cd.png\"");
+}
+
 TEST_CASE("runnerArgs sanitizes") {
     std::string l = lineFor("a.sfc", "Bad \"T\"\nitle");
     CHECK(l.find("--title \"Bad Title\"") != std::string::npos);
