@@ -13,6 +13,7 @@ struct InstallResult {
     bool ok = false;
     std::string error;
     Manifest manifest;
+    bool cancelled = false;  // the Progress callback returned false
 };
 
 // Downloads and parses the console's latest manifest. nullopt with `error`
@@ -20,8 +21,9 @@ struct InstallResult {
 std::optional<Manifest> fetchLatest(const Console& console, std::string& error);
 
 // Downloads the runner to <emulator>/runner.bin.part, checks size and SHA-256,
-// moves it over runner.bin and records it in installed.json. On failure the
-// .part file is removed and the previous runner.bin is left as it was.
+// swaps it in for runner.bin (the old one is kept as runner.bin.old until the
+// new one is in place) and records it in installed.json. On failure the .part
+// file is removed and the previous runner.bin is left as it was.
 InstallResult installRunner(const Console& console, const Manifest& manifest,
                             const Progress& progress,
                             const std::string& root = "sdmc:/equinox");

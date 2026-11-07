@@ -8,7 +8,8 @@
 // store elsewhere), redirects followed, HTTP errors treated as failures.
 
 // Called while a download runs; total is 0 until the server sends a length.
-// Returning false cancels the download.
+// Returning false cancels the download. It runs on the downloading thread, so
+// UI updates must be marshalled with brls::sync.
 using Progress = std::function<bool(uint64_t done, uint64_t total)>;
 
 bool httpGetToString(const std::string& url, std::string& out, long timeoutSec,

@@ -137,7 +137,8 @@ bool writeInstalled(const std::string& path, const Installed& installed) {
         return false;
     }
     std::filesystem::rename(tmp, path, ec);
-    if (ec && std::filesystem::exists(path)) {
+    std::error_code existsEc;
+    if (ec && std::filesystem::exists(path, existsEc)) {
         // FAT (libnx) cannot rename over an existing file.
         std::filesystem::remove(path, ec);
         ec.clear();

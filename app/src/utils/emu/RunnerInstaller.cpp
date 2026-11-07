@@ -15,24 +15,39 @@ namespace fs = std::filesystem;
 const long MANIFEST_TIMEOUT = 15;
 const long RUNNER_TIMEOUT = 300;
 
-// Horizon's FAT driver will not rename over an existing file, so the target
-// is removed and the rename tried again.
-bool replaceFile(const fs::path& from, const fs::path& to) {
+// Moves `from` onto `to` keeping the old file until the new one is in place.
+// Horizon's FAT driver will not rename over an existing file, so every rename
+// here targets a name that does not exist: the old file goes to `backup`
+// first and comes back if the new one cannot be moved in.
+bool replaceFile(const fs::path& from, const fs::path& to, const fs::path& backup) {
     std::error_code ec;
-    fs::rename(from, to, ec);
-    if (ec && fs::exists(to)) {
-        ec.clear();
-        fs::remove(to, ec);
+    fs::remove(backup, ec);
+    if (fs::exists(backup, ec)) return false;
+
+    const bool hadOld = fs::exists(to, ec);
+    if (hadOld) {
+        fs::rename(to, backup, ec);
         if (ec) return false;
-        fs::rename(from, to, ec);
     }
-    return !ec;
+
+    fs::rename(from, to, ec);
+    if (ec) {
+        if (hadOld) {
+            std::error_code restoreEc;
+            fs::rename(backup, to, restoreEc);
+        }
+        return false;
+    }
+
+    if (hadOld) fs::remove(backup, ec);
+    return true;
 }
 
-InstallResult fail(const fs::path& part, const Manifest& manifest, const std::string& error) {
+InstallResult fail(const fs::path& part, const Manifest& manifest, const std::string& error,
+                   bool cancelled = false) {
     std::error_code ec;
     fs::remove(part, ec);
-    return {false, error, manifest};
+    return {false, error, manifest, cancelled};
 }
 
 }  // namespace
@@ -61,14 +76,24 @@ InstallResult installRunner(const Console& console, const Manifest& manifest,
     const std::string partPath = paths.runner + ".part";
     const fs::path part = fromUtf8(partPath);
 
+    bool cancelled = false;
+    Progress tracked;
+    if (progress) {
+        tracked = [&](uint64_t done, uint64_t total) {
+            if (progress(done, total)) return true;
+            cancelled = true;
+            return false;
+        };
+    }
+
     std::string error;
-    if (!httpGetToFile(assetUrl(console, manifest), partPath, RUNNER_TIMEOUT, progress, error))
-        return fail(part, manifest, error.empty() ? "download failed" : error);
+    if (!httpGetToFile(assetUrl(console, manifest), partPath, RUNNER_TIMEOUT, tracked, error))
+        return fail(part, manifest, error.empty() ? "download failed" : error, cancelled);
 
     if (!verifyFile(partPath, manifest))
         return fail(part, manifest, "downloaded runner does not match the manifest");
 
-    if (!replaceFile(part, fromUtf8(paths.runner)))
+    if (!replaceFile(part, fromUtf8(paths.runner), fromUtf8(paths.runner + ".old")))
         return fail(part, manifest, "could not move the runner into place");
 
     Installed installed;
@@ -76,6 +101,8 @@ InstallResult installRunner(const Console& console, const Manifest& manifest,
     installed.sha256 = manifest.sha256;
     installed.protocol = manifest.protocol;
     installed.lastCheck = static_cast<int64_t>(std::time(nullptr));
+    // The new runner is already in place; with installed.json stale, the next
+    // decide() offers the update again, which fixes it.
     if (!writeInstalled(paths.installed, installed))
         return {false, "could not write installed.json", manifest};
 

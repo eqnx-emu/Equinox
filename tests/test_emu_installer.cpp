@@ -3,6 +3,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <sstream>
 #include <string>
 
@@ -15,6 +16,8 @@ namespace fs = std::filesystem;
 namespace fake {
 std::string body;   // what a download returns
 bool fail = false;  // the transfer fails after writing the whole body
+bool holdPart = false;  // keep the downloaded file open after the download
+std::unique_ptr<std::ifstream> held;
 std::string lastUrl;
 }  // namespace fake
 
@@ -43,6 +46,8 @@ bool httpGetToFile(const std::string& url, const std::string& path, long,
         error = "network down";
         return false;
     }
+    f.close();
+    if (fake::holdPart) fake::held = std::make_unique<std::ifstream>(path, std::ios::binary);
     return true;
 }
 
@@ -78,9 +83,14 @@ struct Sandbox {
         manifest.sha256 = kHelloSha;
         fake::body = "hello";
         fake::fail = false;
+        fake::holdPart = false;
+        fake::held.reset();
         fake::lastUrl.clear();
     }
-    ~Sandbox() { fs::remove_all(root); }
+    ~Sandbox() {
+        fake::held.reset();
+        fs::remove_all(root);
+    }
 
     void installOld() {
         REQUIRE(ensureFolders(paths));
@@ -104,7 +114,9 @@ TEST_CASE("installRunner replaces runner.bin and records installed.json") {
     CHECK(fake::lastUrl == assetUrl(s.snes, s.manifest));
     CHECK(lastDone > 0);
     CHECK(readAll(s.paths.runner) == "hello");
+    CHECK_FALSE(r.cancelled);
     CHECK_FALSE(fs::exists(s.paths.runner + ".part"));
+    CHECK_FALSE(fs::exists(s.paths.runner + ".old"));
     auto installed = readInstalled(s.paths.installed);
     REQUIRE(installed.has_value());
     CHECK(installed->version == "1.2.0");
@@ -150,6 +162,7 @@ TEST_CASE("installRunner cleans up after a failed download") {
     InstallResult r = installRunner(s.snes, s.manifest, Progress(), s.root.string());
     CHECK_FALSE(r.ok);
     CHECK(r.error == "network down");
+    CHECK_FALSE(r.cancelled);
     CHECK(readAll(s.paths.runner) == "old");
     CHECK_FALSE(fs::exists(s.paths.runner + ".part"));
 }
@@ -161,9 +174,45 @@ TEST_CASE("installRunner stops when progress cancels") {
         s.snes, s.manifest, [](uint64_t, uint64_t) { return false; }, s.root.string());
     CHECK_FALSE(r.ok);
     CHECK(r.error == "cancelled");
+    CHECK(r.cancelled);
     CHECK(readAll(s.paths.runner) == "old");
     CHECK_FALSE(fs::exists(s.paths.runner + ".part"));
 }
+
+TEST_CASE("installRunner clears a stale runner.bin.old") {
+    Sandbox s;
+    s.installOld();
+    writeAll(s.paths.runner + ".old", "stale");
+    CHECK(installRunner(s.snes, s.manifest, Progress(), s.root.string()).ok);
+    CHECK(readAll(s.paths.runner) == "hello");
+    CHECK_FALSE(fs::exists(s.paths.runner + ".old"));
+}
+
+TEST_CASE("installRunner leaves runner.bin alone when the backup name is taken") {
+    Sandbox s;
+    s.installOld();
+    fs::create_directories(s.paths.runner + ".old/keep");
+    InstallResult r = installRunner(s.snes, s.manifest, Progress(), s.root.string());
+    CHECK_FALSE(r.ok);
+    CHECK(readAll(s.paths.runner) == "old");
+    CHECK_FALSE(fs::exists(s.paths.runner + ".part"));
+}
+
+#ifdef _WIN32
+// Windows will not rename a file another handle has open, which makes the
+// move of the new runner into place fail after the old one was backed up.
+TEST_CASE("installRunner restores the old runner when the new one cannot be moved in") {
+    Sandbox s;
+    s.installOld();
+    fake::holdPart = true;
+    InstallResult r = installRunner(s.snes, s.manifest, Progress(), s.root.string());
+    CHECK_FALSE(r.ok);
+    CHECK(r.error == "could not move the runner into place");
+    CHECK(readAll(s.paths.runner) == "old");
+    CHECK_FALSE(fs::exists(s.paths.runner + ".old"));
+    CHECK_FALSE(fs::exists(s.paths.installed));
+}
+#endif
 
 TEST_CASE("removeRunner deletes only the emulator folder") {
     Sandbox s;
