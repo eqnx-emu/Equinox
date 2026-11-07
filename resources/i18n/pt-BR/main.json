@@ -458,6 +458,13 @@
         "install_error": "Não foi possível instalar o {}.\n\n{}",
         "updated": "Emulador atualizado",
         "up_to_date": "O emulador já está atualizado",
-        "decimal_separator": ","
+        "decimal_separator": ",",
+        "error_network": "Não deu para baixar. Confira a conexão com a internet.",
+        "error_manifest": "A lista de emuladores no servidor está inválida. Tente mais tarde.",
+        "error_console": "O servidor mandou um emulador de outro console. Tente mais tarde.",
+        "error_folders": "Não deu para criar as pastas em sdmc:/equinox. Confira o cartão SD.",
+        "error_mismatch": "O download chegou corrompido. Tente de novo.",
+        "error_move": "Não deu para colocar o emulador no lugar. Confira o cartão SD.",
+        "error_installed": "Não deu para gravar a versão do emulador. Confira o cartão SD."
     }
 }

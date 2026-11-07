@@ -97,6 +97,29 @@ std::map<std::string, emu::Manifest>& latestManifests() {
 std::atomic<bool> installing{false};
 std::atomic<bool> checkingUpdates{false};
 
+// Translated reason for a failed install; curl's text only adds detail.
+std::string runnerErrorText(emu::RunnerError code, const std::string& detail) {
+    switch (code) {
+    case emu::RunnerError::Network:
+        return detail.empty() ? "emu/error_network"_i18n
+                              : "emu/error_network"_i18n + "\n(" + detail + ")";
+    case emu::RunnerError::BadManifest:
+        return "emu/error_manifest"_i18n;
+    case emu::RunnerError::WrongConsole:
+        return "emu/error_console"_i18n;
+    case emu::RunnerError::Folders:
+        return "emu/error_folders"_i18n;
+    case emu::RunnerError::Mismatch:
+        return "emu/error_mismatch"_i18n;
+    case emu::RunnerError::Move:
+        return "emu/error_move"_i18n;
+    case emu::RunnerError::WriteInstalled:
+        return "emu/error_installed"_i18n;
+    default:
+        return detail;
+    }
+}
+
 bool runnerInstalled(const emu::Console& console) {
     const emu::ConsolePaths paths = emu::pathsFor(console);
     std::error_code ec;
@@ -351,6 +374,8 @@ class OptionButton : public PressableBox {
         addView(hint);
 
         registerClickAction([this](View*) {
+            if (disabled)
+                return true;
             press([this] {
                 // The action may refill the panel, replacing this function.
                 auto run = action;
@@ -377,6 +402,7 @@ class OptionButton : public PressableBox {
 
     // Shown but not selectable, e.g. "More consoles soon".
     void disable() {
+        disabled = true;
         setFocusable(false);
         action = nullptr;
         icon->setTextColor(themeColor("brls/text_disabled"));
@@ -384,6 +410,7 @@ class OptionButton : public PressableBox {
     }
 
   private:
+    bool disabled = false;
     IconLabel* icon;
     BoldLabel* label;
     Label* hint;
@@ -1291,9 +1318,16 @@ void HomeView::showAddChoices() {
         return button;
     };
 
-    addChoice({"", "emu/add_pc"_i18n, "emu/add_pc_hint"_i18n,
-               [dialog, openAddHost] { dialog->close(openAddHost); }},
-              true);
+    // A row acts once its press animation ends; B or Cancel may have closed
+    // the dialog meanwhile, and closing it twice frees it twice.
+    OptionButton* pcButton =
+        addChoice({"", "emu/add_pc"_i18n, "emu/add_pc_hint"_i18n,
+                   [dialog, openAddHost] {
+                       if (isDialogClosing(dialog))
+                           return;
+                       dialog->close(openAddHost);
+                   }},
+                  true);
 
     for (const emu::Console& console : emu::consoles()) {
         const emu::Console* target = &console;
@@ -1306,6 +1340,8 @@ void HomeView::showAddChoices() {
                                     : std::string("11 MB"));
         }
         addChoice({"", console.name, hint, [dialog, target] {
+                       if (isDialogClosing(dialog))
+                           return;
                        dialog->close([target] {
                            if (!instance)
                                return;
@@ -1321,6 +1357,8 @@ void HomeView::showAddChoices() {
     addChoice({"", "emu/more_soon"_i18n, "", nullptr}, false)->disable();
 
     dialog->addButton("common/cancel"_i18n, [] {});
+    // Open on the first choice, not on Cancel.
+    dialog->setLastFocusedView(pcButton);
     dialog->open();
 #else
     openAddHost();
@@ -1392,14 +1430,17 @@ void HomeView::installConsole(const emu::Console& target) {
                  finish] {
         const emu::ConsolePaths paths = emu::pathsFor(*console);
         std::string error;
-        std::optional<emu::Manifest> latest = emu::fetchLatest(*console, error);
+        emu::RunnerError code = emu::RunnerError::None;
+        std::optional<emu::Manifest> latest =
+            emu::fetchLatest(*console, error, &code);
         if (state->cancel.load()) {
             finish(nullptr);
             return;
         }
         if (!latest) {
-            finish([console, error] {
-                showError(brls::getStr("emu/install_error", console->name, error));
+            finish([console, code, error] {
+                showError(brls::getStr("emu/install_error", console->name,
+                                       runnerErrorText(code, error)));
             });
             return;
         }
@@ -1409,8 +1450,11 @@ void HomeView::installConsole(const emu::Console& target) {
             latestManifests()[console->slug] = manifest;
         });
 
-        switch (emu::decide(emu::readInstalled(paths.installed), manifest,
-                            console->protocol)) {
+        // A first install ignores a stale installed.json left without its
+        // runner.bin.
+        const std::optional<emu::Installed> installed =
+            first ? std::nullopt : emu::readInstalled(paths.installed);
+        switch (emu::decide(installed, manifest, console->protocol)) {
         case emu::RunnerAction::NeedsNewerEquinox:
             finish([] { showAlert("emu/needs_newer"_i18n); });
             return;
@@ -1453,9 +1497,9 @@ void HomeView::installConsole(const emu::Console& target) {
             if (result.cancelled || state->cancel.load())
                 finish(nullptr);
             else
-                finish([console, error = result.error] {
+                finish([console, code = result.code, error = result.error] {
                     showError(brls::getStr("emu/install_error", console->name,
-                                           error));
+                                           runnerErrorText(code, error)));
                 });
             return;
         }
@@ -1532,9 +1576,16 @@ void HomeView::checkConsoleUpdates() {
     if (consoleCards.empty() || checkingUpdates.exchange(true))
         return;
 
+    // One request per launch: a console already checked in this run keeps
+    // that answer.
     std::vector<const emu::Console*> targets;
     for (ConsoleCard* card : consoleCards)
-        targets.push_back(&card->console());
+        if (!latestManifests().count(card->console().slug))
+            targets.push_back(&card->console());
+    if (targets.empty()) {
+        checkingUpdates.store(false);
+        return;
+    }
 
     brls::async([targets] {
         for (const emu::Console* console : targets) {
@@ -1549,9 +1600,14 @@ void HomeView::checkConsoleUpdates() {
             if (!latest)
                 continue; // offline: tried again next time
 
-            // Read again: an install may have replaced it meanwhile.
+            // Only an up to date runner waits a day for the next check: a
+            // pending update (or "Update Equinox") is asked again on every
+            // launch, so the card keeps showing it. Read again first: an
+            // install may have replaced the file meanwhile.
             if (!installing.load()) {
-                if (auto fresh = emu::readInstalled(paths.installed)) {
+                auto fresh = emu::readInstalled(paths.installed);
+                if (fresh && emu::decide(fresh, *latest, console->protocol) ==
+                                 emu::RunnerAction::UpToDate) {
                     fresh->lastCheck = now;
                     emu::writeInstalled(paths.installed, *fresh);
                 }

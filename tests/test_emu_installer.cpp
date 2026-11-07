@@ -141,6 +141,7 @@ TEST_CASE("installRunner keeps the old runner when the hash does not match") {
     InstallResult r = installRunner(s.snes, s.manifest, Progress(), s.root.string());
     CHECK_FALSE(r.ok);
     CHECK_FALSE(r.error.empty());
+    CHECK(r.code == RunnerError::Mismatch);
     CHECK(readAll(s.paths.runner) == "old");
     CHECK_FALSE(fs::exists(s.paths.runner + ".part"));
     CHECK_FALSE(fs::exists(s.paths.installed));
@@ -162,6 +163,7 @@ TEST_CASE("installRunner cleans up after a failed download") {
     InstallResult r = installRunner(s.snes, s.manifest, Progress(), s.root.string());
     CHECK_FALSE(r.ok);
     CHECK(r.error == "network down");
+    CHECK(r.code == RunnerError::Network);
     CHECK_FALSE(r.cancelled);
     CHECK(readAll(s.paths.runner) == "old");
     CHECK_FALSE(fs::exists(s.paths.runner + ".part"));
@@ -174,6 +176,7 @@ TEST_CASE("installRunner stops when progress cancels") {
         s.snes, s.manifest, [](uint64_t, uint64_t) { return false; }, s.root.string());
     CHECK_FALSE(r.ok);
     CHECK(r.error == "cancelled");
+    CHECK(r.code == RunnerError::Cancelled);
     CHECK(r.cancelled);
     CHECK(readAll(s.paths.runner) == "old");
     CHECK_FALSE(fs::exists(s.paths.runner + ".part"));
@@ -208,6 +211,7 @@ TEST_CASE("installRunner restores the old runner when the new one cannot be move
     InstallResult r = installRunner(s.snes, s.manifest, Progress(), s.root.string());
     CHECK_FALSE(r.ok);
     CHECK(r.error == "could not move the runner into place");
+    CHECK(r.code == RunnerError::Move);
     CHECK(readAll(s.paths.runner) == "old");
     CHECK_FALSE(fs::exists(s.paths.runner + ".old"));
     CHECK_FALSE(fs::exists(s.paths.installed));
@@ -241,19 +245,23 @@ TEST_CASE("fetchLatest parses the manifest of the right console") {
 TEST_CASE("fetchLatest rejects bad manifests and network errors") {
     Sandbox s;
     std::string error;
+    RunnerError code = RunnerError::None;
 
     fake::body =
         R"({"id":"x","console":"nes","version":"1.0.0","protocol":1,"asset":"a.nro","size":1,"sha256":"x"})";
-    CHECK_FALSE(fetchLatest(s.snes, error).has_value());
+    CHECK_FALSE(fetchLatest(s.snes, error, &code).has_value());
     CHECK_FALSE(error.empty());
+    CHECK(code == RunnerError::WrongConsole);
 
     error.clear();
     fake::body = "not json";
-    CHECK_FALSE(fetchLatest(s.snes, error).has_value());
+    CHECK_FALSE(fetchLatest(s.snes, error, &code).has_value());
     CHECK_FALSE(error.empty());
+    CHECK(code == RunnerError::BadManifest);
 
     error.clear();
     fake::fail = true;
-    CHECK_FALSE(fetchLatest(s.snes, error).has_value());
+    CHECK_FALSE(fetchLatest(s.snes, error, &code).has_value());
     CHECK(error == "network down");
+    CHECK(code == RunnerError::Network);
 }
