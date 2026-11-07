@@ -29,6 +29,9 @@ AppListView::AppListView(const Host& host) : host(host) {
     getAppletFrameItem()->setHintView(hintView);
 
     container->setHideHighlight(true);
+    // The shelf fits the screen; no scroll bar beside it.
+    if (auto* frame = dynamic_cast<ScrollingFrame*>(container->getParent()))
+        frame->setScrollingIndicatorVisible(false);
     carousel = new CoverCarousel();
     carousel->onSelect = [this](int index) { onAppSelected(index); };
     container->addView(carousel);
@@ -37,7 +40,7 @@ AppListView::AppListView(const Host& host) : host(host) {
     titleLabel->setFontSize(26);
     titleLabel->setHorizontalAlign(HorizontalAlign::CENTER);
     titleLabel->setSingleLine(true);
-    titleLabel->setMarginTop(18);
+    titleLabel->setMarginTop(8);
     container->addView(titleLabel);
 
     metaLabel = new Label();
@@ -48,7 +51,7 @@ AppListView::AppListView(const Host& host) : host(host) {
     container->addView(metaLabel);
 
     dots = new CarouselDots();
-    dots->setMarginTop(18);
+    dots->setMarginTop(12);
     container->addView(dots);
 
     loader = new LoadingOverlay(this);
