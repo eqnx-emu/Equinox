@@ -159,9 +159,8 @@ int main(int argc, char* argv[]) {
     // __nx_nv_transfermem_size = (g_application_mode ? 16 : 3) * 0x100000;
 #endif
 
-    // Set log level
-    // We recommend to use INFO for real apps
-    brls::Logger::setLogLevel(brls::LogLevel::LOG_DEBUG);
+    // Debug logging costs whole milliseconds per line over nxlink.
+    brls::Logger::setLogLevel(brls::LogLevel::LOG_INFO);
 
     // Init the app and i18n
     if (!brls::Application::init()) {
