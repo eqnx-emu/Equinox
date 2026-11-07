@@ -9,6 +9,7 @@
 
 #include "Settings.hpp"
 #include "bold_label.hpp"
+#include "library_widgets.hpp"
 
 #include <algorithm>
 
@@ -59,34 +60,6 @@ bool isInside(View* view, View* ancestor) {
             return true;
     return false;
 }
-
-class ProgressBar : public View {
-  public:
-    ProgressBar() {
-        setHeight(6);
-        setShrink(0);
-    }
-
-    void setFraction(float value) { fraction = std::clamp(value, 0.0f, 1.0f); }
-
-    void draw(NVGcontext* vg, float x, float y, float width, float height, Style,
-              FrameContext*) override {
-        const float r = height / 2;
-        nvgBeginPath(vg);
-        nvgRoundedRect(vg, x, y, width, height, r);
-        nvgFillColor(vg, a(themeColor("equinox/card")));
-        nvgFill(vg);
-        if (fraction <= 0)
-            return;
-        nvgBeginPath(vg);
-        nvgRoundedRect(vg, x, y, std::max(height, width * fraction), height, r);
-        nvgFillColor(vg, a(themeColor("brls/accent")));
-        nvgFill(vg);
-    }
-
-  private:
-    float fraction = 0;
-};
 
 // A focusable box that runs action on A and on a tap.
 Box* touchBox(Axis axis, std::function<void()> action) {
@@ -147,22 +120,6 @@ std::string sortName(int sort) {
     }
 }
 
-std::string stopText(emu::DataStop stop) {
-    switch (stop) {
-    case emu::DataStop::Offline:
-        return "library/stop/offline"_i18n;
-    case emu::DataStop::BadLogin:
-        return "library/stop/bad_login"_i18n;
-    case emu::DataStop::Quota:
-        return "library/stop/quota"_i18n;
-    case emu::DataStop::Disk:
-        return "library/stop/disk"_i18n;
-    case emu::DataStop::None:
-    case emu::DataStop::Cancelled:
-        break;
-    }
-    return "";
-}
 } // namespace
 
 GameListPanel::GameListPanel(const emu::Console& console)
@@ -348,7 +305,7 @@ GameListPanel::GameListPanel(const emu::Console& console)
             onCancel();
     }));
     runningRow->addView(runningLineBox);
-    bar = new ProgressBar();
+    bar = new LibraryProgressBar();
     bar->setMarginTop(8);
     runningRow->addView(bar);
     footer->addView(runningRow);
@@ -456,6 +413,7 @@ void GameListPanel::setItems(std::vector<emu::LibraryItem> nextItems,
     if (focusInList())
         Application::giveFocus(searchBox);
     list->clearViews();
+    const bool hadCurrent = current.has_value();
     current.reset();
     shown.clear();
 
@@ -468,6 +426,9 @@ void GameListPanel::setItems(std::vector<emu::LibraryItem> nextItems,
         list->addView(cell);
     }
     applyOrder();
+    // Nothing to pick in the new set; applyOrder only reports a first result.
+    if (hadCurrent && !current && onFocusGame)
+        onFocusGame(std::nullopt);
 }
 
 void GameListPanel::refreshOrder() {
@@ -500,20 +461,19 @@ void GameListPanel::applyOrder() {
     applyCount();
 
     // The game that leaves the filter hands the focus to the first result.
-    const bool currentLeft = current && !visible[*current];
     if (focused && !visible[*focused]) {
         if (!shown.empty())
             Application::giveFocus(cells[shown.front()]);
         else
             Application::giveFocus(searchBox);
     }
-    if (current && !visible[*current])
-        current.reset();
-    if (!current && !shown.empty()) {
-        current = shown.front();
-        if (currentLeft && !focused && onFocusGame)
-            onFocusGame(*current);
-    }
+    // Focus on the search field: the current game still follows the filter.
+    std::optional<size_t> next = current;
+    if (next && !visible[*next])
+        next.reset();
+    if (!next && !shown.empty())
+        next = shown.front();
+    setCurrent(next, false);
     applyLooks(false);
 
     if (focusInList())
@@ -533,16 +493,36 @@ void GameListPanel::applyLooks(bool animate) {
     }
 }
 
-void GameListPanel::setCurrent(size_t index, bool animate) {
-    current = index;
+// The one place where the current game changes; onFocusGame fires only then.
+void GameListPanel::setCurrent(std::optional<size_t> next, bool animate) {
+    if (next == current)
+        return;
+    current = next;
     applyLooks(animate);
     scheduleRecenter();
+    if (onFocusGame)
+        onFocusGame(current);
 }
 
 void GameListPanel::focusedGame(size_t index) {
     setCurrent(index, true);
-    if (onFocusGame)
-        onFocusGame(index);
+}
+
+void GameListPanel::focusGame(size_t index) {
+    GameRowCell* target = nullptr;
+    if (index < cells.size() && cells[index]->getVisibility() == Visibility::VISIBLE)
+        target = cells[index];
+    else if (!shown.empty())
+        target = cells[shown.front()];
+
+    if (!target) {
+        Application::giveFocus(searchBox);
+        setCurrent(std::nullopt, true);
+        return;
+    }
+    Application::giveFocus(target);
+    // Already focused, or the focus not yet on screen: the cell may not report it.
+    setCurrent(target->index(), true);
 }
 
 // The rows keep growing and shrinking for a moment after the focus moved.
@@ -673,13 +653,13 @@ void GameListPanel::applyBatch() {
 
     idleMissing->setText(brls::getStr("library/list/missing", missing));
     if (stopped)
-        stoppedLabel->setText(brls::getStr("library/list/stopped", stopText(*stopped)));
+        stoppedLabel->setText(brls::getStr("library/list/stopped", libraryStopText(*stopped)));
     if (state == Batch::Running) {
         runningLine->setText(brls::getStr("library/list/running",
                                           std::min(batchDone + 1, batchTotal), batchTotal,
                                           batchPercent));
         runningName->setText(batchName);
-        static_cast<ProgressBar*>(bar)->setFraction(batchPercent / 100.0f);
+        static_cast<LibraryProgressBar*>(bar)->setFraction(batchPercent / 100.0f);
     }
 
     // ZR starts, cancels or retries; nothing to do once every game has data.

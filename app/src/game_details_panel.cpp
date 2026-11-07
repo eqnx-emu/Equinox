@@ -11,6 +11,7 @@
 #include "bold_label.hpp"
 #include "emu/PathUtf8.hpp"
 #include "emu/SsCredentials.hpp"
+#include "library_widgets.hpp"
 
 #include <borealis/extern/nanovg/stb_image.h>
 
@@ -25,7 +26,7 @@ namespace {
 constexpr float kSnapW = 292, kSnapH = 256, kSnapRadius = 10;
 constexpr float kTitleW = 148, kTitleH = 112, kTitleRadius = 8;
 constexpr float kButtonHeight = 44;
-constexpr float kBarWidth = 400, kBarHeight = 6;
+constexpr float kBarWidth = 400;
 constexpr int kFadeMs = 150;
 constexpr float kPi = 3.14159265358979f;
 
@@ -173,35 +174,6 @@ class ArtFrame : public Box {
     }
 };
 
-class ProgressBar : public View {
-  public:
-    ProgressBar() {
-        setWidth(kBarWidth);
-        setHeight(kBarHeight);
-        setShrink(0);
-    }
-
-    void setFraction(float value) { fraction = std::clamp(value, 0.0f, 1.0f); }
-
-    void draw(NVGcontext* vg, float x, float y, float width, float height, Style,
-              FrameContext*) override {
-        const float r = height / 2;
-        nvgBeginPath(vg);
-        nvgRoundedRect(vg, x, y, width, height, r);
-        nvgFillColor(vg, a(themeColor("equinox/card")));
-        nvgFill(vg);
-        if (fraction <= 0)
-            return;
-        nvgBeginPath(vg);
-        nvgRoundedRect(vg, x, y, std::max(height, width * fraction), height, r);
-        nvgFillColor(vg, a(themeColor("brls/accent")));
-        nvgFill(vg);
-    }
-
-  private:
-    float fraction = 0;
-};
-
 Label* makeLabel(float size) {
     auto* label = new Label();
     label->setFontSize(size);
@@ -239,22 +211,6 @@ std::string stepText(emu::DataStep step) {
     return text("library/details/step_done");
 }
 
-std::string stopText(emu::DataStop stop) {
-    switch (stop) {
-    case emu::DataStop::Offline:
-        return text("library/stop/offline");
-    case emu::DataStop::BadLogin:
-        return text("library/stop/bad_login");
-    case emu::DataStop::Quota:
-        return text("library/stop/quota");
-    case emu::DataStop::Disk:
-        return text("library/stop/disk");
-    case emu::DataStop::None:
-    case emu::DataStop::Cancelled:
-        break;
-    }
-    return "";
-}
 } // namespace
 
 GameDetailsPanel::GameDetailsPanel() : Box(Axis::COLUMN) {
@@ -311,7 +267,9 @@ GameDetailsPanel::GameDetailsPanel() : Box(Axis::COLUMN) {
     percentLabel->setFontSize(15);
     progressLine->addView(percentLabel);
     progressBox->addView(progressLine);
-    bar = new ProgressBar();
+    auto* progress = new LibraryProgressBar();
+    progress->setWidth(kBarWidth);
+    bar = progress;
     bar->setMarginTop(6);
     progressBox->addView(bar);
     action->addView(progressBox);
@@ -480,10 +438,10 @@ void GameDetailsPanel::applyAction() {
         stepLabel->setText(stepText(*step));
         const float fraction = emu::stepProgress(*step);
         percentLabel->setText(std::to_string(static_cast<int>(std::lround(fraction * 100))) + "%");
-        static_cast<ProgressBar*>(bar)->setFraction(fraction);
+        static_cast<LibraryProgressBar*>(bar)->setFraction(fraction);
     }
     if (failed)
-        failedLabel->setText(brls::getStr("library/details/failed", stopText(*failed)));
+        failedLabel->setText(brls::getStr("library/details/failed", libraryStopText(*failed)));
 }
 
 void GameDetailsPanel::applyMedia() {

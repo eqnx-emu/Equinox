@@ -31,7 +31,8 @@ class GameListPanel : public brls::Box {
     // cells[i] is the row of items[i]. The panel takes them over: it frees the
     // previous set, owns onFocused of every cell (onPlay stays the caller's)
     // and sets their look from the mode. Covers and data state are the
-    // caller's. The query and the sort survive a new set.
+    // caller's. The query and the sort survive a new set, and the first
+    // result becomes the current game (reported through onFocusGame).
     void setItems(std::vector<emu::LibraryItem> items, std::vector<GameRowCell*> cells);
     // Applies the search and the sort again, e.g. after a year or genre changed.
     void refreshOrder();
@@ -49,8 +50,16 @@ class GameListPanel : public brls::Box {
 
     // Index in the items given to setItems of the focused game, if any.
     std::optional<size_t> focusedIndex() const;
+    // Focuses that game's row; when the filter hides it, the first result;
+    // with no result, the search field.
+    void focusGame(size_t index);
 
-    std::function<void(size_t)> onFocusGame;
+    // The current game, which is the one the cartridge shows and the details
+    // panel should show. It follows the focus on a row, and also changes
+    // without focus on a row (a filter that hides it, a new set of items).
+    // Fires only when it changes to a different game. nullopt: no game is
+    // current (nothing matches the search, or no items).
+    std::function<void(std::optional<size_t>)> onFocusGame;
     // Also "Try again" after a stop.
     std::function<void()> onDownloadAll, onCancel;
 
@@ -113,7 +122,7 @@ class GameListPanel : public brls::Box {
     void applyBatch();
     void applyOrder();
     void applyLooks(bool animate);
-    void setCurrent(size_t index, bool animate);
+    void setCurrent(std::optional<size_t> next, bool animate);
     void focusedGame(size_t index);
     void scheduleRecenter();
     bool focusInList() const;
