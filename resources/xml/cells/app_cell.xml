@@ -1,6 +1,6 @@
 <brls:Box
     width="180"
-    height="240"
+    height="216"
     axis="column"
     alignItems="stretch"
     focusable="true"
@@ -20,7 +20,7 @@
         detachedX="0"
         detachedY="0"
         width="172"
-        height="240"
+        height="216"
         axis="column"
         direction="rightToLeft"
         justifyContent="flexStart"
@@ -50,7 +50,7 @@
         detachedX="0"
         detachedY="0"
         width="180"
-        height="240"
+        height="216"
         color="#4A4A4AA0"
         cornerRadius="12"/>
 
@@ -58,7 +58,7 @@
         detachedX="0"
         detachedY="0"
         width="180"
-        height="240"
+        height="216"
         axis="column"
         justifyContent="flexEnd">
 
