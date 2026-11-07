@@ -288,6 +288,19 @@ class Settings : public Singleton<Settings> {
     void set_write_log(bool write_log) { m_write_log = write_log; }
     [[nodiscard]] bool write_log() const { return m_write_log; }
 
+    // Compact FPS / latency / bitrate / loss readout over the stream.
+    void set_show_metrics(bool show) { m_show_metrics = show; }
+    [[nodiscard]] bool show_metrics() const { return m_show_metrics; }
+    // Which metrics (MetricsHud::Metric bits) and how the pill looks.
+    void set_metrics_mask(int mask) { m_metrics_mask = mask; }
+    [[nodiscard]] int metrics_mask() const { return m_metrics_mask; }
+    void set_metrics_position(int position) { m_metrics_position = position; }
+    [[nodiscard]] int metrics_position() const { return m_metrics_position; }
+    void set_metrics_color(int color) { m_metrics_color = color; }
+    [[nodiscard]] int metrics_color() const { return m_metrics_color; }
+    void set_metrics_background(int background) { m_metrics_background = background; }
+    [[nodiscard]] int metrics_background() const { return m_metrics_background; }
+
     // Swaps A/B and X/Y for the game only; Equinox's own menus never swap.
     // Stored under the old "swap_ui_keys" name to keep existing settings.
     void set_swap_game_face_buttons(bool swap) { m_swap_ui_keys = swap; }
@@ -398,6 +411,11 @@ class Settings : public Singleton<Settings> {
     bool m_sops = false;
     bool m_play_audio = false;
     bool m_write_log = false;
+    bool m_show_metrics = false;
+    int m_metrics_mask = 15;
+    int m_metrics_position = 2; // top right
+    int m_metrics_color = 0;
+    int m_metrics_background = 1; // translucent
     bool m_swap_ui_keys = false;
     bool m_swap_joycon_stick_to_dpad = false;
     bool m_touchscreen_mouse_mode = false;

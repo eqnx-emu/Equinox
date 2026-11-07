@@ -252,6 +252,11 @@ OptionsTab::OptionsTab(StreamingView* streamView) : streamView(streamView) {
                                 brls::Application::enableDebuggingView(value);
                             });
 
+    metricsButton->init("settings/show_metrics"_i18n,
+                        Settings::instance().show_metrics(), [](bool value) {
+                            Settings::instance().set_show_metrics(value);
+                        });
+
     debugButton->init(
         "streaming/debug_info"_i18n, streamView->draw_stats,
         [streamView](bool value) { streamView->draw_stats = value; });

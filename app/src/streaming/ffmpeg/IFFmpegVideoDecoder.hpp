@@ -12,6 +12,8 @@ struct VideoDecodeStats {
     uint32_t current_decoded_frames;
     uint32_t total_frames;
     uint32_t network_dropped_frames;
+    uint32_t current_dropped_frames; // this window only
+    uint64_t current_received_bytes;
     uint32_t current_reassembly_time;
     uint64_t current_decode_time; // microseconds
   uint32_t current_decoder_delay_time;
@@ -28,6 +30,8 @@ struct VideoDecodeStats {
     float current_receive_time;
     float current_decoding_time;
     float current_decoder_delay;
+    float current_bitrate_kbps; // video actually received
+    float current_loss_percent; // frames lost on the network
 
     float session_receive_time;
     float session_decoding_time;

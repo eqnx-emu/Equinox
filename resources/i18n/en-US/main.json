@@ -14,7 +14,10 @@
         "version": "Equinox v{}",
         "fork_title": "Based on Moonlight-Switch",
         "fork_text": "Equinox is an unofficial fork of Moonlight-Switch by XITRIX. Most of the streaming client comes from that project and from Moonlight. Equinox is not affiliated with or endorsed by their authors.",
-        "link_original": "Original project: Moonlight-Switch"
+        "link_original": "Original project: Moonlight-Switch",
+        "support_title": "Support Equinox",
+        "support_text": "Equinox is free. If it helps you, you can buy the developer a coffee: point your phone camera at the code or open the link.",
+        "link_coffee": "Buy me a coffee"
     },
     "add_host": {
         "connect": "Connect",
@@ -163,8 +166,24 @@
         "title": "Mouse input mode"
     },
     "settings": {
+        "info": {
+            "action": "About this option",
+            "frame_pacing": "Sets how many frames are held before they reach the screen.\n\nLowest latency shows each frame as soon as it arrives: controls feel faster, but the picture can hitch if the network wobbles.\n\nSmoothest video keeps a few frames in reserve: motion is more fluid, with a little more delay. Balanced sits in between.",
+            "resolution_scale": "Only applies when the resolution is set to Native. It multiplies the screen size used for the stream.\n\n0.5x and 0.75x are lighter on the network and the device. 2.0x asks for a picture larger than the screen: sharper, but much heavier.",
+            "codec": "The format the PC uses to compress the video before sending it.\n\nH.264 works everywhere. HEVC (H.265) gives the same quality with less bitrate, which helps on Wi-Fi. AV1 is the most efficient but needs a recent graphics card in the PC.\n\nIf the picture breaks up or the stream won't start, go back to H.264.",
+            "decoder": "How many processor cores help decode the video.\n\nMore threads help at high resolutions but use more CPU. If unsure, keep the default.",
+            "use_hw_decoding": "Uses the device's video chip to decode the stream instead of the processor. Everything runs lighter and with less delay.",
+            "bitrate": "How much data the PC sends each second.\n\nA higher bitrate gives a cleaner picture, especially in fast scenes, but needs a better network. If the stream stutters or drops frames, lower it.\n\nThe recommended minimum for your resolution and FPS is shown next to the title.",
+            "dithering": "Adds a very fine noise over the picture to hide color banding, common in skies and dark gradients.\n\nThe slider sets the strength.",
+            "upscaling": "When the stream arrives at a lower resolution than the screen, AMD FSR enlarges it with sharper edges instead of just stretching it.",
+            "rcas": "Brings out edges and textures so the picture looks sharper.\n\nToo much can make edges jagged. The slider sets the strength.",
+            "show_metrics": "Shows a summary of how the stream is doing in a corner of the screen while you play:\n\nFPS: frames shown per second.\nms: estimated delay between the PC and your screen.\nMbps: how much video is actually arriving.\nLoss: frames lost on the network. Turns orange from 1% and red from 5%."
+        },
         "audio_backend": "Audio driver",
         "bitrate_below_min": "below recommended — image may blur in motion",
+        "bitrate_ideal": "ideal",
+        "bitrate_risky": "may lag",
+        "bitrate_lag": "likely to lag",
         "bitrate_min_hint": "{} Mbps · min. recommended {} Mbps",
         "av1": "AV1 (Experimental)",
         "buttons": {
@@ -178,6 +197,34 @@
             "title": "Dead zones"
         },
         "debug": "Debug",
+        "ingame": "In game",
+        "show_metrics": "Show stream metrics",
+        "metric_fps": "FPS",
+        "metric_latency": "Latency (ms)",
+        "metric_bitrate": "Bitrate (Mbps)",
+        "metric_loss": "Frame loss",
+        "metrics_position": "Position",
+        "metrics_color": "Text color",
+        "metrics_background": "Background",
+        "metrics_positions": {
+            "top_left": "Top left",
+            "top_center": "Top center",
+            "top_right": "Top right",
+            "bottom_left": "Bottom left",
+            "bottom_center": "Bottom center",
+            "bottom_right": "Bottom right"
+        },
+        "metrics_colors": {
+            "white": "White",
+            "sun": "Sun (amber)",
+            "moon": "Moon (blue)",
+            "green": "Green"
+        },
+        "metrics_backgrounds": {
+            "none": "None",
+            "translucent": "Translucent",
+            "solid": "Solid"
+        },
         "debugging_view": "Show debugging view",
         "decoder_threads": "Decoder Threads",
         "frame_pacing": "Frame pacing",
@@ -242,16 +289,6 @@
         "video_codec": "Video codec",
         "volume_amplification": "Allow volume amplification",
         "zero_threads": "0 (No use threads)",
-        "quick": {
-            "title": "Stream quality",
-            "hint": "{} to adjust, then ◀ ▶",
-            "adjust": "Adjust",
-            "all": "All settings",
-            "on": "on",
-            "off": "off",
-            "upscaling": "Upscaling",
-            "bitrate": "Bitrate"
-        },
         "groups": {
             "video": {
                 "title": "Video",
@@ -260,10 +297,6 @@
             "handheld": {
                 "title": "Handheld mode",
                 "summary": "Separate resolution and bitrate when undocked"
-            },
-            "image": {
-                "title": "Image",
-                "summary": "Upscaling, sharpening and dithering"
             },
             "audio": {
                 "title": "Audio",
@@ -292,6 +325,7 @@
         "decoder_overloaded": "Decoder overloaded...",
         "profile_reconnect_hint": "Dock mode changed: reconnect to apply the other stream profile",
         "connection": "Connection",
+        "metrics_loss": "loss",
         "debug_info": "Debug info",
         "disconnect": "Disconnect",
         "esc": "ESC button",
@@ -379,7 +413,6 @@
         "fav_empty_detail": "Star games in a library with Y",
         "fav_all": "All favorites",
         "settings_detail": "Stream quality, controls and system",
-        "quick": "Quick settings",
         "about_status": "Version {}",
         "about_detail": "Streaming client for the Solstice host",
         "about_more": "About and thanks",

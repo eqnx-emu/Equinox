@@ -20,4 +20,5 @@ class AboutTab : public brls::Box {
     BRLS_BIND(brls::Header, versionLabel, "version_label");
     BRLS_BIND(LinkCell, github, "github");
     BRLS_BIND(LinkCell, original, "original");
+    BRLS_BIND(LinkCell, coffee, "coffee");
 };
