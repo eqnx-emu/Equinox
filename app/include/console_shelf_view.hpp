@@ -68,6 +68,10 @@ class ConsoleShelfView : public brls::Box {
     // the UI thread before touching the view.
     std::shared_ptr<bool> alive = std::make_shared<bool>(true);
     std::shared_ptr<CoverQueue> covers;
+    // The cell showing "Fetching cover...", or -1. Only the cover being
+    // downloaded right now; cleared whenever the queue stops.
+    int fetchingIndex = -1;
+    void showFetching(int index);
 
     brls::Box* shelf = nullptr;
     brls::Box* empty = nullptr;

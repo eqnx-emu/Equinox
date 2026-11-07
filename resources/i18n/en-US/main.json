@@ -482,6 +482,7 @@
         "cannot_launch": "Could not open the game from here. Open Equinox from the Homebrew Menu and try again.",
         "opening": "Opening the game…",
         "try_again": "Try again in a moment.",
+        "fetching_cover": "Fetching cover…",
         "no_return": "Equinox.nro was not found on the SD card, so the game could not return to Equinox. Put it in sdmc:/switch/Equinox/ and try again."
     }
 }

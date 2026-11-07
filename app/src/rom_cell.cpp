@@ -76,6 +76,26 @@ RomCell::RomCell(const emu::Console& console, const emu::RomEntry& rom)
     image->setVisibility(Visibility::GONE);
     addView(image);
 
+    // Along the bottom of the generic cover while its cover downloads; the
+    // spinner is the loading dialog's, smaller.
+    fetchingLayer = new Box(Axis::COLUMN);
+    fetchingLayer->setDetachedPosition(0, kHeight - 64);
+    fetchingLayer->setSize(Size(kWidth, 56));
+    fetchingLayer->setJustifyContent(JustifyContent::CENTER);
+    fetchingLayer->setAlignItems(AlignItems::CENTER);
+    auto* spinner = new ProgressSpinner(ProgressSpinnerSize::NORMAL);
+    spinner->View::setSize(Size(28, 28));
+    fetchingLayer->addView(spinner);
+    auto* fetchingText = new Label();
+    fetchingText->setFontSize(13);
+    fetchingText->setMarginTop(4);
+    fetchingText->setHorizontalAlign(HorizontalAlign::CENTER);
+    fetchingText->setTextColor(nvgRGBA(238, 240, 250, 200));
+    fetchingText->setText("emu/fetching_cover"_i18n);
+    fetchingLayer->addView(fetchingText);
+    fetchingLayer->setVisibility(Visibility::GONE);
+    addView(fetchingLayer);
+
     // Over the cover, under the star: same look as AppCell's offline layer.
     missingLayer = new Box(Axis::COLUMN);
     missingLayer->setDetachedPosition(0, 0);
@@ -129,6 +149,13 @@ void RomCell::setMissing(bool missing) {
                                         : Visibility::GONE);
 }
 
+void RomCell::setFetching(bool fetching) {
+    const bool show = fetching && !coverShown;
+    fetchingLayer->setVisibility(show ? Visibility::VISIBLE : Visibility::GONE);
+    // The controller and the name move up, clear of the spinner.
+    generic->setPaddingBottom(show ? 64 : 16);
+}
+
 void RomCell::loadCover(const std::string& path) {
     if (useCachedCover(path))
         return;
@@ -174,6 +201,7 @@ void RomCell::setCoverTexture(int texture) {
     image->innerSetImage(texture);
     image->setVisibility(Visibility::VISIBLE);
     generic->setVisibility(Visibility::GONE);
+    fetchingLayer->setVisibility(Visibility::GONE);
     coverShown = true;
 }
 

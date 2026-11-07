@@ -24,6 +24,9 @@ class RomCell : public brls::Box {
     // Dims the cover with a "not on the SD card" layer (the carousel owns
     // the cell's alpha, so it cannot be used for this).
     void setMissing(bool missing);
+    // A spinner and "Fetching cover..." over the generic cover while its
+    // cover downloads. Hidden once a cover is shown.
+    void setFetching(bool fetching);
 
     // Shows the cover at this path; decoded off the UI thread.
     void loadCover(const std::string& path);
@@ -45,6 +48,7 @@ class RomCell : public brls::Box {
 
     brls::Image* image = nullptr;
     brls::Box* generic = nullptr;
+    brls::Box* fetchingLayer = nullptr;
     brls::Box* missingLayer = nullptr;
     brls::Image* star = nullptr;
 

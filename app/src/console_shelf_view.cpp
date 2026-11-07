@@ -285,6 +285,7 @@ ConsoleShelfView::ConsoleShelfView(const emu::Console& console,
 
 ConsoleShelfView::~ConsoleShelfView() {
     *alive = false;
+    fetchingIndex = -1; // the cells go with the view
     stopCovers();
 }
 
@@ -344,6 +345,7 @@ void ConsoleShelfView::showGames(std::vector<Game> found) {
 
     carousel->clearViews();
     cells.clear();
+    fetchingIndex = -1;
     games = std::move(found);
 
     const bool none = games.empty();
@@ -543,6 +545,18 @@ void ConsoleShelfView::stopCovers() {
     if (covers)
         covers->stop.store(true);
     covers.reset();
+    showFetching(-1);
+}
+
+// UI thread. -1 hides it.
+void ConsoleShelfView::showFetching(int index) {
+    if (fetchingIndex == index)
+        return;
+    if (fetchingIndex >= 0 && fetchingIndex < (int)cells.size())
+        cells[fetchingIndex]->setFetching(false);
+    fetchingIndex = index;
+    if (index >= 0 && index < (int)cells.size())
+        cells[index]->setFetching(true);
 }
 
 void ConsoleShelfView::fetchCovers(int first) {
@@ -595,6 +609,14 @@ void ConsoleShelfView::fetchOneCover(std::shared_ptr<CoverQueue> queue) {
     }
 
     const CoverQueue::Job job = queue->jobs[queue->next];
+    // Spinner on this game's cell. Posted before the end below, and syncs
+    // run in order, so it cannot outlive the task.
+    brls::sync([queue, job] {
+        if (*queue->alive && !queue->stop.load() &&
+            queue->view->covers == queue &&
+            queue->generation == queue->view->generation)
+            queue->view->showFetching((int)job.index);
+    });
     const Progress keepGoing = [queue](uint64_t, uint64_t) {
         return !queue->stop.load();
     };
@@ -644,6 +666,9 @@ void ConsoleShelfView::fetchOneCover(std::shared_ptr<CoverQueue> queue) {
     brls::sync([queue, job, found, transient] {
         if (!*queue->alive)
             return;
+        if (queue->view->covers == queue &&
+            queue->view->fetchingIndex == (int)job.index)
+            queue->view->showFetching(-1);
         if (found)
             queue->view->coverArrived(queue->generation, job.index, job.path);
         if (transient)
