@@ -111,6 +111,9 @@
                 lineTop="1px"/>
                 
             <brls:BooleanCell
+                id="show_metrics"/>
+
+            <brls:BooleanCell
                 id="debug"/>
                 
             <brls:BooleanCell

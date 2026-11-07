@@ -378,6 +378,9 @@ void StreamingView::draw(NVGcontext* vg, float x, float y, float width,
 
     }
 
+    if (Settings::instance().show_metrics())
+        drawMetrics(vg, width);
+
     if (draw_stats) {
         // The stats only change a few times a second; formatting them and
         // laying the text out twice (blurred shadow + text) every frame cost
@@ -411,6 +414,44 @@ void StreamingView::draw(NVGcontext* vg, float x, float y, float width,
     Box::draw(vg, x, y, width, height, style, ctx);
 }
 
+// Glass-to-glass estimate: half the round trip, then receive, decode, the
+// frames waiting in the queue and rendering. `parts` gets {network, queue}.
+float StreamingView::estimatedLatencyMs(float* parts) {
+    auto stats = session->session_stats();
+    uint32_t rtt = 0, rttVariance = 0;
+    const bool hasRtt = LiGetEstimatedRttInfo(&rtt, &rttVariance);
+    const auto& ds = stats->video_decode_stats;
+    const auto& rs = stats->video_render_stats;
+    const float networkMs = hasRtt ? rtt / 2.0f : 0.0f;
+    const float queueMs =
+        AVFrameHolder::instance().getFrameQueueSize() *
+        (1000.0f / (float) std::max(session->stream_fps(), 1));
+    if (parts) {
+        parts[0] = networkMs;
+        parts[1] = queueMs;
+    }
+    return networkMs + ds.current_receive_time + ds.current_decoding_time +
+           queueMs + rs.rendering_time;
+}
+
+// The metrics chosen in Settings, refreshed four times a second.
+void StreamingView::drawMetrics(NVGcontext* vg, float width) {
+    const auto now = std::chrono::steady_clock::now();
+    if (metricsTime == std::chrono::steady_clock::time_point{} ||
+        now - metricsTime >= std::chrono::milliseconds(250)) {
+        const auto& ds = session->session_stats()->video_decode_stats;
+        const auto& rs = session->session_stats()->video_render_stats;
+        MetricsHud::Values values;
+        values.fps = rs.rendered_fps;
+        values.latencyMs = estimatedLatencyMs();
+        values.bitrateMbps = ds.current_bitrate_kbps / 1000.0f;
+        values.lossPercent = ds.current_loss_percent;
+        metricsItems = MetricsHud::items(values);
+        metricsTime = now;
+    }
+    MetricsHud::draw(vg, 0, 0, width, getHeight(), metricsItems);
+}
+
 std::string StreamingView::buildStatsText() {
     auto stats = session->session_stats();
 
@@ -438,13 +479,9 @@ std::string StreamingView::buildStatsText() {
     const bool hasRtt = LiGetEstimatedRttInfo(&rtt, &rttVariance);
     const auto& ds = stats->video_decode_stats;
     const auto& rs = stats->video_render_stats;
-    const float networkMs = hasRtt ? rtt / 2.0f : 0.0f;
-    const float queueMs =
-        AVFrameHolder::instance().getFrameQueueSize() *
-        (1000.0f / (float) std::max(session->stream_fps(), 1));
-    const float totalMs = networkMs + ds.current_receive_time +
-                          ds.current_decoding_time + queueMs +
-                          rs.rendering_time;
+    float parts[2];
+    const float totalMs = estimatedLatencyMs(parts);
+    const float networkMs = parts[0], queueMs = parts[1];
     if (hasRtt) {
         statistics += fmt::format("Network RTT: {} ms (variance {} ms)\n",
                                   rtt, rttVariance);

@@ -12,6 +12,7 @@
 #include "loading_overlay.hpp"
 #include <Settings.hpp>
 #include <borealis.hpp>
+#include "metrics_hud.hpp"
 #include <chrono>
 #include <optional>
 #include "GameStreamClient.hpp"
@@ -58,6 +59,10 @@ class StreamingView : public brls::Box {
     void onWindowFocusChanged(bool focused);
 
     std::string buildStatsText();
+    void drawMetrics(NVGcontext* vg, float width);
+    float estimatedLatencyMs(float* parts = nullptr);
+    std::vector<MetricsHud::Item> metricsItems;
+    std::chrono::steady_clock::time_point metricsTime{};
     std::string statsText;
     std::chrono::steady_clock::time_point statsTextTime{};
     float statsBounds[4] = {0, 0, 0, 0};

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "FFmpegVideoDecoder.hpp"
 #include "AVFrameHolder.hpp"
 #include "FFmpegVideoDecoderPlatformHelpers.hpp"
@@ -433,6 +434,8 @@ int FFmpegVideoDecoder::submit_decode_unit(PDECODE_UNIT decode_unit) {
             // dropped frame
             m_video_decode_stats_progress.network_dropped_frames +=
                 decode_unit->frameNumber - (m_last_frame + 1);
+            m_video_decode_stats_progress.current_dropped_frames +=
+                decode_unit->frameNumber - (m_last_frame + 1);
             m_video_decode_stats_progress.total_frames +=
                 decode_unit->frameNumber - (m_last_frame + 1);
             m_last_frame = decode_unit->frameNumber;
@@ -440,6 +443,8 @@ int FFmpegVideoDecoder::submit_decode_unit(PDECODE_UNIT decode_unit) {
 
         m_video_decode_stats_progress.current_received_frames++;
         m_video_decode_stats_progress.total_frames++;
+        m_video_decode_stats_progress.current_received_bytes +=
+            static_cast<uint64_t>(decode_unit->fullLength);
 
 
         if (!m_decoder_ready || m_decoder_context == nullptr) {
@@ -517,6 +522,18 @@ int FFmpegVideoDecoder::submit_decode_unit(PDECODE_UNIT decode_unit) {
                         (float)m_video_decode_stats_cache.current_decoded_frames /
                         ((float)(now - m_video_decode_stats_cache.measurement_start_timestamp) /
                     1000);
+
+                const uint64_t windowMs = std::max<uint64_t>(
+                    now - m_video_decode_stats_cache.measurement_start_timestamp, 1);
+                // bytes * 8 / ms = kbit/s
+                m_video_decode_stats_cache.current_bitrate_kbps =
+                    (float)m_video_decode_stats_cache.current_received_bytes * 8.0f /
+                    (float)windowMs;
+                m_video_decode_stats_cache.current_loss_percent =
+                    m_video_decode_stats_cache.total_frames > 0
+                        ? 100.0f * (float)m_video_decode_stats_cache.current_dropped_frames /
+                              (float)m_video_decode_stats_cache.total_frames
+                        : 0.0f;
 
                 m_video_decode_stats_cache.current_receive_time = (float) m_video_decode_stats_cache.current_reassembly_time /
                                                                   (float) m_video_decode_stats_cache.current_received_frames;
