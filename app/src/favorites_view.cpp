@@ -139,8 +139,11 @@ void FavoritesView::setup(int hostIndex, const std::string& console) {
     empty->setText("favorites/empty"_i18n);
     addView(empty);
 
-    // L and R change the PC; hidden from the footer with a single PC.
-    registerAction("favorites/change_pc"_i18n, BUTTON_RB, [this](View*) {
+    // L and R change the PC (or console); hidden from the footer with a
+    // single source. The PC-only wording stays when there is no console.
+    registerAction(consoleFilters.empty() ? "favorites/change_pc"_i18n
+                                          : "favorites/change_filter"_i18n,
+                   BUTTON_RB, [this](View*) {
         stepFilter(1);
         return true;
     }, sources() < 2);
@@ -226,8 +229,10 @@ void FavoritesView::updateChips() {
                 if (status.state != GestureState::END)
                     return;
                 // Rebuilding deletes this chip: do it after the gesture.
-                brls::sync([this, hostIndex, console] {
-                    setFilter(hostIndex, console);
+                std::shared_ptr<bool> token = alive;
+                brls::sync([this, token, hostIndex, console] {
+                    if (*token)
+                        setFilter(hostIndex, console);
                 });
             }));
         chips->addView(chip);
@@ -295,7 +300,11 @@ void FavoritesView::rebuild(int selectIndex) {
                                  [this, index](View*) {
                                      // Rebuilding deletes this cell: do it
                                      // after the action returns.
-                                     brls::sync([this, index] { unstar(index); });
+                                     std::shared_ptr<bool> token = alive;
+                                     brls::sync([this, token, index] {
+                                         if (*token)
+                                             unstar(index);
+                                     });
                                      return true;
                                  });
 #if defined(PLATFORM_SWITCH)
@@ -350,8 +359,7 @@ void FavoritesView::rebuild(int selectIndex) {
 
         auto* cell = new RomCell(*console, entry.rom);
         cell->setFavorite(true);
-        if (entry.missing)
-            cell->setAlpha(0.4f);
+        cell->setMissing(entry.missing);
         if (entry.hasCover)
             cell->loadCover(cover);
         const int index = (int)entries.size();
@@ -371,7 +379,11 @@ void FavoritesView::rebuild(int selectIndex) {
         };
         cell->registerAction("app_list/unstar"_i18n, BUTTON_Y,
                              [this, index](View*) {
-                                 brls::sync([this, index] { unstar(index); });
+                                 std::shared_ptr<bool> token = alive;
+                                 brls::sync([this, token, index] {
+                                     if (*token)
+                                         unstar(index);
+                                 });
                                  return true;
                              });
         entries.push_back(std::move(entry));

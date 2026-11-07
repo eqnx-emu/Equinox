@@ -21,6 +21,9 @@ class RomCell : public brls::Box {
     RomCell(const emu::Console& console, const emu::RomEntry& rom);
 
     void setFavorite(bool favorite);
+    // Dims the cover with a "not on the SD card" layer (the carousel owns
+    // the cell's alpha, so it cannot be used for this).
+    void setMissing(bool missing);
 
     // Shows the cover at this path; decoded off the UI thread.
     void loadCover(const std::string& path);
@@ -42,6 +45,7 @@ class RomCell : public brls::Box {
 
     brls::Image* image = nullptr;
     brls::Box* generic = nullptr;
+    brls::Box* missingLayer = nullptr;
     brls::Image* star = nullptr;
 
     void applyCover(const std::string& path,

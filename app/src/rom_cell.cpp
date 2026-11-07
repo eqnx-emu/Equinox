@@ -76,6 +76,30 @@ RomCell::RomCell(const emu::Console& console, const emu::RomEntry& rom)
     image->setVisibility(Visibility::GONE);
     addView(image);
 
+    // Over the cover, under the star: same look as AppCell's offline layer.
+    missingLayer = new Box(Axis::COLUMN);
+    missingLayer->setDetachedPosition(0, 0);
+    missingLayer->setSize(Size(kWidth, kHeight));
+    missingLayer->setJustifyContent(JustifyContent::CENTER);
+    missingLayer->setAlignItems(AlignItems::CENTER);
+    missingLayer->setPadding(16, 14, 16, 14);
+    missingLayer->setCornerRadius(kRadius);
+    missingLayer->setBackgroundColor(nvgRGBA(11, 14, 31, 190));
+    auto* missingIcon = new IconLabel();
+    missingIcon->setFontSize(40);
+    missingIcon->setText(""); // error
+    missingIcon->setTextColor(nvgRGB(157, 184, 255));
+    missingLayer->addView(missingIcon);
+    auto* missingText = new BoldLabel();
+    missingText->setFontSize(16);
+    missingText->setMarginTop(8);
+    missingText->setHorizontalAlign(HorizontalAlign::CENTER);
+    missingText->setTextColor(nvgRGB(238, 240, 250));
+    missingText->setText("favorites/rom_gone"_i18n);
+    missingLayer->addView(missingText);
+    missingLayer->setVisibility(Visibility::GONE);
+    addView(missingLayer);
+
     star = new Image();
     star->setDetachedPosition(kWidth - 36, 8);
     star->setSize(Size(28, 28));
@@ -98,6 +122,11 @@ RomCell::RomCell(const emu::Console& console, const emu::RomEntry& rom)
 
 void RomCell::setFavorite(bool favorite) {
     star->setVisibility(favorite ? Visibility::VISIBLE : Visibility::GONE);
+}
+
+void RomCell::setMissing(bool missing) {
+    missingLayer->setVisibility(missing ? Visibility::VISIBLE
+                                        : Visibility::GONE);
 }
 
 void RomCell::loadCover(const std::string& path) {

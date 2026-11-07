@@ -436,6 +436,7 @@
     "favorites": {
         "all": "All",
         "change_pc": "Change PC",
+        "change_filter": "Change filter",
         "empty": "No favorites yet. Star games in a library with Y.",
         "rom_gone": "not on the SD card"
     },
