@@ -178,9 +178,8 @@ bool crcOfZipEntry(std::ifstream& f, const ZipEntry& e, uint64_t fileSize, CrcSi
     f.seekg(static_cast<std::streamoff>(dataOffset));
     int rc = Z_OK;
     while (rc != Z_STREAM_END) {
-        if (zs.avail_in == 0) {
+        if (zs.avail_in == 0 && left > 0) {
             size_t want = static_cast<size_t>(std::min<uint64_t>(left, kChunk));
-            if (want == 0) break;
             f.read(reinterpret_cast<char*>(in.data()), static_cast<std::streamsize>(want));
             if (static_cast<size_t>(f.gcount()) != want) break;
             left -= want;
@@ -190,8 +189,15 @@ bool crcOfZipEntry(std::ifstream& f, const ZipEntry& e, uint64_t fileSize, CrcSi
         zs.next_out = out.data();
         zs.avail_out = static_cast<uInt>(out.size());
         rc = inflate(&zs, Z_NO_FLUSH);
-        if (rc != Z_OK && rc != Z_STREAM_END) break;
-        sink.feed(out.data(), out.size() - zs.avail_out);
+        const size_t produced = out.size() - zs.avail_out;
+        if (rc != Z_OK && rc != Z_STREAM_END && rc != Z_BUF_ERROR) break;
+        sink.feed(out.data(), produced);
+        // The last call can consume all the input and still leave output pending, so keep
+        // calling while inflate makes progress. No progress with no input left means the entry is cut.
+        if (rc == Z_BUF_ERROR || (produced == 0 && zs.avail_in == 0 && left == 0 && rc != Z_STREAM_END)) {
+            rc = Z_BUF_ERROR;
+            break;
+        }
     }
     inflateEnd(&zs);
     if (rc != Z_STREAM_END) {

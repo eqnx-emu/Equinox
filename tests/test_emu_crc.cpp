@@ -142,6 +142,25 @@ TEST_CASE("zip uses the rom entry") {
     fs::remove_all(d);
 }
 
+// Inflate only runs for entries with a copier header. These shapes compress to ~100 bytes yet
+// expand across several 64 KB output buffers, and with this zlib the last call ends with the
+// whole input consumed but output still pending.
+TEST_CASE("zip entry larger than the output buffer is fully inflated") {
+    fs::path d = tempDir();
+    struct Shape { size_t aa; size_t kib; };
+    for (Shape sh : {Shape{3, 128}, Shape{257, 64}, Shape{261, 128}, Shape{0, 512}}) {
+        std::string rom(sh.aa, 'ª');
+        rom.append(512 - sh.aa, 'ÿ');
+        rom.append(sh.kib * 1024, 'ÿ');
+        put(d / "big.zip", makeZip({{"game.smc", rom}}, true));
+        uint32_t crc = 0;
+        std::string err;
+        CHECK_MESSAGE(crcFor(d / "big.zip", crc, err), "shape " << sh.aa << "/" << sh.kib << ": " << err);
+        CHECK_MESSAGE(crc == crcOf(rom.substr(512)), "shape " << sh.aa << "/" << sh.kib);
+    }
+    fs::remove_all(d);
+}
+
 TEST_CASE("zip with copier header") {
     fs::path d = tempDir();
     uint32_t expected = crcOf(kBody);
