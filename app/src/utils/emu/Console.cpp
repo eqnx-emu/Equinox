@@ -36,13 +36,17 @@ ConsolePaths pathsFor(const Console& console, const std::string& root) {
     p.emulator = root + "/emulators/" + console.slug;
     p.runner = p.emulator + "/runner.bin";
     p.installed = p.emulator + "/installed.json";
+    p.snaps = root + "/snaps/" + console.slug;
+    p.titles = root + "/titles/" + console.slug;
+    p.meta = root + "/meta/" + console.slug;
     return p;
 }
 
 bool ensureFolders(const ConsolePaths& paths) {
     namespace fs = std::filesystem;
     bool ok = true;
-    for (const std::string* dir : {&paths.roms, &paths.saves, &paths.states, &paths.covers, &paths.emulator}) {
+    for (const std::string* dir : {&paths.roms, &paths.saves, &paths.states, &paths.covers, &paths.emulator,
+                                   &paths.snaps, &paths.titles, &paths.meta}) {
         std::error_code ec;
         fs::create_directories(fs::path(*dir), ec);
         if (!fs::is_directory(fs::path(*dir), ec)) ok = false;

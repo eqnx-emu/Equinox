@@ -20,6 +20,7 @@ struct Console {
 
 struct ConsolePaths {
     std::string roms, saves, states, covers, emulator, runner, installed;
+    std::string snaps, titles, meta;
 };
 
 const std::vector<Console>& consoles();

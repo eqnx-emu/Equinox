@@ -18,6 +18,9 @@ TEST_CASE("snes paths") {
     CHECK(p.emulator == "sdmc:/equinox/emulators/snes");
     CHECK(p.runner == "sdmc:/equinox/emulators/snes/runner.bin");
     CHECK(p.installed == "sdmc:/equinox/emulators/snes/installed.json");
+    CHECK(p.snaps == "sdmc:/equinox/snaps/snes");
+    CHECK(p.titles == "sdmc:/equinox/titles/snes");
+    CHECK(p.meta == "sdmc:/equinox/meta/snes");
 }
 
 TEST_CASE("console lookup") {
@@ -45,7 +48,7 @@ TEST_CASE("ensureFolders creates everything and is idempotent") {
     emu::ConsolePaths p = emu::pathsFor(*emu::findConsole("snes"), root.generic_string());
     CHECK(emu::ensureFolders(p));
     CHECK(emu::ensureFolders(p));
-    for (const std::string& d : {p.roms, p.saves, p.states, p.covers, p.emulator})
+    for (const std::string& d : {p.roms, p.saves, p.states, p.covers, p.emulator, p.snaps, p.titles, p.meta})
         CHECK(fs::is_directory(fs::path(d)));
 
     fs::remove_all(root, ec);
