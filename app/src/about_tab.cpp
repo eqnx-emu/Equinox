@@ -34,6 +34,16 @@ AboutTab::AboutTab() {
         return true;
     });
 
+    std::string coffeeLink = "https://buymeacoffee.com/luizfbalves";
+    coffee->addGestureRecognizer(new TapGestureRecognizer(coffee));
+    coffee->title->setText("about/link_coffee"_i18n);
+    coffee->subtitle->setText("buymeacoffee.com/luizfbalves");
+    coffee->image->setImageFromRes("img/links/buymeacoffee.png");
+    coffee->registerClickAction([coffeeLink](View* view) {
+        openWebpage(coffeeLink);
+        return true;
+    });
+
     std::string originalLink = "https://github.com/XITRIX/Moonlight-Switch";
     original->addGestureRecognizer(new TapGestureRecognizer(original));
     original->title->setText("about/link_original"_i18n);

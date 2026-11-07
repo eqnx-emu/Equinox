@@ -62,6 +62,47 @@
                 id="github"/>
 
             <brls:Header
+                title="@i18n/about/support_title"
+                paddingTop="60"/>
+
+            <brls:Box
+                width="auto"
+                height="auto"
+                axis="row"
+                alignItems="center"
+                marginTop="8">
+
+                <brls:Image
+                    width="180"
+                    height="180"
+                    cornerRadius="12"
+                    image="@res/img/links/buymeacoffee_qr.png"
+                    scalingType="fit"/>
+
+                <brls:Box
+                    width="auto"
+                    height="auto"
+                    grow="1"
+                    axis="column"
+                    alignItems="stretch"
+                    marginLeft="24">
+
+                    <brls:Label
+                        width="auto"
+                        height="auto"
+                        fontSize="15"
+                        textColor="@theme/brls/header/subtitle"
+                        text="@i18n/about/support_text"
+                        marginBottom="12"/>
+
+                    <LinkCell
+                        id="coffee"/>
+
+                </brls:Box>
+
+            </brls:Box>
+
+            <brls:Header
                 title="@i18n/about/thanks"
                 paddingTop="60"/>
 
