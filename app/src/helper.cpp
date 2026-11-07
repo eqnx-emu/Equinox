@@ -63,3 +63,7 @@ brls::Dialog* createLoadingDialog(
     dialog->setHideHighlight(!onCancel);
     return dialog;
 }
+
+bool isHiddenApp(const std::string& name) {
+    return name == "Solstice Network Test";
+}

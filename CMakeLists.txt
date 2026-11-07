@@ -48,7 +48,7 @@ set(VERSION_MINOR "5")
 set(VERSION_ALTER "8")
 set(VERSION_BUILD "7")
 set(PACKAGE_NAME "ru.xitrix.Moonlight")
-set(PROJECT_AUTHOR "XITRIX")
+set(PROJECT_AUTHOR "luizfbalves")
 # Name shown in the Switch homebrew menu. The build target stays "Moonlight".
 set(APP_DISPLAY_NAME "Equinox")
 set(PROJECT_ICON ${CMAKE_CURRENT_SOURCE_DIR}/resources/img/moonlight_icon.jpg)

@@ -8,7 +8,6 @@
 #include "app_list_view.hpp"
 #include "BoxArtManager.hpp"
 #include "helper.hpp"
-#include "main_tabs_view.hpp"
 
 #include <borealis/extern/nanovg/stb_image.h>
 
@@ -209,7 +208,10 @@ void AppListView::updateAppList() {
                         blockInput(false);
 
                         if (result.isSuccess()) {
-                            AppInfoList sortedApps = result.value();
+                            AppInfoList sortedApps;
+                            for (const AppInfo& app : result.value())
+                                if (!isHiddenApp(app.name))
+                                    sortedApps.push_back(app);
                             std::sort(
                                 sortedApps.begin(), sortedApps.end(),
                                 [this, currentGame](const AppInfo& l, const AppInfo& r) {
@@ -438,7 +440,6 @@ void AppListView::updateFavoriteAction(AppCell* cell, Host host, const AppInfo& 
                 App thisApp{app.name, app.app_id};
                 Settings::instance().add_favorite(host, thisApp);
             }
-            MainTabs::getInstanse()->getFavoriteTab()->setRefreshNeeded();
             this->updateFavoriteAction(cell, host, app);
             return true;
         });

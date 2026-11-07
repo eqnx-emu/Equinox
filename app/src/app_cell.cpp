@@ -7,6 +7,7 @@
 
 #include "app_cell.hpp"
 #include "BoxArtManager.hpp"
+#include "bold_label.hpp"
 #include "Settings.hpp"
 #include "streaming_view.hpp"
 
@@ -138,6 +139,37 @@ void AppCell::setCoverTexture(int texture) {
         TextureCache::instance().removeCache(image->getTexture());
     image->setFreeTexture(false);
     image->innerSetImage(texture);
+}
+
+void AppCell::setOffline(bool offline) {
+    if (!offlineLayer) {
+        if (!offline)
+            return;
+        offlineLayer = new Box(Axis::COLUMN);
+        offlineLayer->setDetachedPosition(0, 0);
+        offlineLayer->setSize(Size(getWidth(), getHeight()));
+        offlineLayer->setJustifyContent(JustifyContent::CENTER);
+        offlineLayer->setAlignItems(AlignItems::CENTER);
+        offlineLayer->setCornerRadius(12);
+        offlineLayer->setBackgroundColor(nvgRGBA(11, 14, 31, 190));
+
+        auto* icon = new IconLabel();
+        icon->setFontSize(40);
+        icon->setText(""); // power_settings_new
+        icon->setTextColor(nvgRGB(157, 184, 255));
+        offlineLayer->addView(icon);
+
+        auto* text = new BoldLabel();
+        text->setFontSize(16);
+        text->setMarginTop(8);
+        text->setHorizontalAlign(HorizontalAlign::CENTER);
+        text->setTextColor(nvgRGB(238, 240, 250));
+        text->setText("hosts/status_asleep"_i18n);
+        offlineLayer->addView(text);
+        addView(offlineLayer);
+    }
+    offlineLayer->setVisibility(offline ? Visibility::VISIBLE
+                                        : Visibility::GONE);
 }
 
 void AppCell::setCaptionVisible(bool visible) {

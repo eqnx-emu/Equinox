@@ -27,6 +27,8 @@ class AppCell : public Box {
     BRLS_BIND(Box, caption, "caption");
 
     void setFavorite(bool favorite);
+    // Dim the cover and say the PC is off.
+    void setOffline(bool offline);
     // Hide the name bar on the cover (the library shows the name below).
     void setCaptionVisible(bool visible);
 
@@ -42,6 +44,7 @@ class AppCell : public Box {
     Host host;
     int appId;
     bool coverPending = false;
+    Box* offlineLayer = nullptr;
 
     // Covers are decoded off the UI thread; only the upload runs on it.
     void loadCover();

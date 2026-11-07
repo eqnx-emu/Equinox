@@ -23,3 +23,7 @@ brls::Dialog* createLoadingDialog(
     const std::string& text,
     const std::function<void(void)>& onCancel = nullptr,
     brls::Label** textLabel = nullptr);
+
+// Apps the host lists that are not games (Solstice's network test): hidden
+// from the library, favorites and the game counts.
+bool isHiddenApp(const std::string& name);

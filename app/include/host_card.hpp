@@ -2,9 +2,9 @@
 //  host_card.hpp
 //  Equinox
 //
-//  One paired PC on the home screen: a monitor that shows the host state at
-//  a glance, the name, the status and the address (or the running game).
-//  The whole card is the action; the footer hint names it.
+//  One paired PC on the home shelf: name, status, the address (or the
+//  running game) and what the library holds. A opens its options on the
+//  home screen; the card also runs them.
 //
 
 #pragma once
@@ -14,6 +14,7 @@
 #include <Settings.hpp>
 #include <borealis.hpp>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -55,6 +56,27 @@ class HostCard : public PressableBox {
     BRLS_BIND(brls::Label, detail, "detail");
     BRLS_BIND(brls::Label, info, "info");
 
+    // A on the card (after the press animation).
+    std::function<void()> onEnter;
+    // State, running game or library facts changed.
+    std::function<void()> onChanged;
+
+    const Host& getHost() const { return host; }
+    HostCardState getState() const { return state; }
+    const AppInfo& getRunningApp() const { return runningApp; }
+    std::string statusText() { return status->getFullText(); }
+    std::string detailText() { return detail->getFullText(); }
+    std::string infoText() { return info->getFullText(); }
+    NVGcolor statusColor() const;
+
+    void openLibrary();
+    void resumeRunningApp();
+    void quitRunningApp();
+    void wake();
+    void openCapacityTest();
+    void rename();
+    void remove();
+
   private:
     Host host;
     // Last known library facts; kept while the PC is asleep or away.
@@ -71,9 +93,8 @@ class HostCard : public PressableBox {
     uint64_t wakeRequestGeneration = 0;
     uint64_t canceledWakeRequestGeneration = 0;
 
-    // The Hosts tab is rebuilt every time it is shown. Cards remember what
-    // they last saw for a short while, so flipping tabs doesn't query every
-    // PC again.
+    // The home shelf is rebuilt when PCs change. Cards remember what they
+    // last saw for a short while, so a rebuild doesn't query every PC again.
     struct Snapshot {
         HostCardState state;
         AppInfo runningApp;
@@ -88,14 +109,13 @@ class HostCard : public PressableBox {
     bool restoreSnapshot();
 
     void applyState(HostCardState newState);
-    void activate();
-    void openLibrary();
-    void resumeRunningApp();
-    void wake();
-    void openOptions();
+    void changed() {
+        if (onChanged)
+            onChanged();
+    }
 };
 
-// Last card of the grid: opens the screen that finds or adds a PC.
+// Last card of the PC shelf: opens the screen that finds or adds a PC.
 class AddHostCard : public PressableBox {
   public:
     // primary: no PC is paired yet, so this is the main action on screen.

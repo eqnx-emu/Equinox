@@ -15,7 +15,7 @@
 #include "helper.hpp"
 #include "button_selecting_dialog.hpp"
 #include "mapping_layout_editor.hpp"
-#include "main_tabs_view.hpp"
+#include "home_view.hpp"
 #include "grid_view.hpp"
 #include "pressable_box.hpp"
 #include "bold_label.hpp"
@@ -136,7 +136,7 @@ void SettingsTab::updateBitrateHints() {
     updateQuickSettings();
 }
 
-SettingsTab::SettingsTab() {
+SettingsTab::SettingsTab(const std::string& group) {
     // Inflate the tab from the XML file
     this->inflateFromXMLRes("xml/tabs/settings.xml");
 
@@ -512,7 +512,7 @@ SettingsTab::SettingsTab() {
                                         .get_current_mapping_layout());
                             this->swapGame->setDetailText(currentLayout.title);
                         });
-                    MainTabs::presentWithHeader(this, editor);
+                    HomeView::presentWithHeader(this, editor);
                 }
             });
 
@@ -536,7 +536,7 @@ SettingsTab::SettingsTab() {
                                     this->swapGame->setDetailText(
                                         currentLayout.title);
                                 });
-                            MainTabs::presentWithHeader(this, editor);
+                            HomeView::presentWithHeader(this, editor);
                         }
                     });
                 return true;
@@ -821,6 +821,16 @@ SettingsTab::SettingsTab() {
     });
 
     setupGroups();
+
+    for (size_t i = 0; i < groups.size(); i++) {
+        if (groups[i].id != group)
+            continue;
+        directGroup = true;
+        menu->setVisibility(Visibility::GONE);
+        groups[i].content->setVisibility(Visibility::VISIBLE);
+        pageTitle->setText(groups[i].title);
+        break;
+    }
 }
 
 namespace {
@@ -1151,7 +1161,7 @@ void SettingsTab::setupGroups() {
         const size_t index = groups.size();
         const std::string title = brls::getStr(key + "/title");
         PressableBox* card = makeGroupCard(icon, title);
-        groups.push_back({card, content, title});
+        groups.push_back({card, content, title, id});
         grid->addView(card);
 
         card->registerClickAction([this, card, index](View* view) {
@@ -1160,6 +1170,8 @@ void SettingsTab::setupGroups() {
         });
         content->registerAction("hints/back"_i18n, BUTTON_B,
                                 [this, index](View* view) {
+                                    if (directGroup)
+                                        return false; // the frame closes the screen
                                     closeGroup(index);
                                     return true;
                                 });
