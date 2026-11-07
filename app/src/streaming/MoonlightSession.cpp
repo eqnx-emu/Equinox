@@ -1,5 +1,6 @@
 #include "MoonlightSession.hpp"
 #include "AVFrameHolder.hpp"
+#include <atomic>
 #include "GameStreamClient.hpp"
 #include "InputManager.hpp"
 #include "Settings.hpp"
@@ -84,9 +85,10 @@ void MoonlightSession::connection_stage_complete(int stage) {
 }
 
 // Set by connection_stage_failed, which runs on the thread inside
-// LiStartConnection; read there after it returns.
-static thread_local int s_failed_stage = -1;
-static thread_local int s_failed_error = 0;
+// LiStartConnection; read there after it returns. One start at a time.
+// Not thread_local: on Switch it crashes in the pool threads.
+static std::atomic<int> s_failed_stage{-1};
+static std::atomic<int> s_failed_error{0};
 
 void MoonlightSession::connection_stage_failed(int stage, int error_code) {
     brls::Logger::error("MoonlightSession: Failed: {} with error code: {}", stages[stage], error_code);
@@ -406,11 +408,11 @@ void MoonlightSession::start(ServerCallback<bool> callback, bool is_sunshine) {
                         if (s_failed_stage >= 0) {
                             char ports[128] = {};
                             LiStringifyPortFlags(
-                                LiGetPortFlagsFromStage(s_failed_stage), ", ",
+                                LiGetPortFlagsFromStage(s_failed_stage.load()), ", ",
                                 ports, sizeof(ports));
                             error = brls::getStr("error/stream_start_stage",
-                                                 LiGetStageName(s_failed_stage),
-                                                 s_failed_error);
+                                                 LiGetStageName(s_failed_stage.load()),
+                                                 s_failed_error.load());
                             if (ports[0])
                                 error += "\n" + brls::getStr(
                                                      "error/stream_start_ports",

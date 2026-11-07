@@ -54,8 +54,11 @@ inline brls::ControllerButton mapped_game_button(const KeyMappingLayout& layout,
     return out;
 }
 
-// Number of built-in layouts that precede the user-created ones
-constexpr int BASE_MAPPING_LAYOUTS_COUNT = 3;
+// Number of built-in layouts that precede the user-created ones: Switch and
+// Xbox. The A/B and X/Y swap is a separate setting.
+constexpr int BASE_MAPPING_LAYOUTS_COUNT = 2;
+// Saved with the settings; bump when the built-in layouts change.
+constexpr int MAPPING_LAYOUTS_SCHEME = 2;
 
 struct KeyComboOptions {
     int holdTime;
