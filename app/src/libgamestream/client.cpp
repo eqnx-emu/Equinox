@@ -31,7 +31,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <map>
 #include <sstream>
+#include <thread>
 
 #define CHANNEL_COUNT_STEREO 2
 #define CHANNEL_COUNT_51_SURROUND 6
@@ -228,15 +230,22 @@ static int load_server_status(PSERVER_DATA server) {
 }
 
 // Per thread: requests to several PCs run at once, each sets its own error.
-static thread_local std::string _gs_error;
+// Not thread_local: on Switch it crashes in the pool threads.
+static std::mutex s_gs_error_mutex;
+static std::map<std::thread::id, std::string> s_gs_error;
 
-void gs_set_error(std::string error) { _gs_error = error; }
+void gs_set_error(std::string error) {
+    std::lock_guard<std::mutex> lock(s_gs_error_mutex);
+    s_gs_error[std::this_thread::get_id()] = std::move(error);
+}
 
 std::string gs_error() {
-    if (_gs_error.empty()) {
+    std::lock_guard<std::mutex> lock(s_gs_error_mutex);
+    auto it = s_gs_error.find(std::this_thread::get_id());
+    if (it == s_gs_error.end() || it->second.empty()) {
         return "Unknown error...";
     }
-    return _gs_error;
+    return it->second;
 }
 
 int gs_unpair(PSERVER_DATA server) {
@@ -274,10 +283,9 @@ static int gs_pair_validate(Data& data, std::string* result) {
 // Bumped by each pairing. A cancelled one may still be waiting when the user
 // tries again; when it fails it must not unpair the newer one.
 static std::atomic<uint64_t> s_pair_generation{0};
-static thread_local uint64_t t_pair_generation = 0;
 
-static int gs_pair_cleanup(int ret, PSERVER_DATA server, std::string* result) {
-    if (ret != GS_OK && t_pair_generation == s_pair_generation.load()) {
+static int gs_pair_cleanup(int ret, PSERVER_DATA server, uint64_t generation) {
+    if (ret != GS_OK && generation == s_pair_generation.load()) {
         gs_unpair(server);
     }
     return ret;
@@ -293,7 +301,7 @@ int gs_pair(PSERVER_DATA server, char* pin) {
         gs_set_error("Already paired");
         return GS_WRONG_STATE;
     }
-    t_pair_generation = ++s_pair_generation;
+    const uint64_t generation = ++s_pair_generation;
 
     if (server->currentGame != 0) {
         gs_set_error(
@@ -320,15 +328,15 @@ int gs_pair(PSERVER_DATA server, char* pin) {
              CryptoManager::cert_data().hex().bytes());
 
     if ((ret = http_request(url, &data, HTTPRequestTimeoutLong)) != GS_OK) {
-        return gs_pair_cleanup(ret, server, &result);
+        return gs_pair_cleanup(ret, server, generation);
     }
 
     if ((ret = gs_pair_validate(data, &result) != GS_OK)) {
-        return gs_pair_cleanup(ret, server, &result);
+        return gs_pair_cleanup(ret, server, generation);
     }
 
     if ((ret = xml_search(data, "plaincert", &result)) != GS_OK) {
-        return gs_pair_cleanup(ret, server, &result);
+        return gs_pair_cleanup(ret, server, generation);
     }
 
     brls::Logger::info("Client: Start pairing stage #2");
@@ -360,16 +368,16 @@ int gs_pair(PSERVER_DATA server, char* pin) {
         encryptedChallenge.hex().bytes());
 
     if ((ret = http_request(url, &data, HTTPRequestTimeoutLong)) != GS_OK) {
-        return gs_pair_cleanup(ret, server, &result);
+        return gs_pair_cleanup(ret, server, generation);
     }
 
     if ((ret = gs_pair_validate(data, &result) != GS_OK)) {
-        return gs_pair_cleanup(ret, server, &result);
+        return gs_pair_cleanup(ret, server, generation);
     }
 
     if (xml_search(data, "challengeresponse", &result) != GS_OK) {
         ret = GS_INVALID;
-        return gs_pair_cleanup(ret, server, &result);
+        return gs_pair_cleanup(ret, server, generation);
     }
 
     brls::Logger::info("Client: Start pairing stage #3");
@@ -409,16 +417,16 @@ int gs_pair(PSERVER_DATA server, char* pin) {
         challengeRespEncrypted.hex().bytes());
 
     if ((ret = http_request(url, &data, HTTPRequestTimeoutLong)) != GS_OK) {
-        return gs_pair_cleanup(ret, server, &result);
+        return gs_pair_cleanup(ret, server, generation);
     }
 
     if ((ret = gs_pair_validate(data, &result) != GS_OK)) {
-        return gs_pair_cleanup(ret, server, &result);
+        return gs_pair_cleanup(ret, server, generation);
     }
 
     if (xml_search(data, "pairingsecret", &result) != GS_OK) {
         ret = GS_INVALID;
-        return gs_pair_cleanup(ret, server, &result);
+        return gs_pair_cleanup(ret, server, generation);
     }
 
     brls::Logger::info("Client: Start pairing stage #4");
@@ -432,7 +440,7 @@ int gs_pair(PSERVER_DATA server, char* pin) {
                                          plainCert.hex_to_bytes())) {
         gs_set_error("MITM attack detected");
         ret = GS_FAILED;
-        return gs_pair_cleanup(ret, server, &result);
+        return gs_pair_cleanup(ret, server, generation);
     }
 
     Data serverChallengeRespHashInput =
@@ -461,11 +469,11 @@ int gs_pair(PSERVER_DATA server, char* pin) {
         unique_id.c_str(),
         clientPairingSecret.hex().bytes());
     if ((ret = http_request(url, &data, HTTPRequestTimeoutLong)) != GS_OK) {
-        return gs_pair_cleanup(ret, server, &result);
+        return gs_pair_cleanup(ret, server, generation);
     }
 
     if ((ret = gs_pair_validate(data, &result) != GS_OK)) {
-        return gs_pair_cleanup(ret, server, &result);
+        return gs_pair_cleanup(ret, server, generation);
     }
 
     brls::Logger::info("Client: Start pairing stage #5");
@@ -476,16 +484,16 @@ int gs_pair(PSERVER_DATA server, char* pin) {
         "pair?uniqueid=%s&devicename=roth&updateState=1&phrase=pairchallenge",
         server->serverInfo.address, server->httpsPort, unique_id.c_str());
     if ((ret = http_request(url, &data, HTTPRequestTimeoutLong)) != GS_OK) {
-        return gs_pair_cleanup(ret, server, &result);
+        return gs_pair_cleanup(ret, server, generation);
     }
 
     if ((ret = gs_pair_validate(data, &result) != GS_OK)) {
-        return gs_pair_cleanup(ret, server, &result);
+        return gs_pair_cleanup(ret, server, generation);
     }
 
     server->paired = true;
 
-    return gs_pair_cleanup(ret, server, &result);
+    return gs_pair_cleanup(ret, server, generation);
 }
 
 int gs_applist(PSERVER_DATA server, PAPP_LIST* list) {
