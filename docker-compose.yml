@@ -15,6 +15,8 @@ services:
     environment:
       JOBS: ${JOBS:-}
       BUILD_TYPE: ${BUILD_TYPE:-Release}
+      EQUINOX_SS_DEVID:
+      EQUINOX_SS_DEVPASSWORD:
     # Strip CRs so the script also runs from a Windows checkout.
     command: ["bash", "-c", "sed 's/\r$//' docker/switch.sh | bash"]
 

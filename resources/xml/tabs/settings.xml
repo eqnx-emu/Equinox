@@ -301,7 +301,53 @@
                 visibility="gone">
 
                 <brls:Header
-                    title="@i18n/settings/ingame"/>
+                    title="@i18n/settings/interface"/>
+
+                <brls:BooleanCell
+                    id="reduce_motion"/>
+
+                <brls:Label
+                    id="reduce_motion_note"
+                    width="auto"
+                    height="auto"
+                    fontSize="15"
+                    marginLeft="16"
+                    marginRight="16"
+                    marginTop="8"
+                    marginBottom="8"/>
+
+                <brls:Box
+                    id="screenscraper_section"
+                    width="auto"
+                    height="auto"
+                    axis="column"
+                    alignItems="stretch">
+
+                    <brls:Header
+                        title="@i18n/settings/screenscraper"
+                        paddingTop="60"/>
+
+                    <brls:DetailCell
+                        id="screenscraper_user"/>
+
+                    <brls:DetailCell
+                        id="screenscraper_password"/>
+
+                    <brls:Label
+                        id="screenscraper_note"
+                        width="auto"
+                        height="auto"
+                        fontSize="15"
+                        marginLeft="16"
+                        marginRight="16"
+                        marginTop="8"
+                        marginBottom="8"/>
+
+                </brls:Box>
+
+                <brls:Header
+                    title="@i18n/settings/ingame"
+                    paddingTop="60"/>
 
                 <brls:BooleanCell
                     id="show_metrics"/>

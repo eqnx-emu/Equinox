@@ -1,0 +1,405 @@
+//
+//  game_row_cell.cpp
+//  Equinox
+//
+
+#include "game_row_cell.hpp"
+
+#if defined(PLATFORM_SWITCH)
+
+#include "Settings.hpp"
+#include "bold_label.hpp"
+#include "cartridge_art.hpp"
+
+#include <borealis/core/cache_helper.hpp>
+#include <borealis/extern/nanovg/stb_image.h>
+
+#include <algorithm>
+#include <cmath>
+
+using namespace brls;
+using namespace brls::literals;
+
+namespace {
+constexpr float kRowHeight = 48;
+constexpr float kCartridgeHeight = 216;
+constexpr int kHeightMs = 200;
+constexpr int kEntryMs = 250;
+constexpr int kFocusMs = 120;
+
+constexpr float kCartW = 240;
+constexpr float kCartH = 140;
+// Room above the cartridge for its ring (6) and the float (7).
+constexpr float kCartTop = 22;
+constexpr float kNameTop = 178;
+constexpr float kNameWidth = 320;
+constexpr float kFloatAmplitude = 7;
+constexpr float kFloatSeconds = 3.8f;
+constexpr float kTiltDegrees = 0.5f;
+
+constexpr float kThumbW = 48;
+constexpr float kThumbH = 34;
+constexpr float kThumbLeft = 8;
+constexpr float kRowRadius = 10;
+
+constexpr float kPi = 3.14159265358979f;
+
+// The cartridge shell, the one colour that is not the theme's.
+const NVGcolor kCartridgeBody = nvgRGB(0xB4, 0xB4, 0xBC);
+
+// material "file_download"
+const char* const kDownloadGlyph = "\xEE\x8B\x84";
+
+NVGcolor themeColor(const char* name) {
+    return Application::getTheme().getColor(name);
+}
+
+std::shared_ptr<unsigned char> decodeCover(const std::string& path, int& width,
+                                           int& height) {
+    int channels = 0;
+    unsigned char* px = stbi_load(path.c_str(), &width, &height, &channels, 4);
+    return std::shared_ptr<unsigned char>(px, [](unsigned char* p) {
+        if (p)
+            stbi_image_free(p);
+    });
+}
+} // namespace
+
+GameRowCell::GameRowCell(const emu::Console&, size_t index) : rowIndex(index) {
+    setFocusable(true);
+    setHeight(kRowHeight);
+    setHighlightCornerRadius(kRowRadius + 3);
+    setCornerRadius(kRowRadius);
+
+    // Only holds the cover's texture; drawn by this cell, never laid out.
+    texture = new Image();
+    texture->setVisibility(Visibility::GONE);
+    texture->setDetachedPosition(0, 0);
+    texture->setSize(Size(1, 1));
+    addView(texture);
+
+    nameLabel = new BoldLabel();
+    nameLabel->setSingleLine(true);
+    nameLabel->setAutoAnimate(false);
+    addView(nameLabel);
+
+    subLabel = new Label();
+    subLabel->setFontSize(14);
+    subLabel->setSingleLine(true);
+    subLabel->setAutoAnimate(false);
+    subLabel->setHorizontalAlign(HorizontalAlign::CENTER);
+    subLabel->setWidth(kNameWidth);
+    subLabel->setHeight(17);
+    subLabel->setMarginTop(2);
+    addView(subLabel);
+
+    yearLabel = new Label();
+    yearLabel->setFontSize(14);
+    yearLabel->setSingleLine(true);
+    yearLabel->setMarginLeft(12);
+    addView(yearLabel);
+
+    statusLabel = new Label();
+    statusLabel->setFontSize(14);
+    statusLabel->setSingleLine(true);
+    statusLabel->setMarginLeft(10);
+    addView(statusLabel);
+
+    downloadIcon = new IconLabel();
+    downloadIcon->setFontSize(18);
+    downloadIcon->setText(kDownloadGlyph);
+    downloadIcon->setMarginLeft(10);
+    addView(downloadIcon);
+
+    heightAnim.setTickCallback([this]() { setHeight(heightAnim.getValue()); });
+    heightAnim.setEndCallback([this](bool) {
+        setHeight(targetHeight);
+        setClipsToBounds(false);
+    });
+
+    applyColors();
+    applyLayout();
+    applyStatus();
+
+    addGestureRecognizer(new TapGestureRecognizer(this));
+    registerClickAction([this](View*) {
+        if (onPlay)
+            onPlay();
+        return true;
+    });
+    updateActionHint(BUTTON_A, "emu/play"_i18n);
+}
+
+bool GameRowCell::reduceMotion() const {
+    return Settings::instance().reduce_motion();
+}
+
+void GameRowCell::setGame(const std::string& name, const std::string& sub,
+                          const std::string& yearText) {
+    nameLabel->setText(name);
+    subLabel->setText(sub);
+    yearLabel->setText(yearText);
+}
+
+void GameRowCell::setDataState(bool data, std::optional<int> pct, bool queue) {
+    hasData = data;
+    percent = pct;
+    queued = queue;
+    applyStatus();
+}
+
+void GameRowCell::setLook(RowLook next, bool animate) {
+    if (next == look)
+        return;
+    look = next;
+    applyLayout();
+    applyStatus();
+
+    targetHeight = look == RowLook::Cartridge ? kCartridgeHeight : kRowHeight;
+    const float from = heightAnim.getValue();
+    if (animate && !reduceMotion() && from != targetHeight) {
+        heightAnim.reset(from);
+        heightAnim.addStep(targetHeight, kHeightMs,
+                           EasingFunction::quadraticOut);
+        setClipsToBounds(true);
+        heightAnim.start();
+    } else {
+        heightAnim.reset(targetHeight);
+        setHeight(targetHeight);
+        setClipsToBounds(false);
+    }
+
+    if (look != RowLook::Cartridge) {
+        entry.reset(1.0f);
+        return;
+    }
+    if (animate && !reduceMotion()) {
+        entry.reset(0.0f);
+        entry.addStep(1.0f, kEntryMs, EasingFunction::cubicOut);
+        entry.start();
+        floatStart = getCPUTimeUsec() + kEntryMs * 1000;
+    } else {
+        entry.reset(1.0f);
+        floatStart = getCPUTimeUsec();
+    }
+}
+
+void GameRowCell::applyLayout() {
+    const bool cartridge = look == RowLook::Cartridge;
+    const bool thumb = look == RowLook::Thumb;
+
+    // The cartridge draws its own ring; rows use the borealis highlight.
+    setHideHighlight(cartridge);
+    subLabel->setVisibility(cartridge ? Visibility::VISIBLE : Visibility::GONE);
+    yearLabel->setVisibility(thumb ? Visibility::VISIBLE : Visibility::GONE);
+
+    if (cartridge) {
+        setAxis(Axis::COLUMN);
+        setAlignItems(AlignItems::CENTER);
+        setJustifyContent(JustifyContent::FLEX_START);
+        setPadding(kNameTop, 0, 0, 0);
+        nameLabel->setFontSize(16);
+        nameLabel->setGrow(0);
+        nameLabel->setShrink(0);
+        nameLabel->setWidth(kNameWidth);
+        nameLabel->setHeight(20);
+        nameLabel->setMarginLeft(0);
+        nameLabel->setHorizontalAlign(HorizontalAlign::CENTER);
+        return;
+    }
+    setAxis(Axis::ROW);
+    setAlignItems(AlignItems::CENTER);
+    setJustifyContent(JustifyContent::FLEX_START);
+    if (thumb)
+        setPadding(4, 12, 4, kThumbLeft);
+    else
+        setPadding(0, 14, 0, 14);
+    nameLabel->setFontSize(15);
+    nameLabel->setGrow(1);
+    nameLabel->setShrink(1);
+    nameLabel->setWidth(View::AUTO);
+    nameLabel->setHeight(View::AUTO);
+    nameLabel->setMarginLeft(thumb ? kThumbW + 12 : 0);
+    nameLabel->setHorizontalAlign(HorizontalAlign::LEFT);
+}
+
+void GameRowCell::applyStatus() {
+    const bool inRow = look != RowLook::Cartridge;
+    std::string text;
+    if (percent)
+        text = std::to_string(*percent) + "%";
+    else if (queued)
+        text = "emu/queued"_i18n;
+    statusLabel->setText(text);
+    statusLabel->setVisibility(inRow && !text.empty() ? Visibility::VISIBLE
+                                                      : Visibility::GONE);
+    downloadIcon->setVisibility(inRow && !hasData && text.empty()
+                                    ? Visibility::VISIBLE
+                                    : Visibility::GONE);
+}
+
+void GameRowCell::applyColors() {
+    const NVGcolor muted = themeColor("equinox/muted");
+    subLabel->setTextColor(muted);
+    yearLabel->setTextColor(muted);
+    statusLabel->setTextColor(muted);
+    downloadIcon->setTextColor(muted);
+}
+
+void GameRowCell::willAppear(bool resetState) {
+    Box::willAppear(resetState);
+    applyColors();
+}
+
+void GameRowCell::onFocusGained() {
+    Box::onFocusGained();
+    if (reduceMotion()) {
+        focusAlpha.reset(1.0f);
+    } else {
+        focusAlpha.reset();
+        focusAlpha.addStep(1.0f, kFocusMs, EasingFunction::quadraticOut);
+        focusAlpha.start();
+    }
+    if (onFocused)
+        onFocused();
+}
+
+void GameRowCell::onFocusLost() {
+    Box::onFocusLost();
+    if (reduceMotion()) {
+        focusAlpha.reset(0.0f);
+    } else {
+        focusAlpha.reset();
+        focusAlpha.addStep(0.0f, kFocusMs, EasingFunction::quadraticOut);
+        focusAlpha.start();
+    }
+}
+
+void GameRowCell::setCover(const std::string& path) {
+    if (useCachedCover(path))
+        return;
+
+    ASYNC_RETAIN
+    brls::async([ASYNC_TOKEN, path]() {
+        int width = 0, height = 0;
+        auto pixels = decodeCover(path, width, height);
+        brls::sync([ASYNC_TOKEN, path, pixels, width, height]() {
+            ASYNC_RELEASE
+            applyCover(path, pixels, width, height);
+        });
+    });
+}
+
+void GameRowCell::applyCover(const std::string& path,
+                             std::shared_ptr<unsigned char> pixels, int width,
+                             int height) {
+    if (useCachedCover(path) || !pixels)
+        return;
+
+    const int tex = nvgCreateImageRGBA(Application::getNVGContext(), width,
+                                       height, 0, pixels.get());
+    if (tex <= 0)
+        return;
+    setCoverTexture(tex);
+    TextureCache::instance().addCache(path, tex);
+}
+
+bool GameRowCell::useCachedCover(const std::string& path) {
+    const int tex = TextureCache::instance().getCache(path);
+    if (tex <= 0)
+        return false;
+    setCoverTexture(tex);
+    return true;
+}
+
+// Same bookkeeping as RomCell: the cache owns the textures.
+void GameRowCell::setCoverTexture(int tex) {
+    if (texture->getTexture() > 0)
+        TextureCache::instance().removeCache(texture->getTexture());
+    texture->setFreeTexture(false);
+    texture->innerSetImage(tex);
+}
+
+void GameRowCell::draw(NVGcontext* vg, float x, float y, float width,
+                       float height, Style style, FrameContext* ctx) {
+    if (look == RowLook::Cartridge)
+        drawCartridgeLook(vg, x, y, width);
+    else if (look == RowLook::Thumb)
+        drawThumb(vg, x, y, height);
+    Box::draw(vg, x, y, width, height, style, ctx);
+}
+
+void GameRowCell::drawCartridgeLook(NVGcontext* vg, float x, float y,
+                                    float width) {
+    const bool still = reduceMotion();
+    const float appear = still ? 1.0f : entry.getValue();
+    const float seconds =
+        still ? 0.0f
+              : std::max<float>(0, (getCPUTimeUsec() - floatStart) / 1e6f);
+    const float phase = std::sin(2 * kPi * seconds / kFloatSeconds);
+    // 0 on the ground, 1 at the top of the float.
+    const float lift = (1 + phase) / 2;
+
+    const float cx = x + width / 2;
+    const float top = y + kCartTop;
+    const float groundY = top + kCartH + 8;
+    const float groundW = kCartW * 0.72f;
+    const float groundScale = still ? 1.0f : 1 - 0.18f * lift;
+    const float groundAlpha = still ? 0.55f : 0.55f - 0.25f * lift;
+
+    nvgSave(vg);
+    nvgGlobalAlpha(vg, appear);
+
+    nvgSave(vg);
+    nvgTranslate(vg, cx, groundY);
+    nvgScale(vg, groundScale, 1);
+    nvgBeginPath(vg);
+    nvgRect(vg, -groundW / 2 - 12, -18, groundW + 24, 36);
+    nvgFillPaint(vg, nvgBoxGradient(vg, -groundW / 2, -6, groundW, 12, 6, 8,
+                                    nvgRGBAf(0, 0, 0, groundAlpha),
+                                    nvgRGBAf(0, 0, 0, 0)));
+    nvgFill(vg);
+    nvgRestore(vg);
+
+    const float rise = (1 - appear) * 8;
+    const float bob = still ? 0.0f : -kFloatAmplitude * phase;
+    const float tilt = still ? 0.0f : kTiltDegrees * kPi / 180 * phase;
+    nvgTranslate(vg, cx, top + kCartH / 2 + rise + bob);
+    nvgRotate(vg, tilt);
+
+    int texW = 0, texH = 0;
+    const int tex = texture->getTexture();
+    if (tex > 0)
+        nvgImageSize(vg, tex, &texW, &texH);
+    drawCartridge(vg, -kCartW / 2, -kCartH / 2, kCartW, kCartH, tex, texW,
+                  texH, kCartridgeBody, themeColor("brls/highlight/color1"),
+                  themeColor("brls/background"), focusAlpha.getValue());
+    nvgRestore(vg);
+}
+
+void GameRowCell::drawThumb(NVGcontext* vg, float x, float y, float height) {
+    const float tx = x + kThumbLeft;
+    const float ty = y + (height - kThumbH) / 2;
+    const int tex = texture->getTexture();
+    int texW = 0, texH = 0;
+    if (tex > 0)
+        nvgImageSize(vg, tex, &texW, &texH);
+    if (texW <= 0 || texH <= 0) {
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, tx, ty, kThumbW, kThumbH, 3);
+        nvgFillColor(vg, themeColor("equinox/card_inner"));
+        nvgFill(vg);
+        return;
+    }
+    const float fit = std::min(kThumbW / texW, kThumbH / texH);
+    const float w = texW * fit;
+    const float h = texH * fit;
+    const float ix = tx + (kThumbW - w) / 2;
+    const float iy = ty + (kThumbH - h) / 2;
+    nvgBeginPath(vg);
+    nvgRect(vg, ix, iy, w, h);
+    nvgFillPaint(vg, nvgImagePattern(vg, ix, iy, w, h, 0, tex, 1));
+    nvgFill(vg);
+}
+
+#endif // PLATFORM_SWITCH

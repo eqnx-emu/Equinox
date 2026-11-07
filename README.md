@@ -30,6 +30,8 @@ Equinox is a game streaming client for the Nintendo Switch. It is built to pair 
 - **In-app updates.** Checks for new releases and installs them when Equinox runs as an NRO
   from the SD card.
 - **New look.** Dusk blue theme, sun amber accents and the Onest typeface.
+- **Super Nintendo games.** Play your own SNES ROMs from the SD card, on the same home
+  screen as your PCs. See [Super Nintendo](#super-nintendo).
 
 # Installing
 
@@ -70,6 +72,20 @@ accelerometer. Only player 1 is supported.
 ### In-game overlay
 Press − and + together, or hold Esc on a keyboard. The combination and hold time can be
 changed in Settings.
+
+## Super Nintendo
+
+Equinox can also run Super Nintendo games on the console itself, with
+[snes9x](https://github.com/luizfbalves/equinox-snes9x).
+
+1. On the home screen, open the **Add** card and pick **Super Nintendo**. Equinox
+   downloads the emulator to `sdmc:/equinox/emulators/snes/`.
+2. Copy your own game files (`.sfc`, `.smc` or `.zip`) to `sdmc:/equinox/roms/snes/`.
+3. Select the Super Nintendo card to see your games. Covers are fetched on their own.
+
+Saves and save states live in `sdmc:/equinox/saves/snes/` and `sdmc:/equinox/states/snes/`.
+Games can be added to Favorites like PC games. Removing the console keeps your games, saves
+and covers on the SD card. Equinox does not provide games or BIOS files.
 
 ## Forwarders
 
@@ -177,6 +193,9 @@ Equinox exists thanks to:
   [FFmpeg](https://github.com/averne/FFmpeg).
 - [Cooler3D](https://github.com/Cooler3Ds) for help with the deko3d renderer and performance.
 - The forwarder installer is adapted from [sphaira](https://github.com/ITotalJustice/sphaira).
+- Console icons are from the RetroSystem theme of
+  [libretro/retroarch-assets](https://github.com/libretro/retroarch-assets), licensed under
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 The Switch deko3d upscaling path includes AMD FidelityFX Super Resolution 1.0 EASU and RCAS
 code translated from the MIT-licensed

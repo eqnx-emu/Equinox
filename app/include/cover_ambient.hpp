@@ -24,6 +24,10 @@ class CoverAmbient {
 
     // Glows in the colours of this game's cover, once it is on disk.
     void select(const Host& host, int appId);
+    // Glows in the colours of the cover at this path. A missing or
+    // unreadable file fades the glow out; selecting it again once the file
+    // is there lights it.
+    void select(const std::string& coverPath);
     // Fades the glow out.
     void clear();
 
@@ -51,6 +55,9 @@ class CoverAmbient {
     // Cleared on destruction, so colours read in the background are dropped.
     std::shared_ptr<bool> alive = std::make_shared<bool>(true);
 
+    // cacheFailure: remember an unreadable file as "no colours" (PC boxart)
+    // instead of reading it again on the next select (console covers).
+    void select(const std::string& path, bool onDisk, bool cacheFailure);
     void show(const Colors& colors);
     void paint(NVGcontext* vg, float x, float y, float width, float height);
     void paintOne(NVGcontext* vg, const Colors& colors, float alpha, float x,

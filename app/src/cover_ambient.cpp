@@ -53,7 +53,16 @@ CoverAmbient::~CoverAmbient() {
 
 void CoverAmbient::select(const Host& host, int appId) {
     // The cover file is unique per PC and game.
-    const std::string path = BoxArtManager::get_texture_path(host, appId);
+    select(BoxArtManager::get_texture_path(host, appId),
+           BoxArtManager::instance().has_boxart(host, appId), true);
+}
+
+void CoverAmbient::select(const std::string& coverPath) {
+    select(coverPath, true, false);
+}
+
+void CoverAmbient::select(const std::string& path, bool onDisk,
+                          bool cacheFailure) {
     // Selecting the same game again (a refresh) keeps the glow as it is.
     if (path == selected && cache.count(path))
         return;
@@ -64,15 +73,19 @@ void CoverAmbient::select(const Host& host, int appId) {
         return;
     }
     show(Colors{});
-    if (!BoxArtManager::instance().has_boxart(host, appId))
+    if (!onDisk)
         return;
 
     std::shared_ptr<bool> token = alive;
-    brls::async([this, token, path]() {
+    brls::async([this, token, path, cacheFailure]() {
         Colors colors;
         colors.valid = coverColors(path, colors.top, colors.bottom);
-        brls::sync([this, token, path, colors]() {
+        brls::sync([this, token, path, colors, cacheFailure]() {
             if (!*token)
+                return;
+            // A console cover still downloading is read again once it is
+            // there; a PC's unreadable boxart is not.
+            if (!colors.valid && !cacheFailure)
                 return;
             cache[path] = colors;
             if (selected == path)

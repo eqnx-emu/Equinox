@@ -22,6 +22,7 @@
 #include "bold_label.hpp"
 #include "UpscalingSupport.hpp"
 #include "StreamCapacity.hpp"
+#include "emu/SsCredentials.hpp"
 #include <yoga/Yoga.h>
 #include <fmt/core.h>
 #include <cmath>
@@ -974,6 +975,51 @@ SettingsTab::SettingsTab(const std::string& group) {
                             Settings::instance().metrics_background(), [](int selected) {
                                 Settings::instance().set_metrics_background(selected);
                             });
+
+    reduceMotion->init("settings/reduce_motion"_i18n,
+                       Settings::instance().reduce_motion(), [](bool value) {
+                           Settings::instance().set_reduce_motion(value);
+                       });
+    reduceMotionNote->setText("settings/reduce_motion_note"_i18n);
+    reduceMotionNote->setTextColor(Application::getTheme().getColor("equinox/muted"));
+
+    if (emu::ssDevConfigured()) {
+        const auto showUser = [this] {
+            screenscraperUser->setDetailText(Settings::instance().screenscraper_user());
+        };
+        const auto showPassword = [this] {
+            screenscraperPassword->setDetailText(
+                Settings::instance().screenscraper_password().empty() ? "" : "••••");
+        };
+        screenscraperUser->setText("settings/screenscraper_user"_i18n);
+        showUser();
+        screenscraperUser->registerClickAction([showUser](View*) {
+            Application::getImeManager()->openForText(
+                [showUser](const std::string& text) {
+                    Settings::instance().set_screenscraper_user(text);
+                    showUser();
+                },
+                "settings/screenscraper_user"_i18n, "", 64,
+                Settings::instance().screenscraper_user(), 0);
+            return true;
+        });
+        screenscraperPassword->setText("settings/screenscraper_password"_i18n);
+        showPassword();
+        screenscraperPassword->registerClickAction([showPassword](View*) {
+            Application::getImeManager()->openForText(
+                [showPassword](const std::string& text) {
+                    Settings::instance().set_screenscraper_password(text);
+                    showPassword();
+                },
+                "settings/screenscraper_password"_i18n, "", 64,
+                Settings::instance().screenscraper_password(), 0);
+            return true;
+        });
+        screenscraperNote->setText("settings/screenscraper_note"_i18n);
+        screenscraperNote->setTextColor(Application::getTheme().getColor("equinox/muted"));
+    } else {
+        screenscraperSection->setVisibility(Visibility::GONE);
+    }
 
     writeLog->init("settings/debugging_view"_i18n,
                    Settings::instance().write_log(), [](bool value) {

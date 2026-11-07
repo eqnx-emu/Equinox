@@ -30,6 +30,11 @@
 #include "metrics_hud.hpp"
 #include "views/boolean_slider_cell.hpp"
 
+#if defined(PLATFORM_SWITCH)
+#include "emu/EmuLauncher.hpp"
+#include "emu/LaunchLine.hpp"
+#endif
+
 #include "MoonlightSession.hpp"
 #include "SwitchMoonlightSessionDecoderAndRenderProvider.hpp"
 
@@ -154,9 +159,8 @@ int main(int argc, char* argv[]) {
     // __nx_nv_transfermem_size = (g_application_mode ? 16 : 3) * 0x100000;
 #endif
 
-    // Set log level
-    // We recommend to use INFO for real apps
-    brls::Logger::setLogLevel(brls::LogLevel::LOG_DEBUG);
+    // Debug logging costs whole milliseconds per line over nxlink.
+    brls::Logger::setLogLevel(brls::LogLevel::LOG_INFO);
 
     // Init the app and i18n
     if (!brls::Application::init()) {
@@ -269,8 +273,25 @@ int main(int argc, char* argv[]) {
     brls::getStyle().addMetric("about/padding_sides", 75);
     brls::getStyle().addMetric("about/description_margin", 50);
 
+    // Back from a console game: the runner passes a resume token. The home
+    // screen opens straight on the console's shelf, without the splash.
+    bool resuming = false;
+#if defined(PLATFORM_SWITCH)
+    if (auto arg = emu::resumeArg(argc, argv)) {
+        if (auto token = emu::decodeToken(*arg)) {
+            emu::setPendingResume(*token);
+            resuming = true;
+        } else {
+            brls::Logger::warning("Ignoring an invalid resume token");
+        }
+    }
+#endif
+
     // Create and push the main activity to the stack if cannot run game from arguments
-    if (!startFromArgs(argc, argv)) {
+    if (resuming) {
+        if (canStartApp(argc, argv))
+            brls::Application::pushActivity(new MainActivity());
+    } else if (!startFromArgs(argc, argv)) {
         brls::Application::pushActivity(new MainActivity());
         SplashView::show();
     }

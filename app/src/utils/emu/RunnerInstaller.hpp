@@ -1,0 +1,50 @@
+#pragma once
+
+#include <optional>
+#include <string>
+
+#include "HttpDownload.hpp"
+#include "emu/Console.hpp"
+#include "emu/RunnerManifest.hpp"
+
+namespace emu {
+
+// What went wrong, for a translated message; `error` keeps the detail.
+enum class RunnerError {
+    None,
+    Network,         // a download failed (curl's text in `error`)
+    BadManifest,     // the manifest is not valid JSON or misses fields
+    WrongConsole,    // the manifest names another console
+    Folders,         // the folders could not be created
+    Mismatch,        // the runner's size or SHA-256 differs from the manifest
+    Move,            // runner.bin could not be put in place
+    WriteInstalled,  // installed.json could not be written
+    Cancelled,
+};
+
+struct InstallResult {
+    bool ok = false;
+    std::string error;
+    Manifest manifest;
+    bool cancelled = false;  // the Progress callback returned false
+    RunnerError code = RunnerError::None;
+};
+
+// Downloads and parses the console's latest manifest. nullopt with `error`
+// set when the download fails, the JSON is invalid or it names another console.
+// `code`, when given, receives the kind of failure.
+std::optional<Manifest> fetchLatest(const Console& console, std::string& error,
+                                    RunnerError* code = nullptr);
+
+// Downloads the runner to <emulator>/runner.bin.part, checks size and SHA-256,
+// swaps it in for runner.bin (the old one is kept as runner.bin.old until the
+// new one is in place) and records it in installed.json. On failure the .part
+// file is removed and the previous runner.bin is left as it was.
+InstallResult installRunner(const Console& console, const Manifest& manifest,
+                            const Progress& progress,
+                            const std::string& root = "sdmc:/equinox");
+
+// Deletes only <emulator>; ROMs, saves, states and covers stay.
+bool removeRunner(const Console& console, const std::string& root = "sdmc:/equinox");
+
+}  // namespace emu
