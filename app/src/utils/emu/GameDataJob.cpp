@@ -20,7 +20,16 @@ void removeFile(const std::string& path) {
 }
 
 DataStop stopFor(FetchResult result) {
-    return result == FetchResult::Cancelled ? DataStop::Cancelled : DataStop::Offline;
+    switch (result) {
+        case FetchResult::Cancelled: return DataStop::Cancelled;
+        case FetchResult::Disk: return DataStop::Disk;
+        default: return DataStop::Offline;
+    }
+}
+
+bool failed(FetchResult result) {
+    return result == FetchResult::Transient || result == FetchResult::Disk ||
+           result == FetchResult::Cancelled;
 }
 
 // Tries each libretro name in turn. `stop` is set only when the job must end.
@@ -30,7 +39,7 @@ PartState fetchThumb(const GameDataRequest& req, DataTransport& transport, Thumb
     const std::string part = dest + ".part";
     for (const std::string& name : thumbNameCandidates(canonical, req.rom.title)) {
         const FetchResult result = transport.toFile(thumbUrl(*req.console, kind, name), part);
-        if (result == FetchResult::Transient || result == FetchResult::Cancelled) {
+        if (failed(result)) {
             removeFile(part);
             stop = stopFor(result);
             return PartState::Unknown;
@@ -96,7 +105,7 @@ DataOutcome fetchGameData(const GameDataRequest& req, DataTransport& transport,
         std::string body;
         long httpStatus = 0;
         const FetchResult result = transport.toString(ssUrl(req.ss, query), body, httpStatus);
-        if (result == FetchResult::Transient || result == FetchResult::Cancelled) {
+        if (failed(result)) {
             out.stop = stopFor(result);
             return out;
         }

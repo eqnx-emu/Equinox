@@ -29,3 +29,9 @@ bool httpGetToFile(const std::string& url, const std::string& path, long timeout
 // or 0 when there was no answer (offline, DNS, TLS, timeout).
 bool httpGetToFile(const std::string& url, const std::string& path, long timeoutSec,
                    const Progress& progress, std::string& error, long& httpStatus);
+
+// Same, and `writeFailed` is true when the target file could not be opened or
+// written (full card, read-only), as opposed to a network failure.
+bool httpGetToFile(const std::string& url, const std::string& path, long timeoutSec,
+                   const Progress& progress, std::string& error, long& httpStatus,
+                   bool& writeFailed);

@@ -14,8 +14,11 @@ FetchResult HttpDataTransport::toFile(const std::string& url, const std::string&
     const Progress progress = [this](uint64_t, uint64_t) { return !stop_->load(); };
     std::string error;
     long status = 0;
-    if (httpGetToFile(url, path, TIMEOUT_SEC, progress, error, status)) return FetchResult::Ok;
+    bool writeFailed = false;
+    if (httpGetToFile(url, path, TIMEOUT_SEC, progress, error, status, writeFailed))
+        return FetchResult::Ok;
     if (stop_->load()) return FetchResult::Cancelled;
+    if (writeFailed) return FetchResult::Disk;
     return status == 404 || status == 403 ? FetchResult::NotFound : FetchResult::Transient;
 }
 

@@ -33,7 +33,8 @@ int onProgress(void* user, curl_off_t total, curl_off_t done, curl_off_t, curl_o
 // GET `url` over verified TLS, following redirects (release assets redirect
 // to GitHub's object storage).
 bool httpGet(const std::string& url, curl_write_callback write, void* user, long timeout,
-             const Progress* progress, std::string& error, long* status = nullptr) {
+             const Progress* progress, std::string& error, long* status = nullptr,
+             bool* writeError = nullptr) {
     CURL* curl = curl_easy_init();
     if (!curl) {
         error = "curl_easy_init failed";
@@ -70,6 +71,7 @@ bool httpGet(const std::string& url, curl_write_callback write, void* user, long
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
         *status = response;
     }
+    if (writeError) *writeError = code == CURLE_WRITE_ERROR;
     if (code == CURLE_ABORTED_BY_CALLBACK)
         error = "cancelled";
     else if (code != CURLE_OK)
@@ -103,16 +105,27 @@ bool httpGetToFile(const std::string& url, const std::string& path, long timeout
 
 bool httpGetToFile(const std::string& url, const std::string& path, long timeoutSec,
                    const Progress& progress, std::string& error, long& httpStatus) {
+    bool writeFailed = false;
+    return httpGetToFile(url, path, timeoutSec, progress, error, httpStatus, writeFailed);
+}
+
+bool httpGetToFile(const std::string& url, const std::string& path, long timeoutSec,
+                   const Progress& progress, std::string& error, long& httpStatus,
+                   bool& writeFailed) {
     httpStatus = 0;
+    writeFailed = false;
     std::ofstream file(emu::fromUtf8(path), std::ios::binary | std::ios::trunc);
     if (!file) {
         error = "could not write " + path;
+        writeFailed = true;
         return false;
     }
-    bool ok = httpGet(url, writeToFile, &file, timeoutSec, &progress, error, &httpStatus);
+    bool ok = httpGet(url, writeToFile, &file, timeoutSec, &progress, error, &httpStatus,
+                      &writeFailed);
     file.close();
     if (ok && file.fail()) {
         error = "could not write " + path;
+        writeFailed = true;
         ok = false;
     }
     return ok;

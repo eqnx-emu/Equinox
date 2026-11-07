@@ -36,7 +36,8 @@ struct FakeTransport : DataTransport {
         requested.push_back(url);
         auto it = files.find(url);
         if (it == files.end()) return FetchResult::NotFound;
-        if (it->second.result == FetchResult::Ok || it->second.result == FetchResult::Transient)
+        if (it->second.result == FetchResult::Ok || it->second.result == FetchResult::Transient ||
+            it->second.result == FetchResult::Disk)
             std::ofstream(fromUtf8(path), std::ios::binary) << it->second.content;
         return it->second.result;
     }
@@ -177,6 +178,24 @@ TEST_CASE("offline in the middle") {
     CHECK_FALSE(f.partLeft());
     CHECK_FALSE(f.exists(metaPath(f.req.paths, "Test Game")));
     CHECK_FALSE(f.net.asked("screenscraper"));
+}
+
+TEST_CASE("a disk failure stops with disk, keeps earlier parts and marks nothing missing") {
+    Fixture f("equinox_gamedata_disk");
+    f.serve(ThumbKind::Snap, "Test Game (USA)");
+    f.net.files[thumbUrl(*f.console, ThumbKind::Title, "Test Game (USA)")] = {FetchResult::Disk, "xx"};
+
+    const DataOutcome out = f.run();
+    CHECK_FALSE(out.complete);
+    CHECK(out.stop == DataStop::Disk);
+    CHECK(out.meta.title != PartState::Missing);
+    CHECK(f.exists(thumbPath(f.req.paths, ThumbKind::Snap, "Test Game")));
+    CHECK_FALSE(f.exists(thumbPath(f.req.paths, ThumbKind::Title, "Test Game")));
+    CHECK_FALSE(f.partLeft());
+    CHECK_FALSE(f.exists(metaPath(f.req.paths, "Test Game")));
+    CHECK_FALSE(f.net.asked("screenscraper"));
+    // The second candidate name is never tried after a write failure.
+    CHECK_FALSE(f.net.asked("Test%20Game.png"));
 }
 
 TEST_CASE("quota stops the queue") {

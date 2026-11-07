@@ -11,12 +11,13 @@
 
 namespace emu {
 
-enum class FetchResult { Ok, NotFound, Transient, Cancelled };
+enum class FetchResult { Ok, NotFound, Transient, Disk, Cancelled };
 
 struct DataTransport {
     virtual ~DataTransport() = default;
     // Writes the body to `path`. NotFound: the server has no such file.
-    // Transient: no answer or any other failure. The file may be left behind.
+    // Transient: no answer or any other failure. Disk: the file could not be
+    // written (full card, read-only). The file may be left behind.
     virtual FetchResult toFile(const std::string& url, const std::string& path) = 0;
     // Ok whenever the server answered, whatever the status: `httpStatus`
     // tells what it said. Transient when it did not answer.
