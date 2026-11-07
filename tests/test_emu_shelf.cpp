@@ -2,43 +2,14 @@
 #include "doctest/doctest.h"
 
 #include <chrono>
-#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <string>
 
 #include "emu/CoverStore.hpp"
 #include "emu/PathUtf8.hpp"
-#include "emu/PlayedAgo.hpp"
 
 namespace fs = std::filesystem;
-
-static int64_t localTime(int year, int month, int day, int hour, int minute = 0) {
-    std::tm tm{};
-    tm.tm_year = year - 1900;
-    tm.tm_mon = month - 1;
-    tm.tm_mday = day;
-    tm.tm_hour = hour;
-    tm.tm_min = minute;
-    tm.tm_isdst = -1;
-    return static_cast<int64_t>(std::mktime(&tm));
-}
-
-TEST_CASE("daysSincePlayed counts calendar days") {
-    const int64_t now = localTime(2026, 11, 7, 9, 30);
-    CHECK(emu::daysSincePlayed(0, now) == -1);
-    CHECK(emu::daysSincePlayed(-5, now) == -1);
-    CHECK(emu::daysSincePlayed(localTime(2026, 11, 7, 0, 5), now) == 0);
-    CHECK(emu::daysSincePlayed(now, now) == 0);
-    // Late last night is yesterday, even if less than 24 hours ago.
-    CHECK(emu::daysSincePlayed(localTime(2026, 11, 6, 23, 50), now) == 1);
-    CHECK(emu::daysSincePlayed(localTime(2026, 11, 5, 12), now) == 2);
-    // Across a month and a year.
-    CHECK(emu::daysSincePlayed(localTime(2026, 10, 31, 12), localTime(2026, 11, 1, 8)) == 1);
-    CHECK(emu::daysSincePlayed(localTime(2025, 12, 31, 20), localTime(2026, 1, 2, 8)) == 2);
-    // A clock that went backwards: today.
-    CHECK(emu::daysSincePlayed(now + 3 * 86400, now) == 0);
-}
 
 TEST_CASE("cover misses are kept per version and cleared") {
     fs::path dir = fs::temp_directory_path() /

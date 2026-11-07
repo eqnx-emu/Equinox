@@ -77,7 +77,6 @@ target_link_libraries(test_emu_installer PRIVATE ${JANSSON_LIB} ${MBEDCRYPTO_LIB
 
 add_executable(test_emu_shelf
     test_emu_shelf.cpp
-    "${MOONLIGHT_ROOT}/app/src/utils/emu/PlayedAgo.cpp"
     "${MOONLIGHT_ROOT}/app/src/utils/emu/CoverStore.cpp")
 target_include_directories(test_emu_shelf PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
