@@ -483,6 +483,28 @@
         "opening": "Abrindo o jogo…",
         "try_again": "Tente de novo em instantes.",
         "fetching_cover": "Buscando capa…",
-        "no_return": "Não achei o Equinox.nro no cartão SD, e o jogo não teria como voltar para o Equinox. Coloque-o em sdmc:/switch/Equinox/ e tente de novo."
+        "no_return": "Não achei o Equinox.nro no cartão SD, e o jogo não teria como voltar para o Equinox. Coloque-o em sdmc:/switch/Equinox/ e tente de novo.",
+        "video": {
+            "title": "Vídeo",
+            "size": "Tamanho",
+            "smoothing": "Suavização",
+            "filter": "Filtro",
+            "border": "Moldura",
+            "size_original": "Original",
+            "size_8_7": "8:7",
+            "size_4_3": "4:3",
+            "size_full": "Tela inteira",
+            "smooth_pixel": "Pixel",
+            "smooth_sharp": "Nítido",
+            "smooth_soft": "Suave",
+            "filter_none": "Nenhum",
+            "filter_scanlines": "Scanlines",
+            "filter_ntsc": "NTSC",
+            "border_equinox": "Equinox",
+            "border_cover": "Capa do jogo",
+            "border_tv": "TV de tubo",
+            "border_black": "Preto",
+            "save_failed": "Não deu para guardar o ajuste"
+        }
     }
 }

@@ -14,6 +14,7 @@
 
 #if defined(PLATFORM_SWITCH)
 #include "console_shelf_view.hpp"
+#include "emu_video_view.hpp"
 #include "emu/CoverStore.hpp"
 #include "emu/EmuLauncher.hpp"
 #include "emu/PathUtf8.hpp"
@@ -1421,6 +1422,17 @@ std::vector<HomeOption> HomeView::consoleOptions(ConsoleCard* card) {
         options.push_back({"", "emu/update"_i18n,
                            "v" + card->latest()->version,
                            [this, console] { installConsole(*console); }});
+    // Runners before 1.1.0 ignore --video.
+    const emu::ConsolePaths paths = emu::pathsFor(*console);
+    const std::optional<emu::Installed> installed =
+        emu::readInstalled(paths.installed);
+    if (console->slug == "snes" && installed &&
+        emu::compareVersions(installed->version, "1.1.0") >= 0)
+        options.push_back({"", "emu/video/title"_i18n, "", [paths] {
+                               auto* frame =
+                                   new AppletFrame(makeEmuVideoView(paths));
+                               Application::pushActivity(new Activity(frame));
+                           }});
     // Covers libretro lacked are tried again too.
     options.push_back({"", "emu/rescan"_i18n, "", [card, console] {
                            const emu::ConsolePaths paths =
