@@ -24,20 +24,34 @@
 #include <ctime>
 #include <filesystem>
 #include <functional>
-#include <mutex>
 #include <system_error>
-#include <thread>
 
 using namespace brls;
 using namespace brls::literals;
 
+// One run of the cover queue. Each cover (all its names) is one task on
+// the brls::async pool; the next task is scheduled from the UI thread when
+// it ends, so the pool is free between covers.
 struct ConsoleShelfView::CoverQueue {
+    struct Job {
+        size_t index;
+        std::string title;
+        std::string path;
+    };
+
     std::atomic<bool> stop{false};
+    std::vector<Job> jobs;
+    size_t next = 0; // UI thread only
+    const emu::Console* console = nullptr;
+    emu::ConsolePaths where;
+    uint64_t generation = 0;
+    ConsoleShelfView* view = nullptr; // only used when *alive
+    std::shared_ptr<bool> alive;
 };
 
 namespace {
 constexpr long kCoverTimeout = 20;
-// Before playing, the cover thread gets this long to stop (checked every
+// Before playing, the cover task gets this long to stop (checked every
 // kStopPollMs on the UI thread).
 constexpr int kStopPollMs = 100;
 constexpr int kStopPolls = 50;
@@ -63,13 +77,16 @@ void removeFile(const std::string& path) {
     std::filesystem::remove(emu::fromUtf8(path), ec);
 }
 
-// Covers download one at a time across every shelf: a shelf closed and
-// opened again waits for the previous queue to stop before it starts. Held
-// by the download thread for as long as it runs.
-std::mutex& coverLock() {
-    static std::mutex lock;
-    return lock;
-}
+// Set while a cover task touches the network or the SD card, and by a
+// launch from the moment it starts handing over (kept until the app quits).
+// Covers download one at a time across every shelf. Only ever taken with
+// tryAcquireCovers(): nothing waits on it, so no pool thread blocks.
+std::atomic<bool> coversBusy{false};
+
+bool tryAcquireCovers() { return !coversBusy.exchange(true); }
+void releaseCovers() { coversBusy.store(false); }
+
+constexpr int kBusyRetryMs = 200;
 
 struct LaunchRequest {
     const emu::Console* console;
@@ -85,19 +102,19 @@ void launchWhenIdle(std::shared_ptr<LaunchRequest> request, int attempt);
 
 void finishLaunch(std::shared_ptr<LaunchRequest> request) {
     if (!*request->alive) {
-        coverLock().unlock();
+        releaseCovers();
         return;
     }
     if (emu::launchRom(*request->console, request->rom, request->origin,
                        request->filter))
-        return; // quitting; the cover lock stays held
-    coverLock().unlock();
+        return; // quitting; the cover flag stays set
+    releaseCovers();
     if (request->onFail)
         request->onFail();
 }
 
 void launchWhenIdle(std::shared_ptr<LaunchRequest> request, int attempt) {
-    if (coverLock().try_lock()) {
+    if (tryAcquireCovers()) {
         if (Dialog* loader = request->loader) {
             request->loader = nullptr;
             loader->close([request] { finishLaunch(request); });
@@ -108,7 +125,7 @@ void launchWhenIdle(std::shared_ptr<LaunchRequest> request, int attempt) {
     }
 
     if (attempt >= kStopPolls) {
-        brls::Logger::warning("Launch: cover thread did not stop");
+        brls::Logger::warning("Launch: cover task did not stop");
         auto giveUp = [request] {
             if (!*request->alive)
                 return;
@@ -451,13 +468,13 @@ void ConsoleShelfView::play(int index) {
         return;
     launching = true;
     // Nothing may be downloading or writing to the SD card while the app
-    // hands over: the game starts only once the cover thread has let go.
+    // hands over: the game starts only once the cover task has finished.
     stopCovers();
     waitForCovers(index, 0);
 }
 
 void ConsoleShelfView::waitForCovers(int index, int attempt) {
-    if (coverLock().try_lock()) {
+    if (tryAcquireCovers()) {
         // Held until the app quits, or released below if it does not.
         if (stopLoader) {
             Dialog* loader = stopLoader;
@@ -465,7 +482,7 @@ void ConsoleShelfView::waitForCovers(int index, int attempt) {
             std::shared_ptr<bool> token = alive;
             loader->close([this, token, index] {
                 if (!*token) {
-                    coverLock().unlock();
+                    releaseCovers();
                     return;
                 }
                 launch(index);
@@ -477,7 +494,7 @@ void ConsoleShelfView::waitForCovers(int index, int attempt) {
     }
 
     if (attempt >= kStopPolls) {
-        brls::Logger::warning("ConsoleShelf: cover thread did not stop");
+        brls::Logger::warning("ConsoleShelf: cover task did not stop");
         Dialog* loader = stopLoader;
         stopLoader = nullptr;
         launching = false;
@@ -511,8 +528,8 @@ void ConsoleShelfView::waitForCovers(int index, int attempt) {
 
 void ConsoleShelfView::launch(int index) {
     if (emu::launchRom(consoleRef, games[index].rom, emu::Origin::Shelf, -1))
-        return; // quitting; the cover lock stays held
-    coverLock().unlock();
+        return; // quitting; the cover flag stays set
+    releaseCovers();
     launching = false;
 
     // The game may have been deleted since the shelf was filled.
@@ -531,96 +548,109 @@ void ConsoleShelfView::stopCovers() {
 void ConsoleShelfView::fetchCovers(int first) {
     stopCovers();
 
-    struct Job {
-        size_t index;
-        std::string title;
-        std::string path;
-    };
-    std::vector<Job> jobs;
+    auto queue = std::make_shared<CoverQueue>();
     for (size_t i = 0; i < games.size(); i++)
         if (!games[i].hasCover && !games[i].missed)
-            jobs.push_back({i, games[i].rom.title,
-                            emu::coverPath(paths, games[i].rom.title)});
-    if (jobs.empty())
+            queue->jobs.push_back({i, games[i].rom.title,
+                                   emu::coverPath(paths, games[i].rom.title)});
+    if (queue->jobs.empty())
         return;
     // The selected game first, then outwards.
-    std::stable_sort(jobs.begin(), jobs.end(),
-                     [first](const Job& a, const Job& b) {
+    std::stable_sort(queue->jobs.begin(), queue->jobs.end(),
+                     [first](const CoverQueue::Job& a, const CoverQueue::Job& b) {
                          return std::abs((int)a.index - first) <
                                 std::abs((int)b.index - first);
                      });
 
-    auto queue = std::make_shared<CoverQueue>();
+    queue->console = &consoleRef;
+    queue->where = paths;
+    queue->generation = generation;
+    queue->view = this;
+    queue->alive = alive;
     covers = queue;
-    const emu::Console* console = &consoleRef;
-    const emu::ConsolePaths where = paths;
-    const uint64_t forGeneration = generation;
-    std::shared_ptr<bool> token = alive;
+    runNextCover(queue);
+}
 
-    // Its own thread, not the pool: the queue can run for minutes and the
-    // Switch pool has only a few workers.
-    std::thread([this, token, queue, console, where, jobs, forGeneration] {
-        std::lock_guard<std::mutex> lock(coverLock());
-        const Progress keepGoing = [queue](uint64_t, uint64_t) {
-            return !queue->stop.load();
-        };
+// UI thread: hands the next cover to the pool.
+void ConsoleShelfView::runNextCover(std::shared_ptr<CoverQueue> queue) {
+    if (queue->stop.load() || !*queue->alive ||
+        queue->next >= queue->jobs.size())
+        return;
+    brls::async([queue] { fetchOneCover(queue); });
+}
 
-        for (const Job& job : jobs) {
-            if (queue->stop.load())
-                return;
+// Pool thread: one cover, every name it may have on libretro.
+void ConsoleShelfView::fetchOneCover(std::shared_ptr<CoverQueue> queue) {
+    if (queue->stop.load())
+        return;
+    // Another shelf's cover, or a launch, has the network: try again soon,
+    // without holding this worker.
+    if (!tryAcquireCovers()) {
+        brls::delay(kBusyRetryMs, [queue] { runNextCover(queue); });
+        return;
+    }
+    if (queue->stop.load()) {
+        releaseCovers();
+        return;
+    }
 
-            // Fetched meanwhile by another shelf.
-            bool found = fileExists(job.path);
-            // A miss is remembered only when libretro clearly answered "no"
-            // for every name: 404/403, or a 200 that is not a PNG. Anything
-            // else (no answer, 5xx, 429, a body cut short) is like being
-            // offline: the queue stops and nothing is remembered.
-            bool transient = false, diskError = false;
-            const std::vector<std::string> names =
-                found ? std::vector<std::string>{}
-                      : emu::coverNameCandidates(job.title);
-            for (const std::string& name : names) {
-                if (queue->stop.load())
-                    return;
-                const std::string part = job.path + ".part";
-                std::string error;
-                long status = 0;
-                const bool ok =
-                    httpGetToFile(emu::coverUrl(*console, name), part,
-                                  kCoverTimeout, keepGoing, error, status);
-                const bool png = ok && emu::looksLikePng(part);
-                if (png) {
-                    if (emu::replaceFile(part, job.path)) {
-                        found = true;
-                    } else {
-                        removeFile(part);
-                        diskError = true;
-                    }
-                    break;
-                }
-                removeFile(part);
-                const bool notThere =
-                    ok || status == 404 || status == 403;
-                if (!notThere) {
-                    transient = true;
-                    break;
-                }
-            }
+    const CoverQueue::Job job = queue->jobs[queue->next];
+    const Progress keepGoing = [queue](uint64_t, uint64_t) {
+        return !queue->stop.load();
+    };
 
-            if (queue->stop.load() || transient)
-                return; // generic covers; tried again next time
-            if (found) {
-                const size_t index = job.index;
-                const std::string path = job.path;
-                brls::sync([this, token, forGeneration, index, path] {
-                    if (*token)
-                        coverArrived(forGeneration, index, path);
-                });
-            } else if (!diskError) {
-                emu::markCoverMissed(where, job.title, APP_VERSION);
-            }
+    // Fetched meanwhile by another shelf.
+    bool found = fileExists(job.path);
+    // A miss is remembered only when libretro clearly answered "no" for
+    // every name: 404/403, or a 200 that is not a PNG. Anything else (no
+    // answer, 5xx, 429, a body cut short) is like being offline: the queue
+    // stops and nothing is remembered.
+    bool transient = false, diskError = false;
+    const std::vector<std::string> names =
+        found ? std::vector<std::string>{}
+              : emu::coverNameCandidates(job.title);
+    for (const std::string& name : names) {
+        if (queue->stop.load()) {
+            transient = true;
+            break;
         }
-    }).detach();
+        const std::string part = job.path + ".part";
+        std::string error;
+        long status = 0;
+        const bool ok =
+            httpGetToFile(emu::coverUrl(*queue->console, name), part,
+                          kCoverTimeout, keepGoing, error, status);
+        const bool png = ok && emu::looksLikePng(part);
+        if (png) {
+            if (emu::replaceFile(part, job.path)) {
+                found = true;
+            } else {
+                removeFile(part);
+                diskError = true;
+            }
+            break;
+        }
+        removeFile(part);
+        const bool notThere = ok || status == 404 || status == 403;
+        if (!notThere) {
+            transient = true;
+            break;
+        }
+    }
+    if (!found && !transient && !diskError)
+        emu::markCoverMissed(queue->where, job.title, APP_VERSION);
+    releaseCovers();
+
+    brls::sync([queue, job, found, transient] {
+        if (!*queue->alive)
+            return;
+        if (found)
+            queue->view->coverArrived(queue->generation, job.index, job.path);
+        if (transient)
+            return; // generic covers; tried again next time
+        queue->next++;
+        runNextCover(queue);
+    });
 }
 
 void ConsoleShelfView::coverArrived(uint64_t forGeneration, size_t index,

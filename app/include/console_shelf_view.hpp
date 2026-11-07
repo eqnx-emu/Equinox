@@ -24,7 +24,7 @@
 #include <vector>
 
 // Opens a console game from outside its shelf (Favorites) once no cover is
-// downloading, like the shelf does: polls the shared cover lock on the UI
+// downloading, like the shelf does: polls the shared cover-busy flag on the UI
 // thread, showing "Opening the game..." while it waits, and gives up after
 // a few seconds. onFail runs when the game was not opened (and `alive` is
 // still true). Switch only.
@@ -50,7 +50,7 @@ class ConsoleShelfView : public brls::Box {
         bool hasCover = false;
         bool missed = false; // libretro had no cover, as of this version
     };
-    // Shared with the cover download thread.
+    // Shared with the cover tasks on the async pool.
     struct CoverQueue;
 
   private:
@@ -83,7 +83,7 @@ class ConsoleShelfView : public brls::Box {
     void showGames(std::vector<Game> found);
     void onSelected(int index);
     void play(int index);
-    // Polls (on the UI thread) until the cover thread has stopped, then
+    // Polls (on the UI thread) until the cover task has finished, then
     // launches; gives up after a few seconds.
     void waitForCovers(int index, int attempt);
     void launch(int index);
@@ -95,6 +95,8 @@ class ConsoleShelfView : public brls::Box {
     // Downloads the missing covers, nearest to `first` first.
     void fetchCovers(int first);
     void stopCovers();
+    static void runNextCover(std::shared_ptr<CoverQueue> queue);
+    static void fetchOneCover(std::shared_ptr<CoverQueue> queue);
     void coverArrived(uint64_t forGeneration, size_t index,
                       const std::string& path);
 };
