@@ -222,6 +222,7 @@ ConsoleShelfView::ConsoleShelfView(const emu::Console& console,
         onCurrent(index);
     };
     listPanel->onDownloadAll = [this] { downloadAll(); };
+    listPanel->onRetry = [this] { retryStopped(); };
     listPanel->onCancel = [this] { cancelData(); };
     library->addView(listPanel);
     detailsPanel = new GameDetailsPanel();
@@ -368,6 +369,7 @@ void ConsoleShelfView::createDataQueue() {
         dataFinished(index, outcome);
     };
     dataQueue->onStopped = [this](emu::DataStop stop) { dataStopped(stop); };
+    dataQueue->onAdvanced = [this] { applyProgress(); };
 }
 
 void ConsoleShelfView::showGames(std::vector<Game> found) {
@@ -376,6 +378,7 @@ void ConsoleShelfView::showGames(std::vector<Game> found) {
     cancelData();
     failure.reset();
     stoppedIndex.reset();
+    retry.reset();
     listPanel->setBatchStopped(std::nullopt);
 
     View* focus = Application::getCurrentFocus();
@@ -605,13 +608,38 @@ void ConsoleShelfView::downloadAll() {
     if (!dataQueue || scanning)
         return;
     failure.reset();
+    retry.reset();
     listPanel->setBatchStopped(std::nullopt);
+    batchActive = true;
     // The picked game first, then the others.
     if (current && !games[*current].hasData)
         dataQueue->enqueue(*current, games[*current].rom);
     for (size_t i = 0; i < games.size(); i++)
         if (!games[i].hasData)
             dataQueue->enqueue(i, games[i].rom);
+    if (!dataQueue->running())
+        batchActive = false;
+    applyProgress();
+}
+
+void ConsoleShelfView::retryStopped() {
+    if (!dataQueue || scanning || !retry)
+        return;
+    const Retry again = *retry;
+    retry.reset();
+    failure.reset();
+    listPanel->setBatchStopped(std::nullopt);
+    // A refresh stops on a game that already has data: it goes first too.
+    if (again.index < games.size())
+        dataQueue->enqueue(again.index, games[again.index].rom);
+    if (again.batch) {
+        batchActive = true;
+        for (size_t i = 0; i < games.size(); i++)
+            if (!games[i].hasData)
+                dataQueue->enqueue(i, games[i].rom);
+    }
+    if (!dataQueue->running())
+        batchActive = false;
     applyProgress();
 }
 
@@ -619,13 +647,19 @@ void ConsoleShelfView::cancelData() {
     if (dataQueue)
         dataQueue->cancel();
     dataStep.reset();
+    batchActive = false;
     applyProgress();
 }
 
 void ConsoleShelfView::dataFinished(size_t index, const emu::DataOutcome& outcome) {
     dataStep.reset();
-    if (outcome.stop != emu::DataStop::None)
+    if (outcome.stop != emu::DataStop::None) {
         stoppedIndex = index;
+        stoppedInBatch = batchActive;
+    }
+    // The queue is already empty here when this was the last game or it stopped.
+    if (!dataQueue->running())
+        batchActive = false;
     if (index < games.size()) {
         Game& game = games[index];
         readGameData(paths, game);
@@ -643,6 +677,7 @@ void ConsoleShelfView::dataFinished(size_t index, const emu::DataOutcome& outcom
 void ConsoleShelfView::dataStopped(emu::DataStop stop) {
     if (stop != emu::DataStop::Cancelled && stoppedIndex) {
         failure = Failure{*stoppedIndex, stop};
+        retry = Retry{*stoppedIndex, stoppedInBatch};
         listPanel->setBatchStopped(stop);
     }
     stoppedIndex.reset();

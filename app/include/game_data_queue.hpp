@@ -43,6 +43,8 @@ class GameDataQueue {
 
     std::function<void(size_t index, emu::DataStep)> onStep;
     std::function<void(size_t index, const emu::DataOutcome&)> onFinished;
+    // The next game of the batch was just handed to the pool.
+    std::function<void()> onAdvanced;
     // The queue stopped (offline, bad login, quota, disk) without finishing.
     std::function<void(emu::DataStop)> onStopped;
 

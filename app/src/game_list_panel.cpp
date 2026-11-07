@@ -278,10 +278,11 @@ GameListPanel::GameListPanel(const emu::Console& console)
     stoppedLabel->setShrink(1);
     stoppedLabel->setMarginRight(10);
     stoppedRow->addView(stoppedLabel);
-    stoppedRow->addView(secondaryButton("library/details/retry"_i18n, [this] {
-        if (onDownloadAll)
-            onDownloadAll();
-    }));
+    retryButton = secondaryButton("library/details/retry"_i18n, [this] {
+        if (onRetry)
+            onRetry();
+    });
+    stoppedRow->addView(retryButton);
     footer->addView(stoppedRow);
 
     runningRow = new Box(Axis::COLUMN);
@@ -300,10 +301,11 @@ GameListPanel::GameListPanel(const emu::Console& console)
     runningName->setMarginTop(2);
     runningText->addView(runningName);
     runningLineBox->addView(runningText);
-    runningLineBox->addView(secondaryButton("common/cancel"_i18n, [this] {
+    cancelButton = secondaryButton("common/cancel"_i18n, [this] {
         if (onCancel)
             onCancel();
-    }));
+    });
+    runningLineBox->addView(cancelButton);
     runningRow->addView(runningLineBox);
     bar = new LibraryProgressBar();
     bar->setMarginTop(8);
@@ -356,6 +358,8 @@ void GameListPanel::applyColors() {
     separator->setColor(themeColor("equinox/card"));
     idleIcon->setTextColor(themeColor("brls/text"));
     sortLabel->setTextColor(themeColor("brls/text"));
+    retryButton->setBackgroundColor(themeColor("equinox/card_inner"));
+    cancelButton->setBackgroundColor(themeColor("equinox/card_inner"));
     applyQuery();
     applyToggle();
 }
@@ -488,9 +492,9 @@ void GameListPanel::applyOrder() {
 
 void GameListPanel::applyLooks(bool animate) {
     for (size_t i = 0; i < cells.size(); i++) {
-        RowLook look = RowLook::Thumb;
+        RowLook look = RowLook::Name;
         if (mode == 0)
-            look = current && *current == i ? RowLook::Cartridge : RowLook::Name;
+            look = current && *current == i ? RowLook::Cartridge : RowLook::Thumb;
         const bool visible = cells[i]->getVisibility() == Visibility::VISIBLE;
         cells[i]->setLook(look, animate && visible);
     }

@@ -539,6 +539,7 @@
             "facts_pending": "Gênero, jogadores, desenvolvedora e ano aparecem depois de baixar os dados.",
             "facts_none": "Sem ficha para este jogo no libretro-database.",
             "synopsis": "Sinopse",
+            "synopsis_empty": "Sem sinopse para este jogo.",
             "synopsis_none": "Sem sinopse ainda. Baixe os dados deste jogo para ver a sinopse, a ficha e as imagens.",
             "sources": "Fontes: libretro, libretro-database, ScreenScraper",
             "sources_free": "Fontes: libretro, libretro-database"

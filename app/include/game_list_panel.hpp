@@ -61,7 +61,7 @@ class GameListPanel : public brls::Box {
     // current (nothing matches the search, or no items).
     std::function<void(std::optional<size_t>)> onFocusGame;
     // Also "Try again" after a stop.
-    std::function<void()> onDownloadAll, onCancel;
+    std::function<void()> onDownloadAll, onRetry, onCancel;
 
     void willAppear(bool resetState = false) override;
 
@@ -109,6 +109,8 @@ class GameListPanel : public brls::Box {
     brls::Label* doneLabel = nullptr;
     brls::Box* stoppedRow = nullptr;
     brls::Label* stoppedLabel = nullptr;
+    brls::Button* retryButton = nullptr;
+    brls::Button* cancelButton = nullptr;
     brls::Box* runningRow = nullptr;
     brls::Label* runningLine = nullptr;
     brls::Label* runningName = nullptr;

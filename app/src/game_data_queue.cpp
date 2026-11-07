@@ -132,6 +132,10 @@ void GameDataQueue::finish(const std::shared_ptr<Job>& job, const emu::DataOutco
         if (onStopped) onStopped(outcome.stop);
         return;
     }
-    if (pending_.empty() && !current_) reset();
-    else pump();
+    if (pending_.empty() && !current_) {
+        reset();
+        return;
+    }
+    pump();
+    if (current_ && onAdvanced) onAdvanced();
 }

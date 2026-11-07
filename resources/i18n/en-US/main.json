@@ -539,6 +539,7 @@
             "facts_pending": "Genre, players, developer and year show up after downloading the data.",
             "facts_none": "No details for this game in libretro-database.",
             "synopsis": "Synopsis",
+            "synopsis_empty": "No synopsis for this game.",
             "synopsis_none": "No synopsis yet. Download this game's data to see the synopsis, the details and the images.",
             "sources": "Sources: libretro, libretro-database, ScreenScraper",
             "sources_free": "Sources: libretro, libretro-database"

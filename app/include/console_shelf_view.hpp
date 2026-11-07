@@ -128,10 +128,22 @@ class ConsoleShelfView : public brls::Box {
     void createDataQueue();
     void download(size_t index);
     void downloadAll();
+    // The bottom notice's retry: the game that stopped, then the rest of the
+    // batch when it stopped inside one.
+    void retryStopped();
     void cancelData();
     void dataFinished(size_t index, const emu::DataOutcome& outcome);
     void dataStopped(emu::DataStop stop);
     std::optional<size_t> stoppedIndex;
+    // Set by downloadAll, cleared when the queue empties or stops.
+    bool batchActive = false;
+    bool stoppedInBatch = false;
+    struct Retry {
+        size_t index;
+        bool batch;
+    };
+    // What the bottom notice's retry re-queues.
+    std::optional<Retry> retry;
 
     // Downloads the missing covers, nearest to `first` first.
     void fetchCovers(size_t first);

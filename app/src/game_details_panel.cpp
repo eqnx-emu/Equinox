@@ -409,8 +409,10 @@ void GameDetailsPanel::applyDetails() {
     title->setText(details.name);
     fileLine->setText(brls::getStr("library/details/not_identified", details.fileName));
     fileLine->setVisibility(details.identified ? Visibility::GONE : Visibility::VISIBLE);
-    synopsisText->setText(details.synopsis.empty() ? text("library/details/synopsis_none")
-                                                   : details.synopsis);
+    // With data downloaded, an empty synopsis is a fact, not an invitation.
+    synopsisText->setText(!details.synopsis.empty() ? details.synopsis
+                          : details.hasData         ? text("library/details/synopsis_empty")
+                                                    : text("library/details/synopsis_none"));
     applyAction();
     applyMedia();
     applyFacts();
