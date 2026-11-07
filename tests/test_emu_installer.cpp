@@ -1,0 +1,210 @@
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include "doctest/doctest.h"
+
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <string>
+
+#include "emu/RunnerInstaller.hpp"
+
+using namespace emu;
+namespace fs = std::filesystem;
+
+// Fake transport: RunnerInstaller.cpp links against these instead of curl.
+namespace fake {
+std::string body;   // what a download returns
+bool fail = false;  // the transfer fails after writing the whole body
+std::string lastUrl;
+}  // namespace fake
+
+bool httpGetToString(const std::string& url, std::string& out, long, std::string& error) {
+    fake::lastUrl = url;
+    if (fake::fail) {
+        error = "network down";
+        return false;
+    }
+    out = fake::body;
+    return true;
+}
+
+bool httpGetToFile(const std::string& url, const std::string& path, long,
+                   const Progress& progress, std::string& error) {
+    fake::lastUrl = url;
+    std::ofstream f(path, std::ios::binary);
+    uint64_t total = fake::body.size();
+    f.write(fake::body.data(), static_cast<std::streamsize>(total / 2));
+    if (progress && !progress(total / 2, total)) {
+        error = "cancelled";
+        return false;
+    }
+    f.write(fake::body.data() + total / 2, static_cast<std::streamsize>(total - total / 2));
+    if (fake::fail) {
+        error = "network down";
+        return false;
+    }
+    return true;
+}
+
+static const char* kHelloSha = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
+
+static std::string readAll(const fs::path& p) {
+    std::ifstream f(p, std::ios::binary);
+    std::stringstream s;
+    s << f.rdbuf();
+    return s.str();
+}
+
+static void writeAll(const fs::path& p, const std::string& data) {
+    std::ofstream f(p, std::ios::binary);
+    f << data;
+}
+
+struct Sandbox {
+    fs::path root = fs::temp_directory_path() / "equinox_emu_installer";
+    const Console& snes = *findConsole("snes");
+    ConsolePaths paths;
+    Manifest manifest;
+
+    Sandbox() {
+        fs::remove_all(root);
+        paths = pathsFor(snes, root.string());
+        manifest.id = "snes9x";
+        manifest.console = "snes";
+        manifest.version = "1.2.0";
+        manifest.protocol = 1;
+        manifest.asset = "equinox-snes9x.nro";
+        manifest.size = 5;
+        manifest.sha256 = kHelloSha;
+        fake::body = "hello";
+        fake::fail = false;
+        fake::lastUrl.clear();
+    }
+    ~Sandbox() { fs::remove_all(root); }
+
+    void installOld() {
+        REQUIRE(ensureFolders(paths));
+        writeAll(paths.runner, "old");
+    }
+};
+
+TEST_CASE("installRunner replaces runner.bin and records installed.json") {
+    Sandbox s;
+    s.installOld();
+    uint64_t lastDone = 0;
+    InstallResult r = installRunner(
+        s.snes, s.manifest,
+        [&](uint64_t done, uint64_t) {
+            lastDone = done;
+            return true;
+        },
+        s.root.string());
+    CHECK(r.ok);
+    CHECK(r.error.empty());
+    CHECK(fake::lastUrl == assetUrl(s.snes, s.manifest));
+    CHECK(lastDone > 0);
+    CHECK(readAll(s.paths.runner) == "hello");
+    CHECK_FALSE(fs::exists(s.paths.runner + ".part"));
+    auto installed = readInstalled(s.paths.installed);
+    REQUIRE(installed.has_value());
+    CHECK(installed->version == "1.2.0");
+    CHECK(installed->sha256 == kHelloSha);
+    CHECK(installed->protocol == 1);
+    CHECK(installed->lastCheck > 0);
+}
+
+TEST_CASE("installRunner creates the folders on a fresh card") {
+    Sandbox s;
+    InstallResult r = installRunner(s.snes, s.manifest, Progress(), s.root.string());
+    CHECK(r.ok);
+    CHECK(fs::is_directory(s.paths.roms));
+    CHECK(fs::is_directory(s.paths.covers));
+    CHECK(readAll(s.paths.runner) == "hello");
+}
+
+TEST_CASE("installRunner keeps the old runner when the hash does not match") {
+    Sandbox s;
+    s.installOld();
+    s.manifest.sha256 = std::string(64, '0');
+    InstallResult r = installRunner(s.snes, s.manifest, Progress(), s.root.string());
+    CHECK_FALSE(r.ok);
+    CHECK_FALSE(r.error.empty());
+    CHECK(readAll(s.paths.runner) == "old");
+    CHECK_FALSE(fs::exists(s.paths.runner + ".part"));
+    CHECK_FALSE(fs::exists(s.paths.installed));
+}
+
+TEST_CASE("installRunner keeps the old runner when the size does not match") {
+    Sandbox s;
+    s.installOld();
+    s.manifest.size = 6;
+    CHECK_FALSE(installRunner(s.snes, s.manifest, Progress(), s.root.string()).ok);
+    CHECK(readAll(s.paths.runner) == "old");
+    CHECK_FALSE(fs::exists(s.paths.runner + ".part"));
+}
+
+TEST_CASE("installRunner cleans up after a failed download") {
+    Sandbox s;
+    s.installOld();
+    fake::fail = true;
+    InstallResult r = installRunner(s.snes, s.manifest, Progress(), s.root.string());
+    CHECK_FALSE(r.ok);
+    CHECK(r.error == "network down");
+    CHECK(readAll(s.paths.runner) == "old");
+    CHECK_FALSE(fs::exists(s.paths.runner + ".part"));
+}
+
+TEST_CASE("installRunner stops when progress cancels") {
+    Sandbox s;
+    s.installOld();
+    InstallResult r = installRunner(
+        s.snes, s.manifest, [](uint64_t, uint64_t) { return false; }, s.root.string());
+    CHECK_FALSE(r.ok);
+    CHECK(r.error == "cancelled");
+    CHECK(readAll(s.paths.runner) == "old");
+    CHECK_FALSE(fs::exists(s.paths.runner + ".part"));
+}
+
+TEST_CASE("removeRunner deletes only the emulator folder") {
+    Sandbox s;
+    s.installOld();
+    writeAll(fs::path(s.paths.roms) / "game.sfc", "rom");
+    writeAll(fs::path(s.paths.saves) / "game.srm", "save");
+    CHECK(removeRunner(s.snes, s.root.string()));
+    CHECK_FALSE(fs::exists(s.paths.emulator));
+    CHECK(fs::exists(fs::path(s.paths.roms) / "game.sfc"));
+    CHECK(fs::exists(fs::path(s.paths.saves) / "game.srm"));
+    CHECK(fs::is_directory(s.paths.states));
+    CHECK(fs::is_directory(s.paths.covers));
+}
+
+TEST_CASE("fetchLatest parses the manifest of the right console") {
+    Sandbox s;
+    fake::body =
+        R"({"id":"snes9x","console":"snes","version":"1.0.0","protocol":1,"asset":"a.nro","size":1,"sha256":"x"})";
+    std::string error;
+    auto m = fetchLatest(s.snes, error);
+    REQUIRE(m.has_value());
+    CHECK(m->version == "1.0.0");
+    CHECK(fake::lastUrl == manifestUrl(s.snes));
+}
+
+TEST_CASE("fetchLatest rejects bad manifests and network errors") {
+    Sandbox s;
+    std::string error;
+
+    fake::body =
+        R"({"id":"x","console":"nes","version":"1.0.0","protocol":1,"asset":"a.nro","size":1,"sha256":"x"})";
+    CHECK_FALSE(fetchLatest(s.snes, error).has_value());
+    CHECK_FALSE(error.empty());
+
+    error.clear();
+    fake::body = "not json";
+    CHECK_FALSE(fetchLatest(s.snes, error).has_value());
+    CHECK_FALSE(error.empty());
+
+    error.clear();
+    fake::fail = true;
+    CHECK_FALSE(fetchLatest(s.snes, error).has_value());
+    CHECK(error == "network down");
+}

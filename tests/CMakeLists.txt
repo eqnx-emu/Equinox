@@ -63,3 +63,14 @@ add_executable(test_emu_launch
 target_include_directories(test_emu_launch PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
     "${MOONLIGHT_ROOT}/extern")
+
+# RunnerInstaller with a fake transport defined in the test (no curl).
+add_executable(test_emu_installer
+    test_emu_installer.cpp
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/RunnerInstaller.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/RunnerManifest.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp")
+target_include_directories(test_emu_installer PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
+target_link_libraries(test_emu_installer PRIVATE ${JANSSON_LIB} ${MBEDCRYPTO_LIB})

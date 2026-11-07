@@ -1,5 +1,7 @@
 #include "Updater.hpp"
 
+#include "HttpDownload.hpp"
+
 #include "Settings.hpp"
 #include "helper.hpp"
 
@@ -51,56 +53,9 @@ std::string stripTag(const std::string& tag) {
 
 #ifdef __SWITCH__
 
-const char* const CA_BUNDLE = "romfs:/certs/cacert.pem";
-
-size_t writeToString(char* data, size_t size, size_t count, void* user) {
-    static_cast<std::string*>(user)->append(data, size * count);
-    return size * count;
-}
-
-size_t writeToFile(char* data, size_t size, size_t count, void* user) {
-    return fwrite(data, 1, size * count, static_cast<FILE*>(user));
-}
-
-// GET `url` over verified TLS, following redirects (release assets redirect
-// to GitHub's object storage).
-bool httpGet(const std::string& url, curl_write_callback write, void* user,
-             long timeout, std::string& error) {
-    CURL* curl = curl_easy_init();
-    if (!curl) {
-        error = "curl_easy_init failed";
-        return false;
-    }
-
-    struct curl_slist* headers = nullptr;
-    headers = curl_slist_append(headers, "Accept: application/vnd.github+json");
-
-    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Equinox/" APP_VERSION);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
-    curl_easy_setopt(curl, CURLOPT_CAINFO, CA_BUNDLE);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-    curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, user);
-
-    CURLcode code = curl_easy_perform(curl);
-    if (code != CURLE_OK)
-        error = curl_easy_strerror(code);
-
-    curl_slist_free_all(headers);
-    curl_easy_cleanup(curl);
-    return code == CURLE_OK;
-}
-
 bool fetchLatest(UpdateInfo& info, std::string& error) {
     std::string body;
-    if (!httpGet(RELEASES_URL, writeToString, &body, 20, error))
+    if (!httpGetToString(RELEASES_URL, body, 20, error))
         return false;
 
     json_error_t jsonError;
@@ -194,19 +149,13 @@ void downloadAndInstall(const UpdateInfo& info) {
         std::string error;
         bool ok = false;
 
-        FILE* file = fopen(downloaded.c_str(), "wb");
-        if (!file) {
-            error = "could not write " + downloaded;
-        } else {
-            ok = httpGet(info.url, writeToFile, file, 300, error);
-            ok = fclose(file) == 0 && ok;
-            if (ok && !looksLikeNro(downloaded, info.size)) {
-                ok = false;
-                error = "downloaded file is not a valid NRO";
-            }
-            if (!ok)
-                remove(downloaded.c_str());
+        ok = httpGetToFile(info.url, downloaded, 300, Progress(), error);
+        if (ok && !looksLikeNro(downloaded, info.size)) {
+            ok = false;
+            error = "downloaded file is not a valid NRO";
         }
+        if (!ok)
+            remove(downloaded.c_str());
 
         brls::sync([ok, error, info, target, downloaded, loader] {
             loader->close([ok, error, info, target, downloaded] {

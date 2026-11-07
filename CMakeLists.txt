@@ -80,7 +80,8 @@ file(GLOB MAIN_SRC CONFIGURE_DEPENDS
     app/src/streaming/ffmpeg/*.cpp
     app/src/streaming/switch/*.cpp
     app/src/views/*.cpp
-    app/src/utils/*.cpp)
+    app/src/utils/*.cpp
+    app/src/utils/emu/*.cpp)
 
 if (PLATFORM_SWITCH)
     list(REMOVE_ITEM MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/app/src/streaming/audio/SDLAudioRenderer.cpp)
