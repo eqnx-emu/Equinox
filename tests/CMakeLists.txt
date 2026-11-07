@@ -111,3 +111,12 @@ target_include_directories(test_emu_gamedb PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
     "${MOONLIGHT_ROOT}/extern")
 target_compile_definitions(test_emu_gamedb PRIVATE MOONLIGHT_ROOT="${MOONLIGHT_ROOT}")
+
+add_executable(test_emu_meta
+    test_emu_meta.cpp
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/GameMeta.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/CoverStore.cpp")
+target_include_directories(test_emu_meta PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
+target_link_libraries(test_emu_meta PRIVATE ${JANSSON_LIB})
