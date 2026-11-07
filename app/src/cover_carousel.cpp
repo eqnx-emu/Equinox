@@ -12,9 +12,7 @@
 using namespace brls;
 
 namespace {
-constexpr float kLift = 6;        // focused cover sits this much higher
-constexpr float kFloat = 2.5f;      // amplitude of the floating motion
-constexpr float kFloatPeriod = 4.8f;
+constexpr float kLift = 6; // focused cover sits this much higher
 constexpr int kSlideMs = 460;
 // Entering: the focused item grows a little on its way to the side.
 constexpr int kEnterMs = 520;
@@ -123,7 +121,6 @@ void CoverCarousel::draw(NVGcontext* vg, float x, float y, float width,
         return;
 
     const Time now = getCPUTimeUsec();
-    const float t = seconds(now);
     const float pos = position.getValue();
     const float e = enter.getValue();
     const float glow = std::max(focusGlow.getValue(), kEnteredGlow * e);
@@ -186,8 +183,7 @@ void CoverCarousel::draw(NVGcontext* vg, float x, float y, float width,
         float alpha = a < 1 ? 1.0f - a * (1.0f - shelf.neighbourAlpha)
                             : std::max(0.0f, shelf.neighbourAlpha -
                                                  (a - 1) * shelf.alphaStep);
-        const float bob = std::sin(t * 6.2831853f / kFloatPeriod);
-        float lift = -(kLift + kFloat * bob) * focus;
+        float lift = -kLift * focus;
 
         if (e > 0.001f) {
             if ((int)i == selected) {
@@ -213,9 +209,9 @@ void CoverCarousel::draw(NVGcontext* vg, float x, float y, float width,
         const float sw = cw * scale * squash;
         const float sh = ch * scale;
 
-        // Shadow on the ground; smaller while the cover floats up.
+        // Shadow on the ground.
         const float groundY = y + (shelf.height + ch * shelf.focusScale) / 2 + 4;
-        const float gw = sw * (0.42f - 0.06f * bob * focus);
+        const float gw = sw * 0.42f;
         nvgSave(vg);
         nvgTranslate(vg, cx, groundY);
         nvgScale(vg, 1.0f, 0.16f);
