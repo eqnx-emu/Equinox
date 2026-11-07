@@ -103,3 +103,11 @@ target_include_directories(test_emu_crc PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
     "${MOONLIGHT_ROOT}/extern")
 target_link_libraries(test_emu_crc PRIVATE ${Z_LIB})
+
+add_executable(test_emu_gamedb
+    test_emu_gamedb.cpp
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/GameDb.cpp")
+target_include_directories(test_emu_gamedb PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
+target_compile_definitions(test_emu_gamedb PRIVATE MOONLIGHT_ROOT="${MOONLIGHT_ROOT}")
