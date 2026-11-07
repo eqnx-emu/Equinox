@@ -55,3 +55,11 @@ add_executable(test_emu_roms
 target_include_directories(test_emu_roms PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
     "${MOONLIGHT_ROOT}/extern")
+
+add_executable(test_emu_launch
+    test_emu_launch.cpp
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/LaunchLine.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp")
+target_include_directories(test_emu_launch PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
