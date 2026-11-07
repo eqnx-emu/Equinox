@@ -13,6 +13,7 @@
 #include "emu/CoverName.hpp"
 #include "emu/CoverStore.hpp"
 #include "emu/EmuLauncher.hpp"
+#include "emu/NetGate.hpp"
 #include "emu/PathUtf8.hpp"
 #include "emu/PlayedAgo.hpp"
 #include "helper.hpp"
@@ -77,15 +78,6 @@ void removeFile(const std::string& path) {
     std::filesystem::remove(emu::fromUtf8(path), ec);
 }
 
-// Set while a cover task touches the network or the SD card, and by a
-// launch from the moment it starts handing over (kept until the app quits).
-// Covers download one at a time across every shelf. Only ever taken with
-// tryAcquireCovers(): nothing waits on it, so no pool thread blocks.
-std::atomic<bool> coversBusy{false};
-
-bool tryAcquireCovers() { return !coversBusy.exchange(true); }
-void releaseCovers() { coversBusy.store(false); }
-
 constexpr int kBusyRetryMs = 200;
 
 struct LaunchRequest {
@@ -102,19 +94,19 @@ void launchWhenIdle(std::shared_ptr<LaunchRequest> request, int attempt);
 
 void finishLaunch(std::shared_ptr<LaunchRequest> request) {
     if (!*request->alive) {
-        releaseCovers();
+        emu::netRelease();
         return;
     }
     if (emu::launchRom(*request->console, request->rom, request->origin,
                        request->filter))
         return; // quitting; the cover flag stays set
-    releaseCovers();
+    emu::netRelease();
     if (request->onFail)
         request->onFail();
 }
 
 void launchWhenIdle(std::shared_ptr<LaunchRequest> request, int attempt) {
-    if (tryAcquireCovers()) {
+    if (emu::netTryAcquire()) {
         if (Dialog* loader = request->loader) {
             request->loader = nullptr;
             loader->close([request] { finishLaunch(request); });
@@ -476,7 +468,7 @@ void ConsoleShelfView::play(int index) {
 }
 
 void ConsoleShelfView::waitForCovers(int index, int attempt) {
-    if (tryAcquireCovers()) {
+    if (emu::netTryAcquire()) {
         // Held until the app quits, or released below if it does not.
         if (stopLoader) {
             Dialog* loader = stopLoader;
@@ -484,7 +476,7 @@ void ConsoleShelfView::waitForCovers(int index, int attempt) {
             std::shared_ptr<bool> token = alive;
             loader->close([this, token, index] {
                 if (!*token) {
-                    releaseCovers();
+                    emu::netRelease();
                     return;
                 }
                 launch(index);
@@ -531,7 +523,7 @@ void ConsoleShelfView::waitForCovers(int index, int attempt) {
 void ConsoleShelfView::launch(int index) {
     if (emu::launchRom(consoleRef, games[index].rom, emu::Origin::Shelf, -1))
         return; // quitting; the cover flag stays set
-    releaseCovers();
+    emu::netRelease();
     launching = false;
 
     // The game may have been deleted since the shelf was filled.
@@ -599,12 +591,12 @@ void ConsoleShelfView::fetchOneCover(std::shared_ptr<CoverQueue> queue) {
         return;
     // Another shelf's cover, or a launch, has the network: try again soon,
     // without holding this worker.
-    if (!tryAcquireCovers()) {
+    if (!emu::netTryAcquire()) {
         brls::delay(kBusyRetryMs, [queue] { runNextCover(queue); });
         return;
     }
     if (queue->stop.load()) {
-        releaseCovers();
+        emu::netRelease();
         return;
     }
 
@@ -661,7 +653,7 @@ void ConsoleShelfView::fetchOneCover(std::shared_ptr<CoverQueue> queue) {
     }
     if (!found && !transient && !diskError)
         emu::markCoverMissed(queue->where, job.title, APP_VERSION);
-    releaseCovers();
+    emu::netRelease();
 
     brls::sync([queue, job, found, transient] {
         if (!*queue->alive)
