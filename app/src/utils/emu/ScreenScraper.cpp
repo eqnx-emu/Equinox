@@ -63,9 +63,10 @@ SsResult ssParse(long httpStatus, const std::string& body, const std::string& la
     switch (httpStatus) {
         case 200: return parseBody(body, lang);
         case 404: r.status = SsStatus::NotFound; break;
-        case 401:
         case 403: r.status = SsStatus::BadLogin; break;
-        case 423:
+        // 401 and 423 mean the API is closed or overloaded, not that the login is wrong.
+        case 401:
+        case 423: r.status = SsStatus::Transient; break;
         case 426:
         case 429:
         case 430:

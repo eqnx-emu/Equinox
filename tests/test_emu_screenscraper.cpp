@@ -94,9 +94,9 @@ TEST_CASE("ssParse accepts a game without synopsis") {
 
 TEST_CASE("ssParse maps http statuses") {
     CHECK(ssParse(404, "Erreur : Rom/Iso/Dossier non trouv\xC3\xA9" "e !", "pt").status == SsStatus::NotFound);
-    CHECK(ssParse(401, "", "pt").status == SsStatus::BadLogin);
     CHECK(ssParse(403, "", "pt").status == SsStatus::BadLogin);
-    for (long s : {423, 426, 429, 430, 431}) CHECK(ssParse(s, "", "pt").status == SsStatus::Quota);
+    for (long s : {401, 423}) CHECK(ssParse(s, "", "pt").status == SsStatus::Transient);
+    for (long s : {426, 429, 430, 431}) CHECK(ssParse(s, "", "pt").status == SsStatus::Quota);
     CHECK(ssParse(0, "", "pt").status == SsStatus::Transient);
     CHECK(ssParse(500, "", "pt").status == SsStatus::Transient);
 }
