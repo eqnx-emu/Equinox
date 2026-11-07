@@ -48,6 +48,8 @@ struct ConsoleShelfView::CoverQueue {
     std::vector<Job> jobs; // UI thread only: jobs can be added while it runs
     size_t next = 0;       // UI thread only
     Job running;           // copy of jobs[next], written before its task starts
+    bool inFlight = false; // `running` was handed to the pool and has not ended
+    bool halted = false;   // stopped by a transient failure: nothing else will run
     const emu::Console* console = nullptr;
     emu::ConsolePaths where;
     uint64_t generation = 0;
@@ -837,11 +839,11 @@ void ConsoleShelfView::retryCover(size_t index) {
     games[index].missed = false;
     const CoverQueue::Job job{index, game.rom.title, game.meta.canonical,
                               emu::coverPath(paths, game.rom.title)};
-    if (covers && covers->next < covers->jobs.size()) {
+    if (covers && !covers->halted && covers->next < covers->jobs.size()) {
         // Waiting in the running queue: it just learned the name. The job
         // at `next` may already be on the pool with the old one, so that
         // game goes again at the end.
-        for (size_t i = covers->next + 1; i < covers->jobs.size(); i++) {
+        for (size_t i = covers->next + (covers->inFlight ? 1 : 0); i < covers->jobs.size(); i++) {
             if (covers->jobs[i].index == index) {
                 covers->jobs[i].canonical = job.canonical;
                 return;
@@ -869,6 +871,7 @@ void ConsoleShelfView::runNextCover(std::shared_ptr<CoverQueue> queue) {
         return;
     }
     queue->running = queue->jobs[queue->next];
+    queue->inFlight = true;
     brls::async([queue] { fetchOneCover(queue); });
 }
 
@@ -879,7 +882,10 @@ void ConsoleShelfView::fetchOneCover(std::shared_ptr<CoverQueue> queue) {
     // Another shelf's cover, a game's data or a launch has the network: try
     // again soon, without holding this worker.
     if (!emu::netTryAcquire()) {
-        brls::delay(kBusyRetryMs, [queue] { runNextCover(queue); });
+        brls::delay(kBusyRetryMs, [queue] {
+            queue->inFlight = false;
+            runNextCover(queue);
+        });
         return;
     }
     if (queue->stop.load()) {
@@ -939,8 +945,11 @@ void ConsoleShelfView::fetchOneCover(std::shared_ptr<CoverQueue> queue) {
             return;
         if (found)
             queue->view->coverArrived(queue->generation, job.index, job.path);
-        if (transient)
-            return; // generic covers; tried again next time
+        queue->inFlight = false;
+        if (transient) {
+            queue->halted = true; // generic covers; tried again next time
+            return;
+        }
         queue->next++;
         runNextCover(queue);
     });
