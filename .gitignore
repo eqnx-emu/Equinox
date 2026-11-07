@@ -4,3 +4,5 @@ libromfs-generator
 build*
 vcpkg_installed
 .psv-logs/
+
+.superpowers/

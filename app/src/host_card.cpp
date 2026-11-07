@@ -4,7 +4,6 @@
 //
 
 #include "host_card.hpp"
-#include "add_host_tab.hpp"
 #include "app_list_view.hpp"
 #include "capacity_test_view.hpp"
 #include "helper.hpp"
@@ -553,25 +552,34 @@ AddHostCard::AddHostCard(bool primary) {
     // An open slot: no fill, dashed outline drawn in draw().
     this->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
     monitor->setAddMode(primary);
+#if defined(PLATFORM_SWITCH)
+    // A PC or a console.
+    name->setText("home/add_title"_i18n);
+#else
     name->setText("hosts/add_title"_i18n);
+#endif
     statusDot->setVisibility(Visibility::GONE);
     status->setSingleLine(false);
     status->setFontSize(14);
     status->setTextColor(themeColor("equinox/muted"));
+#if defined(PLATFORM_SWITCH)
+    status->setText("home/add_body"_i18n);
+#else
     status->setText("hosts/add_body"_i18n);
+#endif
     detail->setVisibility(Visibility::GONE);
     info->setVisibility(Visibility::GONE);
 
     this->addGestureRecognizer(new TapGestureRecognizer(this));
     this->registerClickAction([this](View* view) {
-        press([this] {
-            auto* screen = new AddHostTab();
-            screen->getAppletFrameItem()->title = "hosts/add_screen"_i18n;
-            HomeView::presentWithHeader(this, screen);
-        });
+        press([] { HomeView::showAddChoices(); });
         return true;
     });
+#if defined(PLATFORM_SWITCH)
+    updateActionHint(ControllerButton::BUTTON_A, "home/add_title"_i18n);
+#else
     updateActionHint(ControllerButton::BUTTON_A, "hosts/add_action"_i18n);
+#endif
 }
 
 void AddHostCard::draw(NVGcontext* vg, float x, float y, float width,

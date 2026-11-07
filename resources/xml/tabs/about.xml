@@ -154,6 +154,14 @@
                 text="@i18n/about/thanks_6"
                 marginTop="8"/>
 
+            <brls:Label
+                width="auto"
+                height="auto"
+                fontSize="15"
+                textColor="@theme/brls/header/subtitle"
+                text="@i18n/about/gamedb_credit"
+                marginTop="8"/>
+
         </brls:Box>
 
     </brls:ScrollingFrame>

@@ -44,7 +44,7 @@ project(Moonlight)
 include(GNUInstallDirs)
 
 set(VERSION_MAJOR "1")
-set(VERSION_MINOR "8")
+set(VERSION_MINOR "9")
 set(VERSION_ALTER "0")
 set(VERSION_BUILD "7")
 set(PACKAGE_NAME "ru.xitrix.Moonlight")
@@ -80,7 +80,8 @@ file(GLOB MAIN_SRC CONFIGURE_DEPENDS
     app/src/streaming/ffmpeg/*.cpp
     app/src/streaming/switch/*.cpp
     app/src/views/*.cpp
-    app/src/utils/*.cpp)
+    app/src/utils/*.cpp
+    app/src/utils/emu/*.cpp)
 
 if (PLATFORM_SWITCH)
     list(REMOVE_ITEM MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/app/src/streaming/audio/SDLAudioRenderer.cpp)
@@ -104,6 +105,9 @@ endif ()
 
 # building target
 program_target(${PROJECT_NAME} "${MAIN_SRC}")
+set(EQUINOX_SS_DEV_OUT_DIR "${CMAKE_BINARY_DIR}/generated")
+include(cmake/EquinoxSsDev.cmake)
+target_include_directories(${PROJECT_NAME} PRIVATE "${EQUINOX_SS_DEV_OUT_DIR}")
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 20)
 if (USE_SDL3)
     target_compile_definitions(${PROJECT_NAME} PRIVATE SDL_ENABLE_OLD_NAMES)
@@ -184,6 +188,7 @@ find_package(CURL REQUIRED)
 find_package(Jansson REQUIRED)
 find_package(EXPAT REQUIRED)
 find_package(PNG REQUIRED)
+find_package(ZLIB REQUIRED)
 
 find_library(OPUS_LIBRARY opus)
 message("opus: ${OPUS_LIBRARY}")
@@ -240,6 +245,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         ${ZSTD_LIBRARY}
         ${OPUS_LIBRARY}
         PNG::PNG
+        ZLIB::ZLIB
         ${MOONLIGHT_APP_FFMPEG_LIBS}
         ${MOONLIGHT_APP_SDL_LIBS}
         ${APP_PLATFORM_LIB}

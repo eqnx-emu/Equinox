@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "console_card.hpp"
 #include "cover_carousel.hpp"
 #include "host_card.hpp"
 #include "pressable_box.hpp"
@@ -86,6 +87,13 @@ class HomeView : public brls::Box {
     // The home screen has no header; screens opened from it bring it back.
     static void presentWithHeader(brls::View* from, brls::View* view);
 
+    // The shelf of a console's games, landing on selectRom (a file name)
+    // when given.
+    void openConsole(const emu::Console& console, const std::string& selectRom = "");
+    // A on the "Add" card of the devices shelf: a PC, or a console on the
+    // Switch.
+    static void showAddChoices();
+
     // PCs were renamed or removed: rebuild the PC shelf.
     static void hostsChanged();
     // A PC was paired from the add PC screen: back to the PC shelf, which
@@ -116,7 +124,9 @@ class HomeView : public brls::Box {
     };
     Shelf home, pcs;
     std::vector<HomeCard*> homeCards;
+    // The devices shelf holds the PCs, then the consoles, then "Add".
     std::vector<HostCard*> hostCards;
+    std::vector<ConsoleCard*> consoleCards;
 
     // Panel contents.
     brls::Label* panelName = nullptr;
@@ -138,16 +148,35 @@ class HomeView : public brls::Box {
     // B on the home shelf: asks before closing the app.
     void confirmExit();
 
-    void openPcs();
+    // checkUpdates: false on the way back from a game, so no manifest
+    // request is in flight if the player starts another one right away;
+    // the check runs on the next visit to Dispositivos.
+    void openPcs(bool checkUpdates = true);
     void closePcs();
     void enter();
     void leave(bool focusCard = true);
     void fillPanel();
     void setPanelOptions(const std::vector<HomeOption>& options, int columns);
     HostCard* selectedHost();
+    ConsoleCard* selectedConsole();
 
     std::vector<HomeOption> favoritesOptions();
     std::vector<HomeOption> settingsOptions();
     std::vector<HomeOption> aboutOptions();
     std::vector<HomeOption> hostOptions(HostCard* card);
+    std::vector<HomeOption> consoleOptions(ConsoleCard* card);
+
+    // Downloads and installs (or updates) the console's emulator.
+    void installConsole(const emu::Console& console);
+    void consoleInstalled(const emu::Console& console, bool first);
+    // Re-reads the installed version and the games, with the latest
+    // manifest seen.
+    void refreshConsole(const emu::Console& console);
+    void removeConsole(const emu::Console& console);
+    // At most once a day, asks whether the installed emulators have a newer
+    // version. Silent when offline.
+    void checkConsoleUpdates();
+    // Started by the runner on its way back: opens the console's shelf on
+    // the game that was played (see emu::setPendingResume).
+    void resumeConsole();
 };

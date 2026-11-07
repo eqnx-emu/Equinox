@@ -187,9 +187,31 @@ bool Settings::is_favorite(const Host& host, int app_id) {
 }
 
 bool Settings::has_any_favorite() {
-    return std::any_of(m_hosts.begin(), m_hosts.end(), [&](const auto &item) {
-        return !item.favorites.empty();
-    });
+    return !m_local_favorites.empty() ||
+           std::any_of(m_hosts.begin(), m_hosts.end(), [&](const auto &item) {
+               return !item.favorites.empty();
+           });
+}
+
+void Settings::toggle_local_favorite(const LocalFavorite& favorite) {
+    emu::toggleLocalFavorite(m_local_favorites, favorite);
+    save();
+}
+
+bool Settings::is_local_favorite(const std::string& console, const std::string& romFile) const {
+    return emu::isLocalFavorite(m_local_favorites, console, romFile);
+}
+
+int64_t Settings::last_played(const std::string& console, const std::string& romFile) const {
+    auto it = m_local_played.find(console);
+    if (it == m_local_played.end())
+        return 0;
+    auto game = it->second.find(romFile);
+    return game == it->second.end() ? 0 : game->second;
+}
+
+void Settings::set_last_played(const std::string& console, const std::string& romFile, int64_t when) {
+    m_local_played[console][romFile] = when;
 }
 
 void Settings::load() {
@@ -271,7 +293,28 @@ void Settings::load() {
             }
         }
         
+        // Absent in settings written before console favorites existed.
+        m_local_favorites =
+            emu::parseLocalFavorites(json_object_get(root, "local_favorites"));
+
         if (json_t* settings = json_object_get(root, "settings")) {
+            if (json_t* played = json_object_get(settings, "local_played")) {
+                if (json_typeof(played) == JSON_OBJECT) {
+                    const char* console;
+                    json_t* games;
+                    json_object_foreach(played, console, games) {
+                        if (json_typeof(games) != JSON_OBJECT)
+                            continue;
+                        const char* file;
+                        json_t* when;
+                        json_object_foreach(games, file, when) {
+                            if (json_typeof(when) == JSON_INTEGER)
+                                m_local_played[console][file] = (int64_t)json_integer_value(when);
+                        }
+                    }
+                }
+            }
+
             if (json_t* resolution = json_object_get(settings, "resolution")) {
                 if (json_typeof(resolution) == JSON_INTEGER) {
                     m_resolution = (int)json_integer_value(resolution);
@@ -395,6 +438,30 @@ void Settings::load() {
             
             if (json_t* write_log = json_object_get(settings, "write_log")) {
                 m_write_log = json_typeof(write_log) == JSON_TRUE;
+            }
+
+            if (json_t* library_view = json_object_get(settings, "library_view")) {
+                if (json_typeof(library_view) == JSON_INTEGER)
+                    set_library_view((int)json_integer_value(library_view));
+            }
+
+            if (json_t* library_sort = json_object_get(settings, "library_sort")) {
+                if (json_typeof(library_sort) == JSON_INTEGER)
+                    set_library_sort((int)json_integer_value(library_sort));
+            }
+
+            if (json_t* reduce_motion = json_object_get(settings, "reduce_motion")) {
+                m_reduce_motion = json_typeof(reduce_motion) == JSON_TRUE;
+            }
+
+            if (json_t* ss_user = json_object_get(settings, "screenscraper_user")) {
+                if (json_typeof(ss_user) == JSON_STRING)
+                    m_screenscraper_user = json_string_value(ss_user);
+            }
+
+            if (json_t* ss_password = json_object_get(settings, "screenscraper_password")) {
+                if (json_typeof(ss_password) == JSON_STRING)
+                    m_screenscraper_password = json_string_value(ss_password);
             }
 
             if (json_t* show_metrics = json_object_get(settings, "show_metrics")) {
@@ -647,6 +714,9 @@ void Settings::save() {
             }
             json_object_set_new(root, "hosts", hosts);
         }
+
+        if (json_t* favorites = emu::localFavoritesJson(m_local_favorites))
+            json_object_set_new(root, "local_favorites", favorites);
         
         if (json_t* settings = json_object()) {
             json_object_set_new(settings, "resolution", json_integer(m_resolution));
@@ -672,6 +742,11 @@ void Settings::save() {
             json_object_set_new(settings, "sops", m_sops ? json_true() : json_false());
             json_object_set_new(settings, "play_audio", m_play_audio ? json_true() : json_false());
             json_object_set_new(settings, "write_log", m_write_log ? json_true() : json_false());
+            json_object_set_new(settings, "library_view", json_integer(m_library_view));
+            json_object_set_new(settings, "library_sort", json_integer(m_library_sort));
+            json_object_set_new(settings, "reduce_motion", m_reduce_motion ? json_true() : json_false());
+            json_object_set_new(settings, "screenscraper_user", json_string(m_screenscraper_user.c_str()));
+            json_object_set_new(settings, "screenscraper_password", json_string(m_screenscraper_password.c_str()));
             json_object_set_new(settings, "show_metrics", m_show_metrics ? json_true() : json_false());
             json_object_set_new(settings, "metrics_mask", json_integer(m_metrics_mask));
             json_object_set_new(settings, "metrics_position", json_integer(m_metrics_position));
@@ -718,6 +793,18 @@ void Settings::save() {
                 json_object_set_new(settings, "guide_key_buttons", guideKeyButtons);
             }
             
+            if (json_t* played = json_object()) {
+                for (const auto& console : m_local_played) {
+                    json_t* games = json_object();
+                    if (!games)
+                        continue;
+                    for (const auto& game : console.second)
+                        json_object_set_new(games, game.first.c_str(), json_integer((json_int_t)game.second));
+                    json_object_set_new(played, console.first.c_str(), games);
+                }
+                json_object_set_new(settings, "local_played", played);
+            }
+
             json_object_set_new(root, "settings", settings);
         }
 

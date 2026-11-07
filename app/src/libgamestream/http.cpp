@@ -104,7 +104,7 @@ void freeCurl(CURL* curl) {
 
 int http_request(const std::string& url, Data* data,
                  HTTPRequestTimeout timeout, long connect_timeout) {
-    brls::Logger::info("Curl: Request:\n{}", url.c_str());
+    brls::Logger::debug("Curl: Request:\n{}", url.c_str());
 
     auto curl = makeCurl();
     if (!curl) return GS_FAILED;
@@ -139,9 +139,9 @@ int http_request(const std::string& url, Data* data,
     *data = Data(http_data->memory, http_data->size);
 
     if (http_data->size > 3000) {
-        brls::Logger::info("Curl: Response: Ok");
+        brls::Logger::debug("Curl: Response: Ok");
     } else {
-        brls::Logger::info("Curl: Response:\n{}", http_data->memory);
+        brls::Logger::debug("Curl: Response:\n{}", http_data->memory);
     }
 
     free(http_data->memory);
@@ -285,7 +285,7 @@ int http_download_discard(
     const std::string& url, long timeout_s,
     const std::function<void(double elapsed_s, uint64_t bytes)>& on_progress,
     const std::atomic<bool>* cancel) {
-    brls::Logger::info("Curl: Speedtest request:\n{}", url.c_str());
+    brls::Logger::debug("Curl: Speedtest request:\n{}", url.c_str());
 
     auto curl = makeCurl();
     if (!curl) return GS_FAILED;
