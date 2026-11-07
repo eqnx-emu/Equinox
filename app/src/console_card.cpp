@@ -106,9 +106,6 @@ ConsoleCard::ConsoleCard(const emu::Console& console) : consoleRef(console) {
     info->setVisibility(Visibility::GONE);
     status->setFontSize(15);
 
-    // The card draws its own gold border.
-    setHideHighlight(true);
-
     auto it = lastCounts().find(console.slug);
     if (it != lastCounts().end())
         games = it->second;
@@ -242,19 +239,6 @@ void ConsoleCard::draw(NVGcontext* vg, float x, float y, float width,
     const float radius = 16;
     const NVGcolor gold = themeColor("equinox/sun");
 
-    // Soft gold glow behind the card.
-    if (f > 0.0f) {
-        NVGcolor inner = gold;
-        inner.a = 0.35f * f * getAlpha();
-        NVGcolor outer = gold;
-        outer.a = 0;
-        nvgBeginPath(vg);
-        nvgRect(vg, x - 30, y - 30, width + 60, height + 60);
-        nvgFillPaint(vg, nvgBoxGradient(vg, x, y, width, height, radius, 30,
-                                        inner, outer));
-        nvgFill(vg);
-    }
-
     nvgBeginPath(vg);
     nvgRoundedRect(vg, x, y, width, height, radius);
     nvgFillPaint(vg, nvgLinearGradient(vg, x, y + height, x + width, y,
@@ -287,16 +271,6 @@ void ConsoleCard::draw(NVGcontext* vg, float x, float y, float width,
         nvgLerpRGBA(hex(consoleRef.cardAccent), gold, f));
 
     PressableBox::draw(vg, x, y, width, height, style, ctx);
-
-    if (f > 0.0f) {
-        NVGcolor border = gold;
-        border.a = f * getAlpha();
-        nvgBeginPath(vg);
-        nvgRoundedRect(vg, x - 1.5f, y - 1.5f, width + 3, height + 3, radius + 1.5f);
-        nvgStrokeColor(vg, border);
-        nvgStrokeWidth(vg, 3);
-        nvgStroke(vg);
-    }
 }
 
 #endif // PLATFORM_SWITCH

@@ -5,7 +5,7 @@
 //  A console whose emulator is installed, on the Devices shelf: a card in
 //  the console's colors with its controller drawn large in the corner. Shows
 //  how many games are on the SD card, or that an update is waiting. With
-//  focus the card grows, its border and tag turn gold and the controller
+//  focus the card grows, its tag turns gold and the controller
 //  hops upright.
 //
 
@@ -66,7 +66,7 @@ class ConsoleCard : public PressableBox {
 
     brls::Image* icon = nullptr;
     brls::Box* tag = nullptr;
-    // 0 to 1 with focus: gold border, tag and full-strength controller.
+    // 0 to 1 with focus: gold tag and full-strength controller.
     brls::Animatable focus = 0.0f;
     // 0 to 1 with focus, overshooting: the controller's hop.
     brls::Animatable hop = 0.0f;
