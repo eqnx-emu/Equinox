@@ -130,3 +130,10 @@ target_include_directories(test_emu_screenscraper PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
     "${MOONLIGHT_ROOT}/extern")
 target_link_libraries(test_emu_screenscraper PRIVATE ${JANSSON_LIB})
+
+add_executable(test_emu_library
+    test_emu_library.cpp
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/Library.cpp")
+target_include_directories(test_emu_library PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
