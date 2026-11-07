@@ -187,9 +187,19 @@ bool Settings::is_favorite(const Host& host, int app_id) {
 }
 
 bool Settings::has_any_favorite() {
-    return std::any_of(m_hosts.begin(), m_hosts.end(), [&](const auto &item) {
-        return !item.favorites.empty();
-    });
+    return !m_local_favorites.empty() ||
+           std::any_of(m_hosts.begin(), m_hosts.end(), [&](const auto &item) {
+               return !item.favorites.empty();
+           });
+}
+
+void Settings::toggle_local_favorite(const LocalFavorite& favorite) {
+    emu::toggleLocalFavorite(m_local_favorites, favorite);
+    save();
+}
+
+bool Settings::is_local_favorite(const std::string& console, const std::string& romFile) const {
+    return emu::isLocalFavorite(m_local_favorites, console, romFile);
 }
 
 int64_t Settings::last_played(const std::string& console, const std::string& romFile) const {
@@ -283,6 +293,10 @@ void Settings::load() {
             }
         }
         
+        // Absent in settings written before console favorites existed.
+        m_local_favorites =
+            emu::parseLocalFavorites(json_object_get(root, "local_favorites"));
+
         if (json_t* settings = json_object_get(root, "settings")) {
             if (json_t* played = json_object_get(settings, "local_played")) {
                 if (json_typeof(played) == JSON_OBJECT) {
@@ -676,6 +690,9 @@ void Settings::save() {
             }
             json_object_set_new(root, "hosts", hosts);
         }
+
+        if (json_t* favorites = emu::localFavoritesJson(m_local_favorites))
+            json_object_set_new(root, "local_favorites", favorites);
         
         if (json_t* settings = json_object()) {
             json_object_set_new(settings, "resolution", json_integer(m_resolution));

@@ -9,6 +9,16 @@
 #include "forwarder_maker.hpp"
 #include "helper.hpp"
 
+#if defined(PLATFORM_SWITCH)
+#include "console_shelf_view.hpp"
+#include "emu/CoverName.hpp"
+#include "emu/PathUtf8.hpp"
+#include "rom_cell.hpp"
+
+#include <filesystem>
+#include <system_error>
+#endif
+
 #include <algorithm>
 #include <cstdlib>
 #include <map>
@@ -18,7 +28,49 @@
 using namespace brls;
 using namespace brls::literals;
 
-FavoritesView::FavoritesView(int hostIndex) {
+namespace {
+#if defined(PLATFORM_SWITCH)
+bool fileExists(const std::string& path) {
+    std::error_code ec;
+    return std::filesystem::is_regular_file(emu::fromUtf8(path), ec);
+}
+
+bool hasLocalFavorites(const std::string& console) {
+    const auto& favorites = Settings::instance().local_favorites();
+    return std::any_of(favorites.begin(), favorites.end(),
+                       [&](const LocalFavorite& f) { return f.console == console; });
+}
+#endif
+} // namespace
+
+FavoritesView::FavoritesView(int hostIndex, const std::string& console) {
+    setup(hostIndex, console);
+    rebuild(0);
+}
+
+FavoritesView::FavoritesView(const emu::ResumeToken& token) {
+    setup(-1, "");
+    // token.filter is the chip position when the game was opened. Only
+    // "all" or the game's console chip can have shown it, so that position
+    // is kept only when it is still this console's chip; anything else
+    // (favorites changed meanwhile, a bad token) shows all.
+    const auto it = std::find(consoleFilters.begin(), consoleFilters.end(),
+                              token.console);
+    if (it != consoleFilters.end() &&
+        token.filter ==
+            1 + (int)filters.size() + (int)(it - consoleFilters.begin()))
+        consoleFilter = token.console;
+    updateSourceActions();
+
+    // The game itself, or the first one when it is no longer a favorite.
+    selectConsole = token.console;
+    selectRom = token.romFile;
+    rebuild(0);
+}
+
+FavoritesView::~FavoritesView() { *alive = false; }
+
+void FavoritesView::setup(int hostIndex, const std::string& console) {
     setAxis(Axis::COLUMN);
     setJustifyContent(JustifyContent::CENTER);
     setAlignItems(AlignItems::STRETCH);
@@ -37,6 +89,18 @@ FavoritesView::FavoritesView(int hostIndex) {
         std::find(filters.begin(), filters.end(), (size_t)hostIndex) !=
             filters.end())
         filter = hostIndex;
+
+#if defined(PLATFORM_SWITCH)
+    for (const emu::Console& c : emu::consoles())
+        if (hasLocalFavorites(c.slug))
+            consoleFilters.push_back(c.slug);
+    if (filter < 0 && !console.empty() &&
+        std::find(consoleFilters.begin(), consoleFilters.end(), console) !=
+            consoleFilters.end())
+        consoleFilter = console;
+#else
+    (void)console;
+#endif
 
     chips = new Box(Axis::ROW);
     chips->setJustifyContent(JustifyContent::CENTER);
@@ -79,48 +143,70 @@ FavoritesView::FavoritesView(int hostIndex) {
     registerAction("favorites/change_pc"_i18n, BUTTON_RB, [this](View*) {
         stepFilter(1);
         return true;
-    }, filters.size() < 2);
+    }, sources() < 2);
     registerAction("", BUTTON_LB, [this](View*) {
         stepFilter(-1);
         return true;
     }, true);
-    setActionAvailable(BUTTON_RB, filters.size() > 1);
-    setActionAvailable(BUTTON_LB, filters.size() > 1);
+    updateSourceActions();
+}
 
-    rebuild(0);
+void FavoritesView::updateSourceActions() {
+    setActionAvailable(BUTTON_RB, sources() > 1);
+    setActionAvailable(BUTTON_LB, sources() > 1);
+}
+
+int FavoritesView::chipPosition() const {
+    if (!consoleFilter.empty()) {
+        const auto it = std::find(consoleFilters.begin(), consoleFilters.end(),
+                                  consoleFilter);
+        if (it != consoleFilters.end())
+            return 1 + (int)filters.size() + (int)(it - consoleFilters.begin());
+        return 0;
+    }
+    for (size_t i = 0; i < filters.size(); i++)
+        if ((int)filters[i] == filter)
+            return 1 + (int)i;
+    return 0;
+}
+
+void FavoritesView::setChip(int position) {
+    const int pcs = (int)filters.size();
+    if (position >= 1 && position <= pcs)
+        setFilter((int)filters[position - 1], "");
+    else if (position > pcs && position - pcs - 1 < (int)consoleFilters.size())
+        setFilter(-1, consoleFilters[position - pcs - 1]);
+    else
+        setFilter(-1, "");
 }
 
 void FavoritesView::stepFilter(int direction) {
-    if (filters.size() < 2)
+    if (sources() < 2)
         return;
-    // Position -1 is "all", then each PC.
-    int position = -1;
-    for (size_t i = 0; i < filters.size(); i++)
-        if ((int)filters[i] == filter)
-            position = (int)i;
-    const int count = (int)filters.size() + 1;
-    position = ((position + 1 + direction) % count + count) % count - 1;
-    setFilter(position < 0 ? -1 : (int)filters[position]);
+    const int count = (int)sources() + 1;
+    setChip(((chipPosition() + direction) % count + count) % count);
 }
 
-void FavoritesView::setFilter(int hostIndex) {
-    if (hostIndex == filter)
+void FavoritesView::setFilter(int hostIndex, const std::string& console) {
+    if (hostIndex == filter && console == consoleFilter)
         return;
     filter = hostIndex;
+    consoleFilter = console;
     rebuild(0);
 }
 
 void FavoritesView::updateChips() {
     chips->clearViews();
-    if (filters.size() < 2 && filter < 0) {
+    if (sources() < 2 && chipPosition() == 0) {
         chips->setVisibility(Visibility::INVISIBLE);
         return;
     }
     chips->setVisibility(Visibility::VISIBLE);
 
     Theme theme = Application::getTheme();
-    auto addChip = [&](const std::string& text, int hostIndex) {
-        const bool active = hostIndex == filter;
+    auto addChip = [&](const std::string& text, int hostIndex,
+                       const std::string& console) {
+        const bool active = hostIndex == filter && console == consoleFilter;
         auto* chip = new Box(Axis::ROW);
         chip->setPadding(6, 16, 6, 16);
         chip->setMarginLeft(5);
@@ -136,11 +222,13 @@ void FavoritesView::updateChips() {
         label->setText(text);
         chip->addView(label);
         chip->addGestureRecognizer(new TapGestureRecognizer(
-            [this, hostIndex](TapGestureStatus status, Sound* sound) {
+            [this, hostIndex, console](TapGestureStatus status, Sound* sound) {
                 if (status.state != GestureState::END)
                     return;
                 // Rebuilding deletes this chip: do it after the gesture.
-                brls::sync([this, hostIndex] { setFilter(hostIndex); });
+                brls::sync([this, hostIndex, console] {
+                    setFilter(hostIndex, console);
+                });
             }));
         chips->addView(chip);
     };
@@ -150,9 +238,15 @@ void FavoritesView::updateChips() {
     hint->setMarginRight(8);
     hint->setText(Hint::getKeyIcon(BUTTON_LB));
     chips->addView(hint);
-    addChip("favorites/all"_i18n, -1);
+    // Same order as chipPosition(): all, the PCs, then the consoles.
+    addChip("favorites/all"_i18n, -1, "");
     for (size_t index : filters)
-        addChip(hosts[index].hostname, (int)index);
+        addChip(hosts[index].hostname, (int)index, "");
+#if defined(PLATFORM_SWITCH)
+    for (const std::string& slug : consoleFilters)
+        if (const emu::Console* console = emu::findConsole(slug))
+            addChip(console->name, -1, slug);
+#endif
     hint = new Label();
     hint->setFontSize(18);
     hint->setMarginLeft(8);
@@ -178,7 +272,8 @@ void FavoritesView::rebuild(int selectIndex) {
     entries.clear();
     updateChips();
 
-    for (size_t h = 0; h < hosts.size(); h++) {
+    // PC favorites first, in the same order as always.
+    for (size_t h = 0; h < hosts.size() && consoleFilter.empty(); h++) {
         if (filter >= 0 && (int)h != filter)
             continue;
         const Host& host = hosts[h];
@@ -227,9 +322,72 @@ void FavoritesView::rebuild(int selectIndex) {
                     return true;
                 });
 #endif
-            entries.push_back({h, app});
+            entries.push_back(PcEntry{h, app});
             carousel->addView(cell);
         }
+    }
+
+#if defined(PLATFORM_SWITCH)
+    // Then the console games, under "all" or their console's chip. Only the
+    // covers already on the SD card show: the shelf downloads them.
+    for (const LocalFavorite& favorite : Settings::instance().local_favorites()) {
+        if (filter >= 0 ||
+            (!consoleFilter.empty() && favorite.console != consoleFilter))
+            continue;
+        const emu::Console* console = emu::findConsole(favorite.console);
+        if (!console)
+            continue;
+        const emu::ConsolePaths paths = emu::pathsFor(*console);
+        LocalEntry entry;
+        entry.favorite = favorite;
+        entry.console = console;
+        entry.rom.path = paths.roms + "/" + favorite.romFile;
+        entry.rom.fileName = favorite.romFile;
+        entry.rom.title = favorite.title;
+        entry.missing = !fileExists(entry.rom.path);
+        const std::string cover = emu::coverPath(paths, favorite.title);
+        entry.hasCover = fileExists(cover);
+
+        auto* cell = new RomCell(*console, entry.rom);
+        cell->setFavorite(true);
+        if (entry.missing)
+            cell->setAlpha(0.4f);
+        if (entry.hasCover)
+            cell->loadCover(cover);
+        const int index = (int)entries.size();
+        cell->beforeLaunch = [this, index]() {
+            if (carousel->selectedIndex() != index)
+                return false;
+            return Application::getInputType() != InputType::TOUCH ||
+                   getCPUTimeUsec() - carousel->selectedAt() > 350000;
+        };
+        // Launching closes the app: do it once the press is handled.
+        cell->onPlay = [this, index] {
+            std::shared_ptr<bool> token = alive;
+            brls::sync([this, token, index] {
+                if (*token)
+                    play(index);
+            });
+        };
+        cell->registerAction("app_list/unstar"_i18n, BUTTON_Y,
+                             [this, index](View*) {
+                                 brls::sync([this, index] { unstar(index); });
+                                 return true;
+                             });
+        entries.push_back(std::move(entry));
+        carousel->addView(cell);
+    }
+#endif
+
+    if (!selectRom.empty()) {
+        for (size_t i = 0; i < entries.size(); i++) {
+            const auto* local = std::get_if<LocalEntry>(&entries[i]);
+            if (local && local->favorite.console == selectConsole &&
+                local->favorite.romFile == selectRom)
+                selectIndex = (int)i;
+        }
+        selectConsole.clear();
+        selectRom.clear();
     }
 
     const bool none = entries.empty();
@@ -245,6 +403,8 @@ void FavoritesView::rebuild(int selectIndex) {
     else {
         const int index = std::clamp(selectIndex, 0, (int)entries.size() - 1);
         carousel->jumpTo(index);
+        // Before the view is shown, the focus lands on this one.
+        carousel->setDefaultFocusedIndex(index);
         onSelected(index);
         if (focusHere || focus == this)
             Application::giveFocus(carousel->getChildren()[index]);
@@ -254,7 +414,8 @@ void FavoritesView::rebuild(int selectIndex) {
     // the covers never downloaded be fetched.
     std::set<size_t> shown;
     for (const Entry& entry : entries)
-        shown.insert(entry.host);
+        if (const auto* pc = std::get_if<PcEntry>(&entry))
+            shown.insert(pc->host);
     for (size_t h : shown) {
         if (hostOnline.count(h))
             applyHostState(h);
@@ -285,7 +446,8 @@ void FavoritesView::applyHostState(size_t hostIndex) {
     const bool online = it->second;
     auto& cells = carousel->getChildren();
     for (size_t i = 0; i < entries.size() && i < cells.size(); i++) {
-        if (entries[i].host != hostIndex)
+        const auto* pc = std::get_if<PcEntry>(&entries[i]);
+        if (!pc || pc->host != hostIndex)
             continue;
         auto* cell = static_cast<AppCell*>(cells[i]);
         cell->setOffline(!online);
@@ -298,15 +460,66 @@ void FavoritesView::applyHostState(size_t hostIndex) {
 void FavoritesView::onSelected(int index) {
     if (index < 0 || index >= (int)entries.size())
         return;
-    title->setText(entries[index].app.name);
-    const size_t host = entries[index].host;
+    dots->setState(entries.size(), index);
+
+#if defined(PLATFORM_SWITCH)
+    if (const auto* local = std::get_if<LocalEntry>(&entries[index])) {
+        title->setText(local->favorite.title);
+        meta->setText(local->missing ? local->console->name + "  ·  " +
+                                           "favorites/rom_gone"_i18n
+                                     : local->console->name);
+        if (local->hasCover)
+            ambient.select(emu::coverPath(emu::pathsFor(*local->console),
+                                          local->favorite.title));
+        else
+            ambient.clear();
+        return;
+    }
+#endif
+
+    const auto& pc = std::get<PcEntry>(entries[index]);
+    title->setText(pc.app.name);
+    const size_t host = pc.host;
     const auto state = hostOnline.find(host);
     const bool offline = state != hostOnline.end() && !state->second;
     meta->setText(offline ? hosts[host].hostname + "  ·  " +
                                 "hosts/status_asleep"_i18n
                           : hosts[host].hostname);
-    dots->setState(entries.size(), index);
-    ambient.select(hosts[host], entries[index].app.app_id);
+    ambient.select(hosts[host], pc.app.app_id);
+}
+
+void FavoritesView::play(int index) {
+#if defined(PLATFORM_SWITCH)
+    if (launching || index < 0 || index >= (int)entries.size())
+        return;
+    const auto* local = std::get_if<LocalEntry>(&entries[index]);
+    if (!local)
+        return;
+    if (local->missing) {
+        Application::notify("emu/rom_missing"_i18n);
+        return;
+    }
+    launching = true;
+    const std::string romFile = local->favorite.romFile;
+    std::shared_ptr<bool> token = alive;
+    launchWhenCoversIdle(
+        *local->console, local->rom, emu::Origin::Favorites, chipPosition(),
+        alive, [this, token, index, romFile] {
+            if (!*token)
+                return;
+            launching = false;
+            // The game may have been deleted since the screen was filled:
+            // show it dimmed.
+            const auto* now = index < (int)entries.size()
+                                  ? std::get_if<LocalEntry>(&entries[index])
+                                  : nullptr;
+            if (now && now->favorite.romFile == romFile &&
+                !fileExists(now->rom.path))
+                rebuild(index);
+        });
+#else
+    (void)index;
+#endif
 }
 
 void FavoritesView::willAppear(bool resetState) {
@@ -328,7 +541,27 @@ void FavoritesView::draw(NVGcontext* vg, float x, float y, float width,
 void FavoritesView::unstar(int index) {
     if (index < 0 || index >= (int)entries.size())
         return;
-    const Entry entry = entries[index];
+
+#if defined(PLATFORM_SWITCH)
+    if (const auto* local = std::get_if<LocalEntry>(&entries[index])) {
+        const LocalFavorite favorite = local->favorite;
+        Settings::instance().toggle_local_favorite(favorite);
+        // The console may have no favorites left: drop its chip.
+        if (!hasLocalFavorites(favorite.console)) {
+            consoleFilters.erase(std::remove(consoleFilters.begin(),
+                                             consoleFilters.end(),
+                                             favorite.console),
+                                 consoleFilters.end());
+            if (consoleFilter == favorite.console)
+                consoleFilter.clear();
+            updateSourceActions();
+        }
+        rebuild(index);
+        return;
+    }
+#endif
+
+    const PcEntry entry = std::get<PcEntry>(entries[index]);
     Settings::instance().remove_favorite(hosts[entry.host], entry.app.app_id);
 
     // The PC may have no favorites left: drop its chip.
@@ -343,8 +576,7 @@ void FavoritesView::unstar(int index) {
                       filters.end());
         if (filter == (int)entry.host)
             filter = -1;
-        setActionAvailable(BUTTON_RB, filters.size() > 1);
-        setActionAvailable(BUTTON_LB, filters.size() > 1);
+        updateSourceActions();
     }
     rebuild(index);
 }

@@ -436,7 +436,8 @@
     "favorites": {
         "all": "Todos",
         "change_pc": "Trocar PC",
-        "empty": "Nenhum favorito ainda. Marque jogos com Y na biblioteca."
+        "empty": "Nenhum favorito ainda. Marque jogos com Y na biblioteca.",
+        "rom_gone": "não está no cartão SD"
     },
     "emu": {
         "on_switch": "Neste Switch  ·  {}",

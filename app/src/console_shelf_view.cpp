@@ -23,6 +23,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
+#include <functional>
 #include <mutex>
 #include <system_error>
 #include <thread>
@@ -70,6 +71,69 @@ std::mutex& coverLock() {
     return lock;
 }
 
+struct LaunchRequest {
+    const emu::Console* console;
+    emu::RomEntry rom;
+    emu::Origin origin;
+    int filter;
+    std::shared_ptr<bool> alive;
+    std::function<void()> onFail;
+    Dialog* loader = nullptr;
+};
+
+void launchWhenIdle(std::shared_ptr<LaunchRequest> request, int attempt);
+
+void finishLaunch(std::shared_ptr<LaunchRequest> request) {
+    if (!*request->alive) {
+        coverLock().unlock();
+        return;
+    }
+    if (emu::launchRom(*request->console, request->rom, request->origin,
+                       request->filter))
+        return; // quitting; the cover lock stays held
+    coverLock().unlock();
+    if (request->onFail)
+        request->onFail();
+}
+
+void launchWhenIdle(std::shared_ptr<LaunchRequest> request, int attempt) {
+    if (coverLock().try_lock()) {
+        if (Dialog* loader = request->loader) {
+            request->loader = nullptr;
+            loader->close([request] { finishLaunch(request); });
+        } else {
+            finishLaunch(request);
+        }
+        return;
+    }
+
+    if (attempt >= kStopPolls) {
+        brls::Logger::warning("Launch: cover thread did not stop");
+        auto giveUp = [request] {
+            if (!*request->alive)
+                return;
+            Application::notify("emu/try_again"_i18n);
+            if (request->onFail)
+                request->onFail();
+        };
+        if (Dialog* loader = request->loader) {
+            request->loader = nullptr;
+            loader->close(giveUp);
+        } else {
+            giveUp();
+        }
+        return;
+    }
+
+    if (attempt == 0) {
+        request->loader = createLoadingDialog("emu/opening"_i18n);
+        request->loader->open();
+    }
+    brls::delay(kStopPollMs, [request, attempt] {
+        launchWhenIdle(request, attempt + 1);
+    });
+}
+
 std::string upper(std::string text) {
     std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) {
         return (char)std::toupper(c);
@@ -84,6 +148,15 @@ std::string joinExtensions(const std::vector<std::string>& extensions) {
     return text;
 }
 } // namespace
+
+void launchWhenCoversIdle(const emu::Console& console, const emu::RomEntry& rom,
+                          emu::Origin origin, int filter,
+                          std::shared_ptr<bool> alive,
+                          std::function<void()> onFail) {
+    auto request = std::make_shared<LaunchRequest>(LaunchRequest{
+        &console, rom, origin, filter, std::move(alive), std::move(onFail)});
+    launchWhenIdle(request, 0);
+}
 
 ConsoleShelfView::ConsoleShelfView(const emu::Console& console,
                                    const std::string& selectRom)
@@ -290,9 +363,9 @@ void ConsoleShelfView::showGames(std::vector<Game> found) {
                     play(index);
             });
         };
-        // Task 8: favorites for console games.
-        cell->registerAction("app_list/star"_i18n, BUTTON_Y,
-                             [](View*) { return true; });
+        cell->setFavorite(Settings::instance().is_local_favorite(
+            consoleRef.slug, games[i].rom.fileName));
+        updateFavoriteAction(cell);
         if (games[i].hasCover)
             cell->loadCover(emu::coverPath(paths, games[i].rom.title));
         cells.push_back(cell);
@@ -310,6 +383,32 @@ void ConsoleShelfView::showGames(std::vector<Game> found) {
     Application::getGlobalHintsUpdateEvent()->fire();
 
     fetchCovers(index);
+}
+
+void ConsoleShelfView::updateFavoriteAction(RomCell* cell) {
+    const emu::RomEntry& rom = cell->rom();
+    const bool favorite =
+        Settings::instance().is_local_favorite(consoleRef.slug, rom.fileName);
+    cell->registerAction(
+        favorite ? "app_list/unstar"_i18n : "app_list/star"_i18n, BUTTON_Y,
+        [this, cell](View*) {
+            const emu::RomEntry& rom = cell->rom();
+            Settings::instance().toggle_local_favorite(
+                {consoleRef.slug, rom.fileName, rom.title});
+            cell->setFavorite(Settings::instance().is_local_favorite(
+                consoleRef.slug, rom.fileName));
+            // Registering again replaces this action: only its label
+            // changes, after it has returned.
+            std::shared_ptr<bool> token = alive;
+            const uint64_t forGeneration = generation;
+            brls::sync([this, token, cell, forGeneration] {
+                if (*token && forGeneration == generation) {
+                    updateFavoriteAction(cell);
+                    Application::getGlobalHintsUpdateEvent()->fire();
+                }
+            });
+            return true;
+        });
 }
 
 std::string ConsoleShelfView::metaText(const Game& game) const {

@@ -35,7 +35,12 @@ enum class Origin { Shelf, Favorites };
 struct ResumeToken {
     std::string console;
     Origin origin = Origin::Shelf;
-    int filter = -1;  // favorites chip index, -1 = all
+    // Origin::Favorites: position of the selected chip in the Favorites
+    // chip row as it was built at launch (0 = "All", then one chip per PC,
+    // then one per console; the L/R hints do not count). FavoritesView
+    // rebuilds the row on return and uses "All" unless that position is
+    // still the chip of this token's console. -1 (the shelf) also means all.
+    int filter = -1;
     std::string romFile;
 };
 

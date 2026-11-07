@@ -436,7 +436,8 @@
     "favorites": {
         "all": "All",
         "change_pc": "Change PC",
-        "empty": "No favorites yet. Star games in a library with Y."
+        "empty": "No favorites yet. Star games in a library with Y.",
+        "rom_gone": "not on the SD card"
     },
     "emu": {
         "on_switch": "On this Switch  ·  {}",

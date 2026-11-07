@@ -82,3 +82,11 @@ add_executable(test_emu_shelf
 target_include_directories(test_emu_shelf PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
     "${MOONLIGHT_ROOT}/extern")
+
+add_executable(test_emu_favorites
+    test_emu_favorites.cpp
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/LocalFavorites.cpp")
+target_include_directories(test_emu_favorites PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
+target_link_libraries(test_emu_favorites PRIVATE ${JANSSON_LIB})

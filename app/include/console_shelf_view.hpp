@@ -12,14 +12,26 @@
 #include "cover_ambient.hpp"
 #include "cover_carousel.hpp"
 #include "emu/Console.hpp"
+#include "emu/LaunchLine.hpp"
 #include "emu/RomScan.hpp"
 #include "rom_cell.hpp"
 #include <borealis.hpp>
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
+
+// Opens a console game from outside its shelf (Favorites) once no cover is
+// downloading, like the shelf does: polls the shared cover lock on the UI
+// thread, showing "Opening the game..." while it waits, and gives up after
+// a few seconds. onFail runs when the game was not opened (and `alive` is
+// still true). Switch only.
+void launchWhenCoversIdle(const emu::Console& console, const emu::RomEntry& rom,
+                          emu::Origin origin, int filter,
+                          std::shared_ptr<bool> alive,
+                          std::function<void()> onFail);
 
 class ConsoleShelfView : public brls::Box {
   public:
@@ -77,6 +89,8 @@ class ConsoleShelfView : public brls::Box {
     void launch(int index);
     brls::Dialog* stopLoader = nullptr;
     std::string metaText(const Game& game) const;
+    // Y stars or unstars the game; the label follows.
+    void updateFavoriteAction(RomCell* cell);
 
     // Downloads the missing covers, nearest to `first` first.
     void fetchCovers(int first);

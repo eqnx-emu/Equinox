@@ -10,6 +10,9 @@
 #include <vector>
 
 #include "VideoCodec.hpp"
+#include "emu/LocalFavorites.hpp"
+
+using LocalFavorite = emu::LocalFavorite;
 
 std::string getVideoCodecName(VideoCodec codec);
 
@@ -134,7 +137,15 @@ class Settings : public Singleton<Settings> {
     void add_favorite(const Host& host, const App& app);
     void remove_favorite(const Host& host, int app_id);
     bool is_favorite(const Host& host, int app_id);
+    // PC favorites and console games marked as favorite.
     bool has_any_favorite();
+
+    // Console games marked as favorite, in the order they were starred.
+    // Saved as "local_favorites" next to "hosts".
+    [[nodiscard]] const std::vector<LocalFavorite>& local_favorites() const { return m_local_favorites; }
+    // Adds the game, or removes it when already there, and saves.
+    void toggle_local_favorite(const LocalFavorite& favorite);
+    bool is_local_favorite(const std::string& console, const std::string& romFile) const;
 
     // When a console game was last opened (seconds since the epoch), 0 if
     // never. Saved as "local_played": {"snes": {"<rom file>": <epoch>}}.
@@ -389,6 +400,7 @@ class Settings : public Singleton<Settings> {
 
     std::vector<Host> m_hosts;
     std::map<std::string, std::map<std::string, int64_t>> m_local_played;
+    std::vector<LocalFavorite> m_local_favorites;
     int m_resolution = 720;
     int m_native_resolution_scale = 100;
     int m_fps = 60;

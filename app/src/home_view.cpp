@@ -131,11 +131,14 @@ bool runnerInstalled(const emu::Console& console) {
 }
 #endif
 
-// Favorite games per PC, without the apps the library hides.
+// Favorite games per PC, without the apps the library hides, then (on the
+// Switch) the console games marked as favorite.
 struct FavoriteSummary {
     int games = 0;
     std::vector<std::pair<size_t, int>> perHost; // index in hosts(), count
-    std::vector<std::string> names;
+    // Consoles with favorite games, in emu::consoles() order, and count.
+    std::vector<std::pair<const emu::Console*, int>> perConsole;
+    std::vector<std::string> names; // the PCs, then the consoles
 };
 
 FavoriteSummary favoriteSummary() {
@@ -152,6 +155,19 @@ FavoriteSummary favoriteSummary() {
         summary.perHost.push_back({i, count});
         summary.names.push_back(hosts[i].hostname);
     }
+#if defined(PLATFORM_SWITCH)
+    const auto& local = Settings::instance().local_favorites();
+    for (const emu::Console& console : emu::consoles()) {
+        const int count = (int)std::count_if(
+            local.begin(), local.end(),
+            [&](const LocalFavorite& f) { return f.console == console.slug; });
+        if (count == 0)
+            continue;
+        summary.games += count;
+        summary.perConsole.push_back({&console, count});
+        summary.names.push_back(console.name);
+    }
+#endif
     return summary;
 }
 
@@ -163,6 +179,17 @@ std::string joinNames(const std::vector<std::string>& names) {
         text += names[i];
     }
     return text;
+}
+
+// Where the favorites are: "2 PCs", "Super Nintendo", "1 PC and Super
+// Nintendo".
+std::string favoritePlaces(const FavoriteSummary& fav) {
+    std::vector<std::string> places;
+    if (!fav.perHost.empty())
+        places.push_back(pcsText((int)fav.perHost.size()));
+    for (const auto& [console, count] : fav.perConsole)
+        places.push_back(console->name);
+    return joinNames(places);
 }
 
 // MARK: - Card art
@@ -852,7 +879,7 @@ void HomeView::updateHomeCards() {
     homeCards[1]->setStatus(
         fav.games == 0 ? "home/fav_empty"_i18n
                        : brls::getStr("home/fav_status", gamesText(fav.games),
-                                      pcsText((int)fav.perHost.size())));
+                                      favoritePlaces(fav)));
     homeCards[2]->setStatus(streamQuality());
     homeCards[3]->setStatus(brls::getStr("home/about_status", APP_VERSION));
 }
@@ -1073,7 +1100,7 @@ void HomeView::fillPanel() {
                 fav.games == 0
                     ? "home/fav_empty"_i18n
                     : brls::getStr("home/fav_status", gamesText(fav.games),
-                                   pcsText((int)fav.perHost.size())));
+                                   favoritePlaces(fav)));
             color = themeColor("equinox/sun");
             panelDetail->setText(
                 fav.games == 0
@@ -1171,6 +1198,14 @@ std::vector<HomeOption> HomeView::favoritesOptions() {
              [this, hostIndex] {
                  presentWithHeader(this, new FavoritesView(hostIndex));
              }});
+    }
+    for (const auto& [console, count] : fav.perConsole) {
+        const std::string slug = console->slug;
+        options.push_back({"", console->name, std::to_string(count),
+                           [this, slug] {
+                               presentWithHeader(this,
+                                                 new FavoritesView(-1, slug));
+                           }});
     }
     return options;
 }
@@ -1590,10 +1625,26 @@ void HomeView::resumeConsole() {
     const auto token = emu::takePendingResume();
     if (!token)
         return;
-    // Task 8: Origin::Favorites reopens the favorites shelf; for now both
-    // come back to the console's shelf.
     const emu::Console* console = emu::findConsole(token->console);
-    if (!console || !runnerInstalled(*console))
+    if (!console)
+        return; // unknown: just the home screen
+
+    if (token->origin == emu::Origin::Favorites) {
+        // Opened from the favorites: the Favorites card, then that screen
+        // with the same chip and game.
+        for (size_t i = 0; i < homeCards.size(); i++) {
+            if (homeCards[i]->getKind() != HomeCardKind::FAVORITES)
+                continue;
+            home.carousel->jumpTo((int)i);
+            Application::giveFocus(homeCards[i]);
+            break;
+        }
+        updateShelfInfo();
+        presentWithHeader(this, new FavoritesView(*token));
+        return;
+    }
+
+    if (!runnerInstalled(*console))
         return; // removed meanwhile: just the home screen
 
     openPcs(false);
