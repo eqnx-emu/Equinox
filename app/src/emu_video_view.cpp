@@ -22,6 +22,12 @@ int indexOf(const std::vector<std::string>& ids, const std::string& id) {
     return it == ids.end() ? 0 : (int)(it - ids.begin());
 }
 
+std::vector<std::string> without(std::vector<std::string> ids,
+                                 const std::string& id) {
+    ids.erase(std::remove(ids.begin(), ids.end(), id), ids.end());
+    return ids;
+}
+
 // One label per id, so dropping an id also drops its label:
 // "emu/video/<row>_<id>", with the ':' of ratios such as "8:7" as '_'.
 std::vector<std::string> labelsFor(const std::string& row,
@@ -36,17 +42,21 @@ std::vector<std::string> labelsFor(const std::string& row,
 
 class EmuVideoView : public Box {
   public:
-    explicit EmuVideoView(const emu::ConsolePaths& paths)
+    EmuVideoView(const emu::Console& console, const emu::ConsolePaths& paths)
         : Box(Axis::COLUMN), path(emu::videoDefaultsPath(paths)),
           current(emu::readVideoDefaults(path)) {
         getAppletFrameItem()->title = "emu/video/title"_i18n;
         setPadding(30, 80, 30, 80);
 
-        addRow("emu/video/size"_i18n, "size", emu::kSizeIds,
+        // 8:7 and NTSC only make sense for the SNES picture.
+        const bool snes = console.slug == "snes";
+        addRow("emu/video/size"_i18n, "size",
+               snes ? emu::kSizeIds : without(emu::kSizeIds, "8:7"),
                &emu::VideoDefaults::size);
         addRow("emu/video/smoothing"_i18n, "smooth", emu::kSmoothIds,
                &emu::VideoDefaults::smooth);
-        addRow("emu/video/filter"_i18n, "filter", emu::kFilterIds,
+        addRow("emu/video/filter"_i18n, "filter",
+               snes ? emu::kFilterIds : without(emu::kFilterIds, "ntsc"),
                &emu::VideoDefaults::filter);
         border = addRow("emu/video/border"_i18n, "border", emu::kBorderIds,
                         &emu::VideoDefaults::border);
@@ -97,6 +107,7 @@ class EmuVideoView : public Box {
 
 } // namespace
 
-View* makeEmuVideoView(const emu::ConsolePaths& paths) {
-    return new EmuVideoView(paths);
+View* makeEmuVideoView(const emu::Console& console,
+                       const emu::ConsolePaths& paths) {
+    return new EmuVideoView(console, paths);
 }
