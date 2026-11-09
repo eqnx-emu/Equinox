@@ -14,6 +14,7 @@
 #include "game_row_cell.hpp"
 #include <borealis.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -59,6 +60,16 @@ class GameListPanel : public brls::Box {
 
     // Index in the items given to setItems of the focused game, if any.
     std::optional<size_t> focusedIndex() const;
+    // The items shown within `radius` places of that item, in display order:
+    // `radius` before it and `radius` from it on. Empty when it is not shown.
+    std::vector<size_t> itemsAround(size_t index, size_t radius) const {
+        if (index >= shownAt.size() || shownAt[index] >= shown.size())
+            return {};
+        const size_t place = shownAt[index];
+        const size_t from = place > radius ? place - radius : 0;
+        const size_t to = std::min(place + radius, shown.size());
+        return std::vector<size_t>(shown.begin() + from, shown.begin() + to);
+    }
     // Focuses that game's row; when the filter hides it, the first result;
     // with no result, the search field.
     void focusGame(size_t index);

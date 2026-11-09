@@ -20,6 +20,7 @@
 #include "game_list_panel.hpp"
 #include "game_row_cell.hpp"
 #include "helper.hpp"
+#include "library_widgets.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -326,7 +327,11 @@ ConsoleShelfView::ConsoleShelfView(const emu::Console& console,
 
 ConsoleShelfView::~ConsoleShelfView() {
     *alive = false;
-    DownloadService::instance().unsubscribe(coverToken);
+    // They go on, behind what the screen the user went to asks for.
+    DownloadService& service = DownloadService::instance();
+    for (const std::string& id : visibleCovers)
+        service.setPriority(id, emu::DlPriority::Background);
+    service.unsubscribe(coverToken);
 }
 
 void ConsoleShelfView::willAppear(bool resetState) {
@@ -1054,14 +1059,12 @@ void ConsoleShelfView::endLaunch(bool notify) {
         resume();
 }
 
-bool ConsoleShelfView::coverVisible(size_t index, size_t focus) const {
-    return index + kVisibleCoverRows >= focus && index < focus + kVisibleCoverRows;
-}
-
 void ConsoleShelfView::fetchCovers(size_t first) {
     coverRows.clear();
     visibleCovers.clear();
 
+    const std::vector<size_t> around = listPanel->itemsAround(first, kVisibleCoverRows);
+    const std::set<size_t> near(around.begin(), around.end());
     std::vector<emu::DlTask> tasks;
     for (size_t i = 0; i < games.size(); i++) {
         const Game& game = games[i];
@@ -1072,7 +1075,7 @@ void ConsoleShelfView::fetchCovers(size_t first) {
         rows.push_back(i);
         if (rows.size() > 1)
             continue;
-        const bool visible = coverVisible(i, first);
+        const bool visible = near.count(i) > 0;
         tasks.push_back(emu::coverTask(consoleRef, game.rom.title,
                                        game.hasData ? game.meta.canonical : std::string(),
                                        visible ? emu::DlPriority::Visible
@@ -1097,7 +1100,10 @@ void ConsoleShelfView::retryCover(size_t index) {
     indexDirty = true;
 
     const std::string id = emu::coverId(consoleRef.slug, game.rom.title);
-    const bool visible = current && coverVisible(index, *current);
+    std::vector<size_t> around;
+    if (current)
+        around = listPanel->itemsAround(*current, kVisibleCoverRows);
+    const bool visible = std::find(around.begin(), around.end(), index) != around.end();
     // A run already under way has the old name: it is dropped and goes again.
     DownloadService& service = DownloadService::instance();
     service.cancel(id);
@@ -1128,11 +1134,10 @@ void ConsoleShelfView::scheduleCoverPriorities() {
 void ConsoleShelfView::applyCoverPriorities() {
     if (!current)
         return;
-    const size_t focus = *current;
-    const size_t from = focus > kVisibleCoverRows ? focus - kVisibleCoverRows : 0;
-    const size_t to = std::min(focus + kVisibleCoverRows, games.size());
     std::set<std::string> visible;
-    for (size_t i = from; i < to; i++) {
+    for (size_t i : listPanel->itemsAround(*current, kVisibleCoverRows)) {
+        if (i >= games.size())
+            continue;
         std::string id = emu::coverId(consoleRef.slug, games[i].rom.title);
         if (coverRows.count(id))
             visible.insert(std::move(id));
@@ -1149,11 +1154,22 @@ void ConsoleShelfView::applyCoverPriorities() {
 }
 
 // Every task of the service comes through here: anything but a cover of this
-// list that has just ended leaves at the first two checks.
+// list that has just ended leaves early.
 void ConsoleShelfView::coverEvent(const DlEvent& event) {
+    // The queue is paused whole: a batch that was running will not go on.
+    if (event.result == emu::DlResult::Disk && event.id.rfind("cover:", 0) == 0) {
+        batchActive = false;
+        if (!coverDiskNotified) {
+            coverDiskNotified = true;
+            Application::notify(libraryStopText(emu::DataStop::Disk));
+        }
+        return;
+    }
     if (event.state != emu::DlState::Done ||
         (event.result != emu::DlResult::Done && event.result != emu::DlResult::Gone))
         return;
+    if (event.result == emu::DlResult::Done)
+        coverDiskNotified = false;
     auto found = coverRows.find(event.id);
     if (found == coverRows.end())
         return;

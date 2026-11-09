@@ -53,7 +53,7 @@ size_t DownloadQueue::submitAll(std::vector<DlTask> tasks) {
         if (existing.state == DlState::Running) continue;
         existing.priority = task.priority;
         existing.params = std::move(task.params);
-        if (existing.state == DlState::Failed || existing.state == DlState::Paused) {
+        if (existing.state == DlState::Failed) {
             existing.state = DlState::Queued;
             existing.failures = 0;
             changed++;

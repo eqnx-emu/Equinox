@@ -65,7 +65,7 @@ TEST_CASE("submitAll takes the new params of a Queued task and lowers its priori
     CHECK(get(q, "a")->priority == DlPriority::Background);
 }
 
-TEST_CASE("submitAll gives a Failed or Paused task another go, not a Running one") {
+TEST_CASE("submitAll gives a Failed task another go, not a Paused or Running one") {
     DownloadQueue q;
     DlTask failed = task("failed");
     failed.state = DlState::Failed;
@@ -76,10 +76,10 @@ TEST_CASE("submitAll gives a Failed or Paused task another go, not a Running one
     q.submit(paused);
     q.submit(task("running", DlPriority::Interactive));
     REQUIRE(q.next(0)->id == "running");
-    CHECK(q.submitAll({task("failed"), task("paused"), task("running", DlPriority::Background)}) == 2);
+    CHECK(q.submitAll({task("failed"), task("paused"), task("running", DlPriority::Background)}) == 1);
     CHECK(get(q, "failed")->state == DlState::Queued);
     CHECK(get(q, "failed")->failures == 0);
-    CHECK(get(q, "paused")->state == DlState::Queued);
+    CHECK(get(q, "paused")->state == DlState::Paused);
     CHECK(get(q, "running")->state == DlState::Running);
     CHECK(get(q, "running")->priority == DlPriority::Interactive);
 }

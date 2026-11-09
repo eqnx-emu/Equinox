@@ -177,7 +177,6 @@ class ConsoleShelfView : public brls::Box {
     void fetchCovers(size_t first);
     // The game's data brought a canonical name: tries its cover once more.
     void retryCover(size_t index);
-    bool coverVisible(size_t index, size_t focus) const;
     void scheduleCoverPriorities();
     void applyCoverPriorities();
     void coverEvent(const DlEvent& event);
@@ -188,5 +187,7 @@ class ConsoleShelfView : public brls::Box {
     std::unordered_map<std::string, std::vector<size_t>> coverRows;
     std::set<std::string> visibleCovers; // ids queued as Visible
     bool coverPrioritiesDue = false;
+    // A cover hit a full card: said once, until something is written again.
+    bool coverDiskNotified = false;
     int coverToken = 0;
 };
