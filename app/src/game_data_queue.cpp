@@ -116,7 +116,8 @@ void GameDataQueue::enqueue(size_t index, const emu::RomEntry& rom, emu::DlPrior
                                   emu::kHostScreenScraper) != task.hosts.end();
     // The user asked: a ScreenScraper block that holds the task is lifted for
     // one more try, which sets it again if the server still says no. Other
-    // hosts, consoles and failed tasks are left as they are.
+    // hosts are left as they are, but retryHost also requeues every Failed
+    // task that uses ScreenScraper, whatever its console.
     auto unblock = [&] {
         if (!usesSs || *unblocked_ || !service.hostBlocked(emu::kHostScreenScraper)) return;
         *unblocked_ = true;

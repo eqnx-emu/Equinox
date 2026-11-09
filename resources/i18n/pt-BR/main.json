@@ -373,7 +373,8 @@
         "restart_now": "Reiniciar agora",
         "failed": "A atualização falhou.",
         "up_to_date": "O Equinox está atualizado.",
-        "unsupported": "A atualização só funciona com o Equinox aberto como NRO do cartão SD."
+        "unsupported": "A atualização só funciona com o Equinox aberto como NRO do cartão SD.",
+        "disk": "O cartão SD está cheio. Libere espaço e tente a atualização de novo."
     },
     "title": "Equinox",
     "hosts": {
@@ -654,7 +655,7 @@
         "quota_today": "hoje às {}",
         "quota_tomorrow": "amanhã às {}",
         "try_now": "Tentar agora",
-        "disk_notice": "Cartão SD cheio — libere espaço e toque em Retomar tudo",
+        "disk_notice": "Cartão SD cheio — libere espaço e escolha Retomar tudo",
         "disk_paused": "Downloads pausados: o cartão SD está cheio. Libere espaço e retome-os em Downloads."
     }
 }

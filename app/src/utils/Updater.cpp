@@ -248,12 +248,16 @@ void askRestart(const std::string& version, const std::string& target) {
     dialog->open();
 }
 
-void fail() {
+// `reason` replaces the worker's error, which a full card leaves empty.
+void fail(const std::string& reason = "") {
     pending().reset();
     // Out of the queue, so the next request starts a new task; the .part of
     // a network failure stays for it.
     DownloadService::instance().cancel(TASK_ID);
-    showError("update/failed"_i18n + "\n" + takeError());
+    std::string error = takeError();
+    if (!reason.empty())
+        error = reason;
+    showError("update/failed"_i18n + "\n" + error);
 }
 
 // For as long as the app runs, whatever screen is open.
@@ -273,7 +277,7 @@ void watchTask() {
             break; // waits to try again
         case emu::DlState::Paused:
             if (event.result == emu::DlResult::Disk)
-                fail();
+                fail("update/disk"_i18n);
             break;
         case emu::DlState::Failed:
             fail();

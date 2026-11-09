@@ -373,7 +373,8 @@
         "restart_now": "Restart now",
         "failed": "The update failed.",
         "up_to_date": "Equinox is up to date.",
-        "unsupported": "Updates only work when Equinox is launched as an NRO from the SD card."
+        "unsupported": "Updates only work when Equinox is launched as an NRO from the SD card.",
+        "disk": "The SD card is full. Free some space, then try the update again."
     },
     "title": "Equinox",
     "hosts": {
