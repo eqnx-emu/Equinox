@@ -239,8 +239,9 @@ bool beginBody(ResumableCtx& ctx) {
     std::string validator = validatorOf(ctx);
     if (total > 0 && !validator.empty())
         emu::saveResume(ctx.partPath, {ctx.url, validator, total});
-    else
-        emu::removeResume(ctx.partPath);
+    else if (ctx.offset == 0)
+        emu::removeResume(ctx.partPath);  // nothing to resume from
+    // A 206 without validators keeps the control state it started from.
     return true;
 }
 
@@ -288,6 +289,17 @@ ResumableResult httpGetResumable(const std::string& url, const std::string& part
     }
     if (ctx.offset == 0) emu::removeResume(partPath);
 
+    // Everything is already on disk: no request, the caller validates it.
+    if (ctx.offset > 0) {
+        auto saved = emu::loadResume(partPath);
+        if (saved && ctx.offset == saved->total) {
+            emu::removeResume(partPath);
+            result.ok = true;
+            result.status = 200;
+            return result;
+        }
+    }
+
     ctx.file.open(emu::fromUtf8(partPath),
                   std::ios::binary | (ctx.offset > 0 ? std::ios::app : std::ios::trunc));
     if (!ctx.file) {
@@ -304,10 +316,14 @@ ResumableResult httpGetResumable(const std::string& url, const std::string& part
     ctx.curl = curl;
 
     struct curl_slist* headers = nullptr;
+    std::string range;
     if (ctx.offset > 0) {
         headers = curl_slist_append(headers, ("If-Range: " + validator).c_str());
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_RESUME_FROM_LARGE, static_cast<curl_off_t>(ctx.offset));
+        // CURLOPT_RANGE rather than RESUME_FROM: libcurl fails a RESUME_FROM
+        // request that gets a plain 200, and we want to restart in that case.
+        range = std::to_string(ctx.offset) + "-";
+        curl_easy_setopt(curl, CURLOPT_RANGE, range.c_str());
     }
 
     applyCommon(curl, url);
@@ -341,12 +357,20 @@ ResumableResult httpGetResumable(const std::string& url, const std::string& part
     else if (code != CURLE_OK)
         result.error = curl_easy_strerror(code);
 
-    if (code == CURLE_OK) {
-        emu::removeResume(partPath);
-    } else if (result.status == 416) {
+    if (result.status == 416) {
         // The saved range no longer fits the file on the server.
+        if (code == CURLE_OK) {
+            code = CURLE_HTTP_RETURNED_ERROR;
+            result.error = "HTTP 416";
+        }
         std::error_code ec;
         fs::remove(emu::fromUtf8(partPath), ec);
+        emu::removeResume(partPath);
+    } else if (code == CURLE_OK && (result.status < 200 || result.status > 299)) {
+        // e.g. a 3xx without Location: there is no body to trust.
+        code = CURLE_HTTP_RETURNED_ERROR;
+        result.error = "unexpected HTTP status " + std::to_string(result.status);
+    } else if (code == CURLE_OK) {
         emu::removeResume(partPath);
     }
 

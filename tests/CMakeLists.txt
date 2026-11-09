@@ -192,3 +192,19 @@ target_include_directories(test_emu_downloads PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
     "${MOONLIGHT_ROOT}/extern")
 target_link_libraries(test_emu_downloads PRIVATE ${JANSSON_LIB})
+
+find_library(CURL_LIB curl)
+if(CURL_LIB)
+    add_executable(test_http_resumable
+        test_http_resumable.cpp
+        "${MOONLIGHT_ROOT}/app/src/utils/HttpDownload.cpp"
+        "${MOONLIGHT_ROOT}/app/src/utils/emu/ResumeState.cpp")
+    target_include_directories(test_http_resumable PRIVATE
+        "${MOONLIGHT_ROOT}/app/src/utils"
+        "${MOONLIGHT_ROOT}/extern")
+    target_compile_definitions(test_http_resumable PRIVATE APP_VERSION="test")
+    target_link_libraries(test_http_resumable PRIVATE ${CURL_LIB} ${JANSSON_LIB})
+    if(WIN32)
+        target_link_libraries(test_http_resumable PRIVATE ws2_32)
+    endif()
+endif()

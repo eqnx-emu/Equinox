@@ -520,3 +520,18 @@ TEST_CASE("ResumeState round-trips and is removed") {
     removeResume(part);
     CHECK_FALSE(loadResume(part).has_value());
 }
+
+TEST_CASE("resumeOffset is 0 for an empty part") {
+    std::string part = partIn("empty.part");
+    writePart(part, 0);
+    REQUIRE(saveResume(part, {"https://h/a", "\"etag\"", 500}));
+    CHECK(resumeOffset(part, "https://h/a") == 0);
+}
+
+TEST_CASE("resumeOffset is 0 for a corrupt control file") {
+    std::string part = partIn("corrupt.part");
+    writePart(part, 100);
+    std::ofstream(part + ".resume") << "{not json";
+    CHECK(resumeOffset(part, "https://h/a") == 0);
+    CHECK_FALSE(loadResume(part).has_value());
+}
