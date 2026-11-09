@@ -364,11 +364,13 @@
     "update": {
         "title": "Atualizações",
         "check_now": "Procurar atualizações agora",
-        "available": "O Equinox {} está disponível (você tem o {}).\n\nBaixar e instalar agora? O Equinox vai reiniciar.",
+        "available": "O Equinox {} está disponível (você tem o {}).\n\nBaixar agora? O download segue em segundo plano, e o Equinox pergunta antes de reiniciar.",
         "later": "Depois",
         "install": "Atualizar",
-        "downloading": "Baixando atualização...",
-        "installed": "O Equinox {} foi instalado. O Equinox vai reiniciar agora.",
+        "downloading": "Baixando a atualização em segundo plano...",
+        "downloading_percent": "Baixando a atualização: {}%",
+        "ready": "O Equinox {} foi baixado. Reiniciar agora para instalar?",
+        "restart_now": "Reiniciar agora",
         "failed": "A atualização falhou.",
         "up_to_date": "O Equinox está atualizado.",
         "unsupported": "A atualização só funciona com o Equinox aberto como NRO do cartão SD."

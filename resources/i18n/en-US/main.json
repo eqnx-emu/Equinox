@@ -364,11 +364,13 @@
     "update": {
         "title": "Updates",
         "check_now": "Check for updates now",
-        "available": "Equinox {} is available (you have {}).\n\nDownload and install it now? Equinox will restart.",
+        "available": "Equinox {} is available (you have {}).\n\nDownload it now? It downloads in the background, and Equinox asks before restarting.",
         "later": "Later",
         "install": "Update",
-        "downloading": "Downloading update...",
-        "installed": "Equinox {} is installed. Equinox will now restart.",
+        "downloading": "Downloading the update in the background...",
+        "downloading_percent": "Downloading the update: {}%",
+        "ready": "Equinox {} is downloaded. Restart now to install it?",
+        "restart_now": "Restart now",
         "failed": "The update failed.",
         "up_to_date": "Equinox is up to date.",
         "unsupported": "Updates only work when Equinox is launched as an NRO from the SD card."

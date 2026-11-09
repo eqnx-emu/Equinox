@@ -8,11 +8,15 @@
 #include <algorithm>
 #include <borealis.hpp>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
-#include <sstream>
-#include <vector>
+#include <mutex>
+#include <optional>
 
 #ifdef __SWITCH__
+#include "download_service.hpp"
+#include "emu/ResumeState.hpp"
+
 #include <curl/curl.h>
 #include <jansson.h>
 #include <switch.h>
@@ -28,23 +32,6 @@ const char* const RELEASES_URL =
     "https://api.github.com/repos/eqnx-emu/Equinox/releases/latest";
 const char* const ASSET_NAME = "Equinox.nro";
 
-std::vector<int> parseVersion(std::string version) {
-    if (!version.empty() && (version[0] == 'v' || version[0] == 'V'))
-        version.erase(0, 1);
-
-    std::vector<int> parts;
-    std::stringstream stream(version);
-    std::string part;
-    while (std::getline(stream, part, '.')) {
-        try {
-            parts.push_back(std::stoi(part));
-        } catch (...) {
-            return {};
-        }
-    }
-    return parts;
-}
-
 std::string stripTag(const std::string& tag) {
     if (!tag.empty() && (tag[0] == 'v' || tag[0] == 'V'))
         return tag.substr(1);
@@ -52,6 +39,49 @@ std::string stripTag(const std::string& tag) {
 }
 
 #ifdef __SWITCH__
+
+const char* const TASK_ID = "appupdate";
+
+// The update the "appupdate" task downloads, from its submit to its end. UI
+// thread only.
+struct Pending {
+    std::string version;
+    std::string target;
+    int percent = 0;
+};
+
+std::optional<Pending>& pending() {
+    static std::optional<Pending> job;
+    return job;
+}
+
+// Why the last attempt failed: written by the worker, read on the UI thread.
+std::mutex errorMutex;
+std::string lastError;
+
+void setError(const std::string& error) {
+    std::lock_guard<std::mutex> lock(errorMutex);
+    lastError = error;
+}
+
+std::string takeError() {
+    std::lock_guard<std::mutex> lock(errorMutex);
+    std::string error;
+    error.swap(lastError);
+    return error;
+}
+
+std::string partPath(const std::string& target) { return target + ".new.part"; }
+
+void discardPart(const std::string& target) {
+    remove(partPath(target).c_str());
+    emu::removeResume(partPath(target));
+}
+
+std::string stringField(const json_t* object, const char* key) {
+    const json_t* value = json_object_get(object, key);
+    return json_is_string(value) ? json_string_value(value) : std::string();
+}
 
 bool fetchLatest(UpdateInfo& info, std::string& error) {
     std::string body;
@@ -91,19 +121,59 @@ bool fetchLatest(UpdateInfo& info, std::string& error) {
     return found;
 }
 
-// Accept only a complete NRO: the advertised size and the "NRO0" magic.
-bool looksLikeNro(const std::string& path, size_t expectedSize) {
-    FILE* file = fopen(path.c_str(), "rb");
-    if (!file)
-        return false;
+// Worker thread. A network failure or a stop keeps the .part to continue it;
+// a cancel or a file that is not the NRO removes it.
+emu::DlResult runUpdate(const emu::DlTask& task, DlContext& context) {
+    json_error_t jsonError;
+    json_t* params = json_loads(task.params.c_str(), 0, &jsonError);
+    if (!params) {
+        setError("invalid update task");
+        return emu::DlResult::Invalid;
+    }
+    const std::string url = stringField(params, "url");
+    const std::string version = stringField(params, "version");
+    const std::string target = stringField(params, "target");
+    const size_t size = (size_t)json_integer_value(json_object_get(params, "size"));
+    json_decref(params);
+    if (url.empty() || version.empty() || target.empty()) {
+        setError("invalid update task");
+        return emu::DlResult::Invalid;
+    }
 
-    char header[0x14] = {};
-    bool ok = fread(header, 1, sizeof(header), file) == sizeof(header) &&
-              memcmp(header + 0x10, "NRO0", 4) == 0;
-    fseek(file, 0, SEEK_END);
-    long size = ftell(file);
-    fclose(file);
-    return ok && size > 0 && (expectedSize == 0 || (size_t)size == expectedSize);
+    const std::string part = partPath(target);
+    const Progress progress = [&context, size](uint64_t done, uint64_t total) {
+        if (context.stop->load())
+            return false;
+        if (total == 0)
+            total = size;
+        if (total > 0)
+            context.progress(static_cast<float>(std::min(done, total)) / total);
+        return true;
+    };
+    const ResumableResult download = httpGetResumable(url, part, progress);
+    if (context.stop->load() && context.abandoned()) {
+        discardPart(target);
+        return emu::DlResult::Cancelled;
+    }
+    if (!download.ok) {
+        if (context.stop->load())
+            return emu::DlResult::Cancelled;
+        setError(download.error.empty() ? "download failed" : download.error);
+        return download.writeFailed ? emu::DlResult::Disk
+                                    : emu::DlResult::Transient;
+    }
+
+    if (!looksLikeNro(part, size)) {
+        discardPart(target);
+        setError("downloaded file is not a valid NRO");
+        return emu::DlResult::Invalid;
+    }
+    if (!stage(target, version)) {
+        discardPart(target);
+        setError("could not save the update");
+        return emu::DlResult::Invalid;
+    }
+    return emu::DlResult::Done;
 }
 
 // Swap the downloaded NRO in for the running one. The running NRO is still
@@ -139,45 +209,125 @@ void relaunch(const std::string& target) {
     Application::quit();
 }
 
-void downloadAndInstall(const UpdateInfo& info) {
-    const std::string target = Settings::instance().launch_path();
-    auto* loader = createLoadingDialog("update/downloading"_i18n);
-    loader->open();
-
-    brls::async([info, target, loader] {
-        const std::string downloaded = target + ".new";
+// Stops every download first: the CA bundle they need lives in the romfs that
+// install unmounts, and a background emulator install must not end after it.
+void installStaged(const std::string& target) {
+    DownloadService::instance().suspend([target] {
         std::string error;
-        bool ok = false;
-
-        ok = httpGetToFile(info.url, downloaded, 300, Progress(), error);
-        if (ok && !looksLikeNro(downloaded, info.size)) {
-            ok = false;
-            error = "downloaded file is not a valid NRO";
+        if (!install(target, target + ".new", error)) {
+            clearStaged(target);
+            DownloadService::instance().resumeAll();
+            showError("update/failed"_i18n + "\n" + error);
+            return;
         }
-        if (!ok)
-            remove(downloaded.c_str());
-
-        brls::sync([ok, error, info, target, downloaded, loader] {
-            loader->close([ok, error, info, target, downloaded] {
-                if (!ok) {
-                    showError("update/failed"_i18n + "\n" + error);
-                    return;
-                }
-
-                std::string installError;
-                if (!install(target, downloaded, installError)) {
-                    remove(downloaded.c_str());
-                    showError("update/failed"_i18n + "\n" + installError);
-                    return;
-                }
-
-                brls::Logger::info("Updater: installed {}", info.version);
-                showAlert(fmt::format(fmt::runtime("update/installed"_i18n),
-                                      info.version),
-                          [target] { relaunch(target); });
-            });
-        });
+        remove(stagedVersionPath(target).c_str());
+        brls::Logger::info("Updater: installed the staged update");
+        relaunch(target);
     });
+}
+
+// "Later" keeps the staged NRO: it is offered again on the next start.
+void askRestart(const std::string& version, const std::string& target) {
+    auto* dialog = new Dialog(brls::getStr("update/ready", version));
+    dialog->addButton("update/later"_i18n, [] {});
+    dialog->addButton("update/restart_now"_i18n, [target] {
+        brls::sync([target] { installStaged(target); });
+    });
+    dialog->open();
+}
+
+void fail() {
+    pending().reset();
+    // Out of the queue, so the next request starts a new task; the .part of
+    // a network failure stays for it.
+    DownloadService::instance().cancel(TASK_ID);
+    showError("update/failed"_i18n + "\n" + takeError());
+}
+
+// For as long as the app runs, whatever screen is open.
+void watchTask() {
+    static bool watching = false;
+    if (watching)
+        return;
+    watching = true;
+    DownloadService::instance().subscribe([](const DlEvent& event) {
+        if (event.id != TASK_ID || !pending())
+            return;
+        switch (event.state) {
+        case emu::DlState::Running:
+            pending()->percent = std::clamp((int)(event.progress * 100), 0, 100);
+            break;
+        case emu::DlState::Queued:
+            break; // waits to try again
+        case emu::DlState::Paused:
+            if (event.result == emu::DlResult::Disk)
+                fail();
+            break;
+        case emu::DlState::Failed:
+            fail();
+            break;
+        case emu::DlState::Done: {
+            const Pending job = *pending();
+            pending().reset();
+            if (event.result == emu::DlResult::Done) {
+                brls::Logger::info("Updater: downloaded {}", job.version);
+                askRestart(job.version, job.target);
+            } else if (!DownloadService::instance().active(TASK_ID)) {
+                // Cancelled while it waited; a running one removes it itself.
+                discardPart(job.target);
+            }
+            break;
+        }
+        }
+    });
+}
+
+void showProgress() {
+    DownloadService& service = DownloadService::instance();
+    // A full card may have paused it with every other download.
+    service.resume(TASK_ID);
+    service.setPriority(TASK_ID, emu::DlPriority::Interactive);
+    Application::notify(brls::getStr("update/downloading_percent",
+                                     pending()->percent));
+}
+
+void startDownload(const UpdateInfo& info) {
+    if (pending()) {
+        showProgress();
+        return;
+    }
+
+    static bool registered = false;
+    if (!registered) {
+        DownloadService::instance().registerKind(emu::DlKind::AppUpdate, runUpdate);
+        registered = true;
+    }
+    watchTask();
+
+    const std::string target = Settings::instance().launch_path();
+    pending() = Pending{info.version, target, 0};
+
+    emu::DlTask task;
+    task.id = TASK_ID;
+    task.kind = emu::DlKind::AppUpdate;
+    task.priority = emu::DlPriority::Interactive;
+    task.skipWait = true;
+    task.hosts = {emu::kHostGitHub};
+    task.resumable = true;
+    json_t* params = json_object();
+    json_object_set_new(params, "url", json_string(info.url.c_str()));
+    json_object_set_new(params, "version", json_string(info.version.c_str()));
+    json_object_set_new(params, "target", json_string(target.c_str()));
+    json_object_set_new(params, "size", json_integer((json_int_t)info.size));
+    if (char* text = json_dumps(params, JSON_COMPACT)) {
+        task.params = text;
+        free(text);
+    }
+    json_decref(params);
+
+    takeError();
+    DownloadService::instance().submit(std::move(task));
+    Application::notify("update/downloading"_i18n);
 }
 
 void offer(const UpdateInfo& info) {
@@ -185,25 +335,13 @@ void offer(const UpdateInfo& info) {
         fmt::runtime("update/available"_i18n), info.version, APP_VERSION));
     dialog->addButton("update/later"_i18n, [] {});
     dialog->addButton("update/install"_i18n,
-                      [info] { brls::sync([info] { downloadAndInstall(info); }); });
+                      [info] { brls::sync([info] { startDownload(info); }); });
     dialog->open();
 }
 
 #endif // __SWITCH__
 
 } // namespace
-
-bool isNewer(const std::string& candidate, const std::string& current) {
-    std::vector<int> a = parseVersion(candidate);
-    std::vector<int> b = parseVersion(current);
-    if (a.empty() || b.empty())
-        return false;
-
-    size_t count = std::max(a.size(), b.size());
-    a.resize(count, 0);
-    b.resize(count, 0);
-    return a > b;
-}
 
 bool supported() {
 #ifdef __SWITCH__
@@ -215,11 +353,31 @@ bool supported() {
 #endif
 }
 
+void offerStaged() {
+#ifdef __SWITCH__
+    if (!supported() || pending())
+        return;
+    const std::string target = Settings::instance().launch_path();
+    if (std::optional<std::string> version = stagedUpdate(target, APP_VERSION))
+        askRestart(*version, target);
+#endif
+}
+
 void checkAndPrompt(bool silent) {
 #ifdef __SWITCH__
     if (!supported()) {
         if (!silent)
             showError("update/unsupported"_i18n);
+        return;
+    }
+
+    if (pending()) {
+        showProgress();
+        return;
+    }
+    const std::string target = Settings::instance().launch_path();
+    if (std::optional<std::string> version = stagedUpdate(target, APP_VERSION)) {
+        askRestart(*version, target);
         return;
     }
 

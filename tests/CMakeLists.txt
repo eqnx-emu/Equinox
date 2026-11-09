@@ -194,6 +194,13 @@ target_include_directories(test_emu_downloads PRIVATE
     "${MOONLIGHT_ROOT}/extern")
 target_link_libraries(test_emu_downloads PRIVATE ${JANSSON_LIB})
 
+add_executable(test_updater
+    test_updater.cpp
+    "${MOONLIGHT_ROOT}/app/src/utils/UpdateStage.cpp")
+target_include_directories(test_updater PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
+
 find_library(CURL_LIB curl)
 if(CURL_LIB)
     add_executable(test_http_resumable

@@ -490,6 +490,10 @@ void DownloadService::runTask(const emu::DlTask& task, std::unique_lock<std::mut
 
     DlContext context;
     context.stop = stop;
+    context.abandoned = [this] {
+        std::lock_guard<std::mutex> abandonedLock(mutex_);
+        return stopReason_ == StopReason::Abandoned;
+    };
     Clock::time_point nextProgress = Clock::now() + kProgressEvery;
     context.progress = [this, &id, &stop, &nextProgress](float progress) {
         const Clock::time_point now = Clock::now();
@@ -659,12 +663,7 @@ emu::DlResult DownloadService::runRunner(const emu::DlTask& task, DlContext& con
     emu::InstallResult result = emu::installRunner(*console, *manifest, progress);
 
     // A pause or a launch keeps the .part to continue it; a cancel does not.
-    bool abandoned = false;
-    if (!result.ok) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        abandoned = stopReason_ == StopReason::Abandoned;
-    }
-    if (abandoned) emu::discardRunnerDownload(*console);
+    if (!result.ok && context.abandoned()) emu::discardRunnerDownload(*console);
 
     const emu::RunnerError code = result.code;
     context.install = std::move(result);

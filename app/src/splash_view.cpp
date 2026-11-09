@@ -4,6 +4,7 @@
 //
 
 #include "splash_view.hpp"
+#include "Updater.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -166,7 +167,12 @@ void SplashView::finish() {
         return;
     closing = true;
     // Not from inside draw or an action: the view would free itself mid-call.
-    brls::sync([] { Application::popActivity(TransitionAnimation::NONE); });
+    // Then an update a previous run downloaded is offered, over the home
+    // screen: a dialog opened earlier would be the activity popped here.
+    brls::sync([] {
+        Application::popActivity(TransitionAnimation::NONE,
+                                 [] { brls::sync([] { Updater::offerStaged(); }); });
+    });
 }
 
 void SplashView::draw(NVGcontext* vg, float x, float y, float width,

@@ -31,6 +31,8 @@
 struct DlContext {
     std::shared_ptr<std::atomic<bool>> stop;
     std::function<void(float)> progress;
+    // After a stop: true when the task was cancelled, so its .part goes too.
+    std::function<bool()> abandoned;
     // Set by the runner when the result blames a host other than the task's first.
     std::string failedHost;
     std::optional<emu::DataOutcome> data;  // GameData only
