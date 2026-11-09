@@ -519,9 +519,22 @@ void GameListPanel::setItem(size_t index, emu::LibraryItem item) {
         old.name == item.name && old.year == item.year && old.genre == item.genre;
     items[index] = std::move(item);
     refreshRow(index);
+    if (sameOrder)
+        return;
+    if (orderHeld) {
+        orderStale = true;
+        return;
+    }
     // Only the data changed: the list stays where the user left it.
-    if (!sameOrder)
-        applyOrder(false);
+    applyOrder(false);
+}
+
+void GameListPanel::holdOrder(bool hold) {
+    orderHeld = hold;
+    if (hold || !orderStale)
+        return;
+    orderStale = false;
+    applyOrder(false);
 }
 
 void GameListPanel::refreshRow(size_t index) {
@@ -538,6 +551,7 @@ void GameListPanel::refreshRows() {
 }
 
 void GameListPanel::applyOrder(bool resetScroll, std::vector<size_t>* ready) {
+    orderStale = false; // whatever setItem held back is in this order too
     const std::optional<size_t> focused = focusedIndex();
     const int64_t started = liblog::nowUs();
     if (ready) {
