@@ -37,6 +37,11 @@ void LibraryProgressBar::draw(NVGcontext* vg, float x, float y, float width, flo
     nvgFill(vg);
 }
 
+void setTextIfChanged(Label* label, const std::string& text) {
+    if (label->getFullText() != text)
+        label->setText(text);
+}
+
 std::string libraryStopText(emu::DataStop stop) {
     switch (stop) {
     case emu::DataStop::Offline:

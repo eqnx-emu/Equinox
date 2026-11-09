@@ -68,8 +68,11 @@ class ConsoleShelfView : public brls::Box {
     std::string restoreRom;
 
     std::vector<Game> games;
-    std::optional<size_t> current;   // the game the details show
+    std::optional<size_t> current;   // the game picked in the list
     brls::Time currentAt = 0;
+    // The game the details show: lags current while the list moves fast.
+    std::optional<size_t> shownIndex;
+    unsigned detailsTicket = 0;
     // Bumped on each rebuild, so covers for the old cells are dropped.
     uint64_t generation = 0;
     bool scanning = false;
@@ -127,6 +130,10 @@ class ConsoleShelfView : public brls::Box {
     };
     void showGames(Scan& scan);
     void onCurrent(std::optional<size_t> index);
+    // The details of current, now.
+    void showDetails();
+    // The details' download state, when they show current.
+    void applyDetailsProgress();
     void play(size_t index);
     // The game as it was when play() started: the list may be rebuilt while
     // the launch waits.

@@ -1027,14 +1027,15 @@ void GameListPanel::applyBatch() {
     stoppedRow->setVisibility(shownWhen(Batch::Stopped));
     runningRow->setVisibility(shownWhen(Batch::Running));
 
-    idleMissing->setText(brls::getStr("library/list/missing", missing));
+    setTextIfChanged(idleMissing, brls::getStr("library/list/missing", missing));
     if (stopped)
-        stoppedLabel->setText(brls::getStr("library/list/stopped", libraryStopText(*stopped)));
+        setTextIfChanged(stoppedLabel,
+                         brls::getStr("library/list/stopped", libraryStopText(*stopped)));
     if (state == Batch::Running) {
-        runningLine->setText(brls::getStr("library/list/running",
-                                          std::min(batchDone + 1, batchTotal), batchTotal,
-                                          batchPercent));
-        runningName->setText(batchName);
+        setTextIfChanged(runningLine, brls::getStr("library/list/running",
+                                                   std::min(batchDone + 1, batchTotal),
+                                                   batchTotal, batchPercent));
+        setTextIfChanged(runningName, batchName);
         static_cast<LibraryProgressBar*>(bar)->setFraction(batchPercent / 100.0f);
     }
 
