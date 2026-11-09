@@ -99,6 +99,8 @@ class ConsoleShelfView : public brls::Box {
     GameDetailsPanel* detailsPanel = nullptr;
 
     CoverAmbient ambient;
+    bool ambientHeld = false;
+    unsigned ambientTicket = 0;
 
     // The index on the card, when there is one, then a look at the folder.
     void openLibrary();
@@ -147,6 +149,8 @@ class ConsoleShelfView : public brls::Box {
     GameDetails detailsFor(size_t index) const;
     void bindRow(GameRowCell& cell, size_t index);
     void applyAmbient();
+    // No glow until the user has stayed on one game for a moment.
+    void holdAmbient();
     void applyActions();
     // Rows, the details' action and the download-all area, from the queue.
     void applyProgress();

@@ -29,6 +29,9 @@ constexpr float kButtonHeight = 44;
 constexpr float kBarWidth = 400;
 constexpr int kFadeMs = 150;
 constexpr float kPi = 3.14159265358979f;
+constexpr float kStickDeadzone = 0.2f;
+constexpr float kStickPixelsPerFrame = 8;
+constexpr float kSynopsisIndicatorRoom = 20;
 
 NVGcolor themeColor(const char* name) {
     return Application::getTheme().getColor(name);
@@ -211,6 +214,25 @@ std::string stepText(emu::DataStep step) {
     return text("library/details/step_done");
 }
 
+// Follows the right stick; the focus stays on the list, so it never takes it.
+class SynopsisScroll : public ScrollingFrame {
+  public:
+    SynopsisScroll() {
+        setFocusable(false);
+        setGrow(1);
+    }
+
+    View* getDefaultFocus() override { return nullptr; }
+
+    void draw(NVGcontext* vg, float x, float y, float width, float height, Style style,
+              FrameContext* ctx) override {
+        const float stick = Application::getControllerState().axes[RIGHT_Y];
+        if (std::abs(stick) > kStickDeadzone)
+            setContentOffsetY(getContentOffsetY() + stick * kStickPixelsPerFrame, false);
+        ScrollingFrame::draw(vg, x, y, width, height, style, ctx);
+    }
+};
+
 } // namespace
 
 GameDetailsPanel::GameDetailsPanel() : Box(Axis::COLUMN) {
@@ -321,20 +343,25 @@ GameDetailsPanel::GameDetailsPanel() : Box(Axis::COLUMN) {
     facts->setWidth(0);
     media->addView(facts);
 
-    // Clips a very long synopsis at the bottom so "Fontes" stays in place.
+    // A long synopsis scrolls inside the room left, so "Fontes" stays in place.
     auto* synopsis = new Box(Axis::COLUMN);
     synopsis->setMarginTop(20);
     synopsis->setMaxWidth(760);
     synopsis->setGrow(1);
     synopsis->setShrink(1);
-    synopsis->setClipsToBounds(true);
     synopsisHeading = new BoldLabel();
     synopsisHeading->setFontSize(16);
     synopsisHeading->setText(text("library/details/synopsis"));
+    synopsisHeading->setShrink(0);
     synopsis->addView(synopsisHeading);
+    synopsisScroll = new SynopsisScroll();
+    synopsisScroll->setMarginTop(8);
+    auto* synopsisBody = new Box(Axis::COLUMN);
+    synopsisBody->setPaddingRight(kSynopsisIndicatorRoom);
     synopsisText = makeLabel(16);
-    synopsisText->setMarginTop(8);
-    synopsis->addView(synopsisText);
+    synopsisBody->addView(synopsisText);
+    synopsisScroll->setContentView(synopsisBody);
+    synopsis->addView(synopsisScroll);
     content->addView(synopsis);
 
     sources = makeLabel(14);
@@ -413,6 +440,7 @@ void GameDetailsPanel::applyDetails() {
     synopsisText->setText(!details.synopsis.empty() ? details.synopsis
                           : details.hasData         ? text("library/details/synopsis_empty")
                                                     : text("library/details/synopsis_none"));
+    synopsisScroll->setContentOffsetY(0, false);
     applyAction();
     applyMedia();
     applyFacts();

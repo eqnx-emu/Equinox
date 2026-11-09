@@ -80,6 +80,7 @@ class GameDetailsPanel : public brls::Box {
     brls::Label* titleCaption = nullptr;
     brls::Box* facts = nullptr;
     brls::Label* synopsisHeading = nullptr;
+    brls::ScrollingFrame* synopsisScroll = nullptr;
     brls::Label* synopsisText = nullptr;
     brls::Label* sources = nullptr;
 

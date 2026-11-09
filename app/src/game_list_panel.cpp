@@ -33,6 +33,13 @@ class LibraryScroll : public ScrollingFrame {
             updateScrolling(animated);
     }
     void recenterNextFrame() { updateScrollingOnNextFrame = true; }
+
+    void centerOn(float middle) {
+        if (Application::getInputType() == InputType::TOUCH)
+            return;
+        const float limit = std::max(0.0f, getContentHeight() - getHeight());
+        setContentOffsetY(std::clamp(middle - getHeight() / 2, 0.0f, limit), true);
+    }
 };
 
 // The rows stand at positions the panel works out, in no particular child
@@ -796,6 +803,10 @@ View* GameListPanel::rowNextTo(View* from, FocusDirection direction) const {
 }
 
 View* GameListPanel::defaultRow() const {
+    // The scroll asks while the focus is arriving, before current has followed.
+    if (const auto focused = focusedIndex(); focused && shownAt[*focused] != kNoPlace)
+        if (GameRowCell* cell = rowAt(shownAt[*focused]))
+            return cell;
     if (current && *current < shownAt.size())
         if (GameRowCell* cell = rowAt(shownAt[*current]))
             return cell;
@@ -826,6 +837,13 @@ void GameListPanel::setCurrent(std::optional<size_t> next, bool animate) {
 void GameListPanel::focusedGame(size_t index) {
     stats.moves++;
     setCurrent(index, true);
+    if (index >= shownAt.size() || shownAt[index] == kNoPlace)
+        return;
+    // Aim at where the row ends up once the heights settle, in one movement:
+    // the focused row is the only cartridge, so every row above it is plain.
+    recenterToken++;
+    const float height = mode == 0 ? GameRowCell::CartridgeHeight : GameRowCell::RowHeight;
+    scroll->centerOn(kListTop + shownAt[index] * kRowStep + height / 2);
 }
 
 void GameListPanel::focusGame(size_t index) {
