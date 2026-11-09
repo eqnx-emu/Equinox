@@ -200,6 +200,12 @@
         "debug": "Debug",
         "ingame": "Durante o jogo",
         "interface": "Interface",
+        "theme": "Tema",
+        "themes": {
+            "system": "Padrão do sistema",
+            "light": "Claro",
+            "dark": "Escuro"
+        },
         "reduce_motion": "Reduzir animações",
         "reduce_motion_note": "Desliga a fita flutuante e as transições da biblioteca.",
         "screenscraper": "ScreenScraper",
@@ -457,6 +463,7 @@
         "update": "Atualizar emulador",
         "check_update": "Procurar atualização",
         "rescan": "Procurar jogos de novo",
+        "more_options": "Mais opções",
         "remove": "Remover console",
         "remove_message": "Remover o {}? Seus jogos, saves e capas continuam no cartão SD.",
         "add_pc": "PC para stream",

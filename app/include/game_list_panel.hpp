@@ -54,6 +54,16 @@ class GameListPanel : public brls::Box {
     // with no result, the search field.
     void focusGame(size_t index);
 
+    // Keeps the shortcuts but takes them off the footer, for a screen that
+    // lists them elsewhere.
+    void hideShortcutHints();
+    std::string batchActionLabel() const;
+    bool batchActionAvailable() const;
+    void openSearch();
+    void openSort();
+    void toggleMode();
+    void downloadAllOrCancel();
+
     // The current game, which is the one the cartridge shows and the details
     // panel should show. It follows the focus on a row, and also changes
     // without focus on a row (a filter that hides it, a new set of items).
@@ -122,6 +132,7 @@ class GameListPanel : public brls::Box {
     void applySort();
     void applyToggle();
     void applyBatch();
+    void registerShortcuts(bool hidden);
     // resetScroll: the order or the filter changed, not just a game's data.
     void applyOrder(bool resetScroll);
     void applyLooks(bool animate);
@@ -131,10 +142,6 @@ class GameListPanel : public brls::Box {
     bool focusInList() const;
     Batch batchState() const;
 
-    void openSearch();
-    void openSort();
-    void toggleMode();
-    void downloadAllOrCancel();
     void setQuery(const std::string& text);
     void chooseSort(int value);
 };

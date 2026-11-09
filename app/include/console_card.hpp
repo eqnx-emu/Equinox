@@ -8,21 +8,29 @@
 //  focus its tag turns gold and the controller
 //  hops upright.
 //
+//  A console with a 3D turntable (img/3d/<slug>.png) has no card:
+//  its object floats over the name and spins while it is selected.
+//
 
 #pragma once
 
+#include "cover_carousel.hpp"
 #include "emu/Console.hpp"
 #include "emu/RunnerManifest.hpp"
 #include "pressable_box.hpp"
+#include "turntable.hpp"
 #include <borealis.hpp>
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 
-class ConsoleCard : public PressableBox {
+class ConsoleCard : public PressableBox, public ShelfItem {
   public:
     explicit ConsoleCard(const emu::Console& console);
+
+    bool frameless() const override { return turntable != nullptr; }
 
     // Re-reads the installed runner and counts the ROMs again, off the UI
     // thread.
@@ -70,6 +78,9 @@ class ConsoleCard : public PressableBox {
     brls::Animatable focus = 0.0f;
     // 0 to 1 with focus, overshooting: the controller's hop.
     brls::Animatable hop = 0.0f;
+
+    // The 3D object instead of the card, when the console has one.
+    std::unique_ptr<Turntable> turntable;
 
     void update();
     void animateFocus(bool focused);

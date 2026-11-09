@@ -55,6 +55,9 @@ void CoverCarousel::addView(View* view) {
     view->setPositionTop((shelf.height - view->getHeight()) / 2);
     view->setPositionLeft(0);
     view->setHideHighlight(true);
+    // The pressed flash is a filled card: an object with no card only sinks.
+    if (const auto* item = dynamic_cast<const ShelfItem*>(view))
+        view->setHideClickAnimation(item->frameless());
     Box::addView(view);
 }
 
@@ -208,8 +211,12 @@ void CoverCarousel::draw(NVGcontext* vg, float x, float y, float width,
         const float cy = cell->getY() + ch / 2;
         const float sw = cw * scale * squash;
         const float sh = ch * scale;
+        const auto* item = dynamic_cast<const ShelfItem*>(cell);
+        const bool frameless = item && item->frameless();
 
-        // Shadow on the ground.
+        // Shadow on the ground: softer on the light theme's white ground.
+        const float groundShade =
+            Application::getThemeVariant() == ThemeVariant::LIGHT ? 70 : 150;
         const float groundY = y + (shelf.height + ch * shelf.focusScale) / 2 + 4;
         const float gw = sw * 0.42f;
         nvgSave(vg);
@@ -218,13 +225,13 @@ void CoverCarousel::draw(NVGcontext* vg, float x, float y, float width,
         nvgBeginPath(vg);
         nvgCircle(vg, 0, 0, gw);
         nvgFillPaint(vg, nvgRadialGradient(vg, 0, 0, 0, gw,
-                                           nvgRGBA(0, 0, 0, (unsigned char)(150 * alpha)),
+                                           nvgRGBA(0, 0, 0, (unsigned char)(groundShade * alpha)),
                                            nvgRGBA(0, 0, 0, 0)));
         nvgFill(vg);
         nvgRestore(vg);
 
         // Amber glow behind the focused cover.
-        if (focus > 0.01f && glow > 0.01f) {
+        if (!frameless && focus > 0.01f && glow > 0.01f) {
             const float k = focus * glow;
             nvgBeginPath(vg);
             nvgRect(vg, cx - sw / 2 - 40, cy - sh / 2 - 40, sw + 80, sh + 80);
@@ -243,6 +250,10 @@ void CoverCarousel::draw(NVGcontext* vg, float x, float y, float width,
         nvgTranslate(vg, -cx, -cy);
 
         cell->frame(ctx);
+        if (frameless) {
+            nvgRestore(vg);
+            continue;
+        }
 
         const float left = cx - cw / 2;
         const float top = cy - ch / 2;
@@ -299,7 +310,11 @@ void CarouselDots::draw(NVGcontext* vg, float x, float y, float width,
         return;
     constexpr float dot = 7, wide = 22, gap = 7;
     const float pos = slide.getValue();
-    const NVGcolor idle = Application::getTheme()["brls/applet_frame/separator"];
+    // On the light ground the separator line is too faint for a dot.
+    const NVGcolor idle =
+        Application::getTheme()[Application::getThemeVariant() == ThemeVariant::LIGHT
+                                    ? "brls/slider/pointer_border_color"
+                                    : "brls/applet_frame/separator"];
     const NVGcolor accent = Application::getTheme()["brls/accent"];
 
     float full = 0;

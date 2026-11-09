@@ -200,6 +200,12 @@
         "debug": "Debug",
         "ingame": "In game",
         "interface": "Interface",
+        "theme": "Theme",
+        "themes": {
+            "system": "System default",
+            "light": "Light",
+            "dark": "Dark"
+        },
         "reduce_motion": "Reduce motion",
         "reduce_motion_note": "Turns off the floating cartridge and the library transitions.",
         "screenscraper": "ScreenScraper",
@@ -457,6 +463,7 @@
         "update": "Update emulator",
         "check_update": "Check for updates",
         "rescan": "Look for games again",
+        "more_options": "More options",
         "remove": "Remove console",
         "remove_message": "Remove {}? Your games, saves and covers stay on the SD card.",
         "add_pc": "PC for streaming",

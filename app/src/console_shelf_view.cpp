@@ -4,6 +4,7 @@
 //
 
 #include "console_shelf_view.hpp"
+#include "options_sheet.hpp"
 
 #if defined(PLATFORM_SWITCH)
 
@@ -221,6 +222,7 @@ ConsoleShelfView::ConsoleShelfView(const emu::Console& console,
     library->setGrow(1);
     library->setAlignItems(AlignItems::STRETCH);
     listPanel = new GameListPanel(console);
+    listPanel->hideShortcutHints();
     listPanel->onFocusGame = [this](std::optional<size_t> index) {
         onCurrent(index);
     };
@@ -261,7 +263,7 @@ ConsoleShelfView::ConsoleShelfView(const emu::Console& console,
     auto* emptyPath = new BoldLabel();
     emptyPath->setFontSize(22);
     emptyPath->setMarginTop(12);
-    emptyPath->setTextColor(themeColor("equinox/sun"));
+    emptyPath->setTextColor(themeColor("equinox/status_on"));
     emptyPath->setText(paths.roms + "/");
     empty->addView(emptyPath);
 
@@ -279,9 +281,8 @@ ConsoleShelfView::ConsoleShelfView(const emu::Console& console,
     empty->setVisibility(Visibility::GONE);
     addView(empty);
 
-    registerAction("library/hint/download"_i18n, BUTTON_X, [this](View*) {
-        if (current)
-            download(*current);
+    registerAction("emu/more_options"_i18n, BUTTON_X, [this](View*) {
+        openMore();
         return true;
     });
     registerAction("app_list/star"_i18n, BUTTON_Y, [this](View*) {
@@ -296,7 +297,7 @@ ConsoleShelfView::ConsoleShelfView(const emu::Console& console,
     registerAction("emu/rescan"_i18n, BUTTON_LT, [this](View*) {
         rescan(true);
         return true;
-    });
+    }, true);
     applyActions();
 
     rescan(false);
@@ -528,14 +529,32 @@ void ConsoleShelfView::applyAmbient() {
         ambient.clear();
 }
 
+void ConsoleShelfView::openMore() {
+    std::vector<OptionsSheet::Item> items;
+    if (current) {
+        items.push_back({games[*current].hasData ? "library/details/update"_i18n
+                                                 : "library/hint/download"_i18n,
+                         [this] {
+                             if (current)
+                                 download(*current);
+                         }});
+    }
+    items.push_back({"library/list/hint_search"_i18n, [this] { listPanel->openSearch(); }});
+    items.push_back({"library/list/hint_sort"_i18n, [this] { listPanel->openSort(); }});
+    items.push_back({"library/list/hint_mode"_i18n, [this] { listPanel->toggleMode(); }});
+    if (listPanel->batchActionAvailable())
+        items.push_back({listPanel->batchActionLabel(),
+                         [this] { listPanel->downloadAllOrCancel(); }});
+    items.push_back({"emu/rescan"_i18n, [this] { rescan(true); }});
+    OptionsSheet::open("emu/more_options"_i18n, std::move(items));
+}
+
 void ConsoleShelfView::applyActions() {
     const bool any = current.has_value();
-    setActionAvailable(BUTTON_X, any);
+    setActionAvailable(BUTTON_X, !games.empty());
     setActionAvailable(BUTTON_Y, any);
     if (any) {
         const Game& game = games[*current];
-        updateActionHint(BUTTON_X, game.hasData ? "library/details/update"_i18n
-                                                : "library/hint/download"_i18n);
         const bool favorite = Settings::instance().is_local_favorite(
             consoleRef.slug, game.rom.fileName);
         updateActionHint(BUTTON_Y,

@@ -312,22 +312,7 @@ GameListPanel::GameListPanel(const emu::Console& console)
     runningRow->addView(bar);
     footer->addView(runningRow);
 
-    registerAction("library/list/hint_mode"_i18n, BUTTON_RB, [this](View*) {
-        toggleMode();
-        return true;
-    });
-    registerAction("library/list/hint_sort"_i18n, BUTTON_LB, [this](View*) {
-        openSort();
-        return true;
-    });
-    registerAction("library/list/hint_search"_i18n, BUTTON_BACK, [this](View*) {
-        openSearch();
-        return true;
-    });
-    registerAction("library/list/download_all"_i18n, BUTTON_RT, [this](View*) {
-        downloadAllOrCancel();
-        return true;
-    });
+    registerShortcuts(false);
 
     applyColors();
     applyQuery();
@@ -647,6 +632,41 @@ GameListPanel::Batch GameListPanel::batchState() const {
     return missing == 0 ? Batch::Done : Batch::Idle;
 }
 
+void GameListPanel::registerShortcuts(bool hidden) {
+    registerAction("library/list/hint_mode"_i18n, BUTTON_RB, [this](View*) {
+        toggleMode();
+        return true;
+    }, hidden);
+    registerAction("library/list/hint_sort"_i18n, BUTTON_LB, [this](View*) {
+        openSort();
+        return true;
+    }, hidden);
+    registerAction("library/list/hint_search"_i18n, BUTTON_BACK, [this](View*) {
+        openSearch();
+        return true;
+    }, hidden);
+    registerAction("library/list/download_all"_i18n, BUTTON_RT, [this](View*) {
+        downloadAllOrCancel();
+        return true;
+    }, hidden);
+}
+
+void GameListPanel::hideShortcutHints() {
+    registerShortcuts(true);
+    applyBatch();
+}
+
+std::string GameListPanel::batchActionLabel() const {
+    const Batch state = batchState();
+    return state == Batch::Running   ? "common/cancel"_i18n
+           : state == Batch::Stopped ? "library/details/retry"_i18n
+                                     : "library/list/download_all"_i18n;
+}
+
+bool GameListPanel::batchActionAvailable() const {
+    return batchState() != Batch::Done && !items.empty();
+}
+
 void GameListPanel::applyBatch() {
     const Batch state = batchState();
     const bool footerFocused = isInside(Application::getCurrentFocus(), footer);
@@ -674,12 +694,8 @@ void GameListPanel::applyBatch() {
     }
 
     // ZR starts, cancels or retries; nothing to do once every game has data.
-    updateActionHint(BUTTON_RT, state == Batch::Running
-                                    ? "common/cancel"_i18n
-                                    : state == Batch::Stopped
-                                          ? "library/details/retry"_i18n
-                                          : "library/list/download_all"_i18n);
-    setActionAvailable(BUTTON_RT, state != Batch::Done && !items.empty());
+    updateActionHint(BUTTON_RT, batchActionLabel());
+    setActionAvailable(BUTTON_RT, batchActionAvailable());
 
     // The control that had the focus may be the one that just went away.
     if (footerFocused) {

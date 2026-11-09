@@ -5,7 +5,7 @@
 //  A console's games as a library: the list on the left, the picked game's
 //  details on the right. Covers come from libretro, one at a time, while the
 //  library is open; the rest of a game's data only when asked for. A plays,
-//  Y stars, X downloads the game's data, ZL looks for games again, B goes
+//  Y stars, X opens the other actions in a side sheet, B goes
 //  back.
 //
 
@@ -105,6 +105,7 @@ class ConsoleShelfView : public brls::Box {
     CoverAmbient ambient;
 
     void rescan(bool clearMisses);
+    void openMore();
     void showGames(std::vector<Game> found);
     void onCurrent(std::optional<size_t> index);
     void play(size_t index);
