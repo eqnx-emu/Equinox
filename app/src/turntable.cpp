@@ -73,7 +73,9 @@ class RenderThread {
     }
 
   private:
-    RenderThread() { std::thread([this] { run(); }).detach(); }
+    // Kept, not detached: libnx has no pthread_detach, so detach() throws.
+    // The instance is never destroyed, so the thread is never joined.
+    RenderThread() : thread([this] { run(); }) {}
 
     void run() {
 #ifdef __SWITCH__
@@ -111,6 +113,7 @@ class RenderThread {
     std::mutex mutex;
     std::condition_variable wake;
     std::deque<std::function<void()>> jobs;
+    std::thread thread; // last: run() uses the members above
 };
 } // namespace
 
