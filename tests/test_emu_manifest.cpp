@@ -168,7 +168,7 @@ TEST_CASE("urls") {
     REQUIRE(snes != nullptr);
     Manifest m = *parseManifest(kRealManifest);
     CHECK(manifestUrl(*snes) ==
-          "https://github.com/luizfbalves/equinox-snes9x/releases/latest/download/manifest.json");
+          "https://github.com/eqnx-emu/equinox-snes9x/releases/latest/download/manifest.json");
     CHECK(assetUrl(*snes, m) ==
-          "https://github.com/luizfbalves/equinox-snes9x/releases/download/v1.0.0/equinox-snes9x.nro");
+          "https://github.com/eqnx-emu/equinox-snes9x/releases/download/v1.0.0/equinox-snes9x.nro");
 }

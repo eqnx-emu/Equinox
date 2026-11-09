@@ -25,7 +25,7 @@ namespace Updater {
 namespace {
 
 const char* const RELEASES_URL =
-    "https://api.github.com/repos/luizfbalves/Equinox/releases/latest";
+    "https://api.github.com/repos/eqnx-emu/Equinox/releases/latest";
 const char* const ASSET_NAME = "Equinox.nro";
 
 std::vector<int> parseVersion(std::string version) {
