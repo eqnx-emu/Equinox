@@ -668,13 +668,16 @@ void ConsoleShelfView::showGames(Scan& scan) {
     games = std::move(scan.games);
     const bool none = games.empty();
 
-    // The panel reports its first result as current while it fills.
+    // The panel reports its first result as current while it fills, then
+    // focusGame picks the game to restore: the details wait for that one.
+    rebuilding = true;
     listPanel->setItems(std::move(scan.items), std::move(scan.order));
 
     library->setVisibility(none ? Visibility::GONE : Visibility::VISIBLE);
     empty->setVisibility(none ? Visibility::VISIBLE : Visibility::GONE);
     setActionAvailable(BUTTON_LT, !none);
     if (none) {
+        rebuilding = false;
         onCurrent(std::nullopt);
         if (focusHere)
             Application::giveFocus(empty);
@@ -687,6 +690,11 @@ void ConsoleShelfView::showGames(Scan& scan) {
             index = i;
     if (focusHere)
         listPanel->focusGame(index);
+    rebuilding = false;
+    if (current)
+        showDetails();
+    else
+        detailsPanel->setVisibility(Visibility::INVISIBLE);
     applyProgress();
 
     // A launch waiting for the network restarts them if it gives up.
@@ -776,7 +784,9 @@ void ConsoleShelfView::onCurrent(std::optional<size_t> index) {
     current = index;
     currentAt = now;
     const unsigned ticket = ++detailsTicket;
-    if (!current) {
+    if (rebuilding) {
+        // showGames shows the details once the list has settled.
+    } else if (!current) {
         // Nothing matches the search: no game to show.
         shownIndex.reset();
         detailsPanel->setVisibility(Visibility::INVISIBLE);
@@ -797,9 +807,12 @@ void ConsoleShelfView::onCurrent(std::optional<size_t> index) {
 }
 
 void ConsoleShelfView::showDetails() {
-    if (!current)
+    // Back on the game already shown (A, B, A quickly): nothing changed.
+    if (!current || shownIndex == current)
         return;
-    detailsPanel->setVisibility(Visibility::VISIBLE);
+    // setVisibility runs willAppear even when nothing changes.
+    if (detailsPanel->getVisibility() != Visibility::VISIBLE)
+        detailsPanel->setVisibility(Visibility::VISIBLE);
     detailsPanel->show(detailsFor(*current), true);
     shownIndex = current;
     applyDetailsProgress();

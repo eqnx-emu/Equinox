@@ -73,6 +73,7 @@ class ConsoleShelfView : public brls::Box {
     // The game the details show: lags current while the list moves fast.
     std::optional<size_t> shownIndex;
     unsigned detailsTicket = 0;
+    bool rebuilding = false; // showGames is filling the list
     // Bumped on each rebuild, so covers for the old cells are dropped.
     uint64_t generation = 0;
     bool scanning = false;

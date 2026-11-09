@@ -115,8 +115,10 @@ class ArtFrame : public Box {
         label->setTextColor(themeColor("equinox/muted"));
         // Same file: only a new download changes it. A different file is
         // stamped by the worker, so moving through the list costs no stat.
+        // Still decoding it: that decode stays, a new one would only queue
+        // behind it.
         if (imagePath == path) {
-            if (path.empty() || (loadedStamp != kPending && fileStamp(path) == loadedStamp))
+            if (path.empty() || loadedStamp == kPending || fileStamp(path) == loadedStamp)
                 return;
         }
         path = imagePath;
@@ -431,8 +433,9 @@ void GameDetailsPanel::applyColors() {
         cell.label->setTextColor(muted);
     updateButton->setBackgroundColor(themeColor("equinox/card_inner"));
     // The account can change in Settings while the panel is off screen.
-    sources->setText(text(emu::ssConfigured(emu::appSsConfig()) ? "library/details/sources"
-                                                                : "library/details/sources_free"));
+    setTextIfChanged(sources, text(emu::ssConfigured(emu::appSsConfig())
+                                       ? "library/details/sources"
+                                       : "library/details/sources_free"));
 }
 
 void GameDetailsPanel::show(const GameDetails& next, bool animate) {
@@ -571,10 +574,10 @@ void GameDetailsPanel::applyFacts() {
 
     for (size_t i = 0; i < factCells.size(); i++) {
         const FactCell& cell = factCells[i];
-        if (i < list.size()) {
-            setTextIfChanged(cell.label, text(list[i].label));
-            setTextIfChanged(cell.value, list[i].value);
-        }
+        // Emptied when hidden: an invisible cell still has a height, and the
+        // previous game's long text would make its row taller.
+        setTextIfChanged(cell.label, i < list.size() ? text(list[i].label) : "");
+        setTextIfChanged(cell.value, i < list.size() ? list[i].value : "");
         // An odd last fact keeps its half width: the empty cell holds the room.
         cell.box->setVisibility(i < list.size() ? Visibility::VISIBLE : Visibility::INVISIBLE);
     }

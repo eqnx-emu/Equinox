@@ -10,7 +10,16 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <condition_variable>
 #include <cstdio>
+#include <deque>
+#include <functional>
+#include <mutex>
+#include <thread>
+
+#ifdef __SWITCH__
+#include <switch.h>
+#endif
 
 using namespace brls;
 
@@ -42,9 +51,67 @@ constexpr int kMovingSamples = 2;
 constexpr int kRestingSamples = 2;
 brls::Time holdUntil = 0; // shared: the slide moves every object at once
 
+constexpr brls::Time kAppearUs = 150000; // fade in of the first render
+
 std::string fullPath(const std::string& path) {
     return std::string(BRLS_RESOURCES) + path;
 }
+
+// One thread of its own for the renders. brls::async's pool is small on the
+// Switch and also runs network calls that block for seconds; a render queued
+// behind them leaves the object missing or frozen.
+class RenderThread {
+  public:
+    static void post(std::function<void()> job) {
+        // Never destroyed: the thread may still wait on it while the app exits.
+        static RenderThread* instance = new RenderThread();
+        {
+            std::lock_guard<std::mutex> lock(instance->mutex);
+            instance->jobs.push_back(std::move(job));
+        }
+        instance->wake.notify_one();
+    }
+
+  private:
+    RenderThread() { std::thread([this] { run(); }).detach(); }
+
+    void run() {
+#ifdef __SWITCH__
+        // Off the UI thread's core when there is another, below the pool's
+        // priority (0x3A) so network replies are not held up.
+        s32 preferred = -1;
+        u64 mask = 0;
+        if (R_SUCCEEDED(svcGetThreadCoreMask(&preferred, &mask, CUR_THREAD_HANDLE))) {
+            s32 seen = 0;
+            for (s32 core = 0; core < 4; core++) {
+                if (!(mask & (1ULL << core)))
+                    continue;
+                if (seen++ == 1) {
+                    svcSetThreadCoreMask(CUR_THREAD_HANDLE, core, static_cast<u32>(mask));
+                    break;
+                }
+            }
+        }
+        svcSetThreadPriority(CUR_THREAD_HANDLE, 0x3B);
+#endif
+        for (;;) {
+            std::function<void()> job;
+            {
+                std::unique_lock<std::mutex> lock(mutex);
+                wake.wait(lock, [this] { return !jobs.empty(); });
+                job = std::move(jobs.front());
+                jobs.pop_front();
+            }
+            job();
+            // Dropped here, not when the next job replaces it: it holds the
+            // model's buffers, which may belong to a Turntable already gone.
+        }
+    }
+
+    std::mutex mutex;
+    std::condition_variable wake;
+    std::deque<std::function<void()>> jobs;
+};
 } // namespace
 
 // Shared with the worker, so a Turntable can go while a render is running.
@@ -199,6 +266,8 @@ void Turntable::collectRender(NVGcontext* vg) {
             image = -1;
             return;
         }
+        if (appearedAt == 0)
+            appearedAt = getCPUTimeUsec();
     } else {
         nvgUpdateImage(vg, image, live->pixels.data());
     }
@@ -221,7 +290,7 @@ void Turntable::startRender(int w, int h, float tilt, int samples) {
     nextRenderAt = getCPUTimeUsec() + kRenderIntervalUs;
 
     live->working.store(true, std::memory_order_relaxed);
-    brls::async([job = live, w, h, pose = spin, tilt, samples] {
+    RenderThread::post([job = live, w, h, pose = spin, tilt, samples] {
         job->mesh.render(w, h, pose, tilt, kLiveMargin, samples, job->pixels);
         job->working.store(false, std::memory_order_release);
     });
@@ -253,9 +322,13 @@ void Turntable::drawLive(NVGcontext* vg, float cx, float cy, float w, float h,
                 startRender(pw, ph, tilt, kRestingSamples);
         }
     }
-    // The first render is still on its way.
+    // The first render is still on its way; once there it fades in rather
+    // than popping up over the shadow.
     if (image <= 0)
         return;
+    const Time sinceAppeared = getCPUTimeUsec() - appearedAt;
+    if (sinceAppeared < kAppearUs)
+        alpha *= (float)sinceAppeared / kAppearUs;
 
     const float left = cx - dw / 2, top = cy - dh / 2;
     nvgBeginPath(vg);

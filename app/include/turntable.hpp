@@ -26,6 +26,9 @@ class Turntable {
     // path: inside the resources, e.g. "img/3d/snes.png" or ".mesh".
     explicit Turntable(std::string path);
     ~Turntable();
+    // Copies would share one LiveRender and could render into it at once.
+    Turntable(const Turntable&) = delete;
+    Turntable& operator=(const Turntable&) = delete;
 
     // The image is in the resources: use a Turntable instead of the card.
     static bool exists(const std::string& path);
@@ -55,6 +58,7 @@ class Turntable {
     bool rendering = false; // a worker has, or just finished, a render
     int jobW = 0, jobH = 0; // size of that render
     brls::Time nextRenderAt = 0;
+    brls::Time appearedAt = 0; // when the first render was shown
     int imageW = 0, imageH = 0;
     float drawnSpin = -1, drawnTilt = 0; // the pose last sent to a worker
     int drawnSamples = 0;
