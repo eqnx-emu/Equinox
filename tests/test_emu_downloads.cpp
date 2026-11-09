@@ -1,9 +1,12 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
 
+#include <filesystem>
+#include <fstream>
 #include <string>
 
 #include "emu/DownloadQueue.hpp"
+#include "emu/DownloadStore.hpp"
 
 using namespace emu;
 
@@ -291,4 +294,172 @@ TEST_CASE("cancel and cancelGroup remove tasks") {
     CHECK(get(q, "o") != nullptr);
     q.cancel("o");
     CHECK(get(q, "o") == nullptr);
+}
+
+namespace {
+
+namespace fs = std::filesystem;
+
+std::string tmpPath(const std::string& name) {
+    fs::path dir = fs::temp_directory_path() / "eqnx_dlstore_test";
+    fs::create_directories(dir);
+    fs::path p = dir / name;
+    std::error_code ec;
+    fs::remove(p, ec);
+    fs::remove(p.string() + ".tmp", ec);
+    fs::remove(p.string() + ".old", ec);
+    return p.string();
+}
+
+void writeFile(const std::string& path, const std::string& content) {
+    std::ofstream(path, std::ios::binary) << content;
+}
+
+DlTask persisted(const std::string& id, DlKind kind) {
+    DlTask t = task(id, DlPriority::Visible, kHostScreenScraper);
+    t.kind = kind;
+    t.hosts = {kHostScreenScraper, kHostLibretro};
+    t.resumable = true;
+    t.params = "{\"part\":\"/sd/" + id + ".part\",\"n\":1}";
+    return t;
+}
+
+}  // namespace
+
+TEST_CASE("store round trip keeps id, priority, group, hosts and params") {
+    const std::string path = tmpPath("roundtrip.json");
+    DownloadQueue q;
+    q.submit(persisted("gamedata:snes:Foo.sfc", DlKind::GameData));
+    REQUIRE(saveDownloads(path, q));
+
+    DownloadQueue loaded;
+    REQUIRE(loadDownloads(path, loaded));
+    REQUIRE(loaded.tasks().size() == 1);
+    const DlTask& t = loaded.tasks()[0];
+    CHECK(t.id == "gamedata:snes:Foo.sfc");
+    CHECK(t.kind == DlKind::GameData);
+    CHECK(t.priority == DlPriority::Visible);
+    CHECK(t.group == "snes");
+    CHECK(t.hosts == std::vector<std::string>{kHostScreenScraper, kHostLibretro});
+    CHECK(t.resumable);
+    CHECK(t.params == "{\"part\":\"/sd/gamedata:snes:Foo.sfc.part\",\"n\":1}");
+}
+
+TEST_CASE("store saves only GameData and Media tasks") {
+    const std::string path = tmpPath("kinds.json");
+    DownloadQueue q;
+    q.submit(persisted("cover", DlKind::Cover));
+    q.submit(persisted("gd", DlKind::GameData));
+    q.submit(persisted("runner", DlKind::Runner));
+    q.submit(persisted("upd", DlKind::AppUpdate));
+    q.submit(persisted("media", DlKind::Media));
+    REQUIRE(saveDownloads(path, q));
+
+    DownloadQueue loaded;
+    REQUIRE(loadDownloads(path, loaded));
+    REQUIRE(loaded.tasks().size() == 2);
+    CHECK(get(loaded, "gd"));
+    CHECK(get(loaded, "media"));
+}
+
+TEST_CASE("store restores Running as Queued and keeps Failed and Paused") {
+    const std::string path = tmpPath("states.json");
+    DownloadQueue q;
+    q.submit(persisted("running", DlKind::GameData));
+    q.submit(persisted("failed", DlKind::GameData));
+    q.submit(persisted("paused", DlKind::Media));
+    q.submit(persisted("queued", DlKind::Media));
+    REQUIRE(q.next(kNow));  // "running" is first in arrival order
+    q.finish("failed", DlResult::Invalid, kHostScreenScraper, kNow);
+    q.pause("paused");
+    REQUIRE(get(q, "running")->state == DlState::Running);
+    REQUIRE(get(q, "failed")->state == DlState::Failed);
+    REQUIRE(saveDownloads(path, q));
+
+    DownloadQueue loaded;
+    REQUIRE(loadDownloads(path, loaded));
+    CHECK(get(loaded, "running")->state == DlState::Queued);
+    CHECK(get(loaded, "failed")->state == DlState::Failed);
+    CHECK(get(loaded, "paused")->state == DlState::Paused);
+    CHECK(get(loaded, "queued")->state == DlState::Queued);
+}
+
+TEST_CASE("store restores login and quota blocks") {
+    const std::string path = tmpPath("blocks.json");
+    DownloadQueue q;
+    q.submit(persisted("a", DlKind::GameData));
+    q.setBlocks(kHostScreenScraper, {true, 0});
+    q.setBlocks(kHostLibretro, {false, 5000});
+    REQUIRE(saveDownloads(path, q));
+
+    DownloadQueue loaded;
+    REQUIRE(loadDownloads(path, loaded));
+    CHECK(loaded.blocks(kHostScreenScraper).badLogin);
+    CHECK(loaded.blocks(kHostLibretro).quotaUntil == 5000);
+    CHECK_FALSE(loaded.blocks(kHostLibretro).badLogin);
+}
+
+TEST_CASE("store refuses truncated and empty files and leaves the queue alone") {
+    const std::string path = tmpPath("bad.json");
+    DownloadQueue q;
+    q.submit(persisted("a", DlKind::GameData));
+    REQUIRE(saveDownloads(path, q));
+    std::string good;
+    {
+        std::ifstream in(path, std::ios::binary);
+        good.assign(std::istreambuf_iterator<char>(in), {});
+    }
+
+    DownloadQueue target;
+    target.submit(persisted("keep", DlKind::Media));
+
+    writeFile(path, good.substr(0, good.size() / 2));
+    CHECK_FALSE(loadDownloads(path, target));
+    writeFile(path, "");
+    CHECK_FALSE(loadDownloads(path, target));
+    CHECK_FALSE(loadDownloads(tmpPath("missing.json"), target));
+    REQUIRE(target.tasks().size() == 1);
+    CHECK(target.tasks()[0].id == "keep");
+}
+
+TEST_CASE("store falls back to the backup when only it survived") {
+    const std::string path = tmpPath("backup.json");
+    DownloadQueue q;
+    q.submit(persisted("a", DlKind::GameData));
+    REQUIRE(saveDownloads(path, q));
+    fs::rename(path, path + ".old");  // power loss between the two renames
+
+    DownloadQueue loaded;
+    REQUIRE(loadDownloads(path, loaded));
+    CHECK(get(loaded, "a"));
+}
+
+TEST_CASE("saving twice replaces the file and leaves no temp or backup") {
+    const std::string path = tmpPath("twice.json");
+    DownloadQueue q;
+    q.submit(persisted("a", DlKind::GameData));
+    REQUIRE(saveDownloads(path, q));
+    q.submit(persisted("b", DlKind::Media));
+    REQUIRE(saveDownloads(path, q));
+
+    DownloadQueue loaded;
+    REQUIRE(loadDownloads(path, loaded));
+    CHECK(loaded.tasks().size() == 2);
+    CHECK_FALSE(fs::exists(path + ".tmp"));
+    CHECK_FALSE(fs::exists(path + ".old"));
+}
+
+TEST_CASE("orphanPartials returns parts no saved task owns") {
+    DownloadQueue q;
+    q.submit(persisted("owned", DlKind::GameData));
+    DlTask noPart = task("nopart");
+    noPart.params = "{\"x\":1}";
+    q.submit(noPart);
+    DlTask badParams = task("bad");
+    badParams.params = "not json";
+    q.submit(badParams);
+
+    auto orphans = orphanPartials(
+        {"/sd/owned.part", "/sd/stray.part", "/sd/nopart.part"}, q);
+    CHECK(orphans == std::vector<std::string>{"/sd/stray.part", "/sd/nopart.part"});
 }
