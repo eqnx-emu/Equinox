@@ -41,11 +41,21 @@ std::string gamesText(int count) {
 std::string runnerName(const std::string& id) {
     if (id == "snes9x")
         return "Snes9x";
+    if (id == "mgba")
+        return "mGBA";
+    if (id == "gambatte")
+        return "Gambatte";
     return id;
 }
 
 std::string runnerIdFor(const emu::Console& console) {
-    return console.slug == "snes" ? "snes9x" : console.slug;
+    if (console.slug == "snes")
+        return "snes9x";
+    if (console.slug == "gba")
+        return "mgba";
+    if (console.slug == "gbc")
+        return "gambatte";
+    return console.slug;
 }
 } // namespace
 

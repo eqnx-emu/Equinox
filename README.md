@@ -30,8 +30,8 @@ Equinox is a game streaming client for the Nintendo Switch. It is built to pair 
 - **In-app updates.** Checks for new releases and installs them when Equinox runs as an NRO
   from the SD card.
 - **New look.** Dusk blue theme, sun amber accents and the Onest typeface.
-- **Super Nintendo games.** Play your own SNES ROMs from the SD card, on the same home
-  screen as your PCs. See [Super Nintendo](#super-nintendo).
+- **Retro games.** Play your own Super Nintendo, Game Boy Advance and Game Boy Color ROMs
+  from the SD card, on the same home screen as your PCs. See [Retro games](#retro-games).
 
 # Installing
 
@@ -73,18 +73,23 @@ accelerometer. Only player 1 is supported.
 Press − and + together, or hold Esc on a keyboard. The combination and hold time can be
 changed in Settings.
 
-## Super Nintendo
+## Retro games
 
-Equinox can also run Super Nintendo games on the console itself, with
-[snes9x](https://github.com/luizfbalves/equinox-snes9x).
+Equinox can also run games on the console itself:
 
-1. On the home screen, open the **Add** card and pick **Super Nintendo**. Equinox
-   downloads the emulator to `sdmc:/equinox/emulators/snes/`.
-2. Copy your own game files (`.sfc`, `.smc`, `.zip` or `.7z`) to `sdmc:/equinox/roms/snes/`.
-3. Select the Super Nintendo card to see your games. Covers are fetched on their own.
+| Console | Folder | Files | Emulator |
+|---|---|---|---|
+| Super Nintendo | `snes` | `.sfc`, `.smc`, `.zip`, `.7z` | [snes9x](https://github.com/luizfbalves/equinox-snes9x) |
+| Game Boy Advance | `gba` | `.gba`, `.zip`, `.7z` | [mGBA](https://github.com/luizfbalves/equinox-mgba) |
+| Game Boy Color | `gbc` | `.gbc`, `.zip`, `.7z` | [Gambatte](https://github.com/luizfbalves/equinox-gambatte) |
 
-Saves and save states live in `sdmc:/equinox/saves/snes/` and `sdmc:/equinox/states/snes/`.
-Games can be added to Favorites like PC games. Removing the console keeps your games, saves
+1. On the home screen, open the **Add** card and pick the console. Equinox downloads the
+   emulator to `sdmc:/equinox/emulators/<folder>/`.
+2. Copy your own game files to `sdmc:/equinox/roms/<folder>/`.
+3. Select the console's card to see your games. Covers are fetched on their own.
+
+Saves and save states live in `sdmc:/equinox/saves/<folder>/` and
+`sdmc:/equinox/states/<folder>/`. Games can be added to Favorites like PC games. Removing the console keeps your games, saves
 and covers on the SD card. Equinox does not provide games or BIOS files.
 
 ## Forwarders

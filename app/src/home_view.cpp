@@ -1486,15 +1486,15 @@ std::vector<HomeOption> HomeView::consoleOptions(ConsoleCard* card) {
         // install flow fetches the manifest, says "up to date" or installs.
         options.push_back({"", "emu/check_update"_i18n, "",
                            [this, console] { installConsole(*console); }});
-    // Runners before 1.1.0 ignore --video.
+    // Snes9x runners before 1.1.0 ignore --video.
     const emu::ConsolePaths paths = emu::pathsFor(*console);
     const std::optional<emu::Installed> installed =
         emu::readInstalled(paths.installed);
-    if (console->slug == "snes" && installed &&
-        emu::compareVersions(installed->version, "1.1.0") >= 0)
-        options.push_back({"", "emu/video/title"_i18n, "", [paths] {
-                               auto* frame =
-                                   new AppletFrame(makeEmuVideoView(paths));
+    if (installed && (console->slug != "snes" ||
+                      emu::compareVersions(installed->version, "1.1.0") >= 0))
+        options.push_back({"", "emu/video/title"_i18n, "", [paths, console] {
+                               auto* frame = new AppletFrame(
+                                   makeEmuVideoView(*console, paths));
                                Application::pushActivity(new Activity(frame));
                            }});
     // Covers libretro lacked are tried again too.
