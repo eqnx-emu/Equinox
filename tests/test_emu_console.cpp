@@ -40,12 +40,12 @@ TEST_CASE("console lookup") {
     REQUIRE(gba != nullptr);
     CHECK(gba->extensions == std::vector<std::string>{".gba", ".zip", ".7z"});
     CHECK(gba->libretroSystem == "Nintendo - Game Boy Advance");
-    CHECK(gba->repo == "luizfbalves/equinox-mgba");
+    CHECK(gba->repo == "eqnx-emu/equinox-mgba");
     const emu::Console* gbc = emu::findConsole("gbc");
     REQUIRE(gbc != nullptr);
     CHECK(gbc->extensions == std::vector<std::string>{".gbc", ".zip", ".7z"});
     CHECK(gbc->libretroSystem == "Nintendo - Game Boy Color");
-    CHECK(gbc->repo == "luizfbalves/equinox-gambatte");
+    CHECK(gbc->repo == "eqnx-emu/equinox-gambatte");
     CHECK(emu::consoles().size() == 3);
 }
 

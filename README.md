@@ -80,8 +80,8 @@ Equinox can also run games on the console itself:
 | Console | Folder | Files | Emulator |
 |---|---|---|---|
 | Super Nintendo | `snes` | `.sfc`, `.smc`, `.zip`, `.7z` | [snes9x](https://github.com/luizfbalves/equinox-snes9x) |
-| Game Boy Advance | `gba` | `.gba`, `.zip`, `.7z` | [mGBA](https://github.com/luizfbalves/equinox-mgba) |
-| Game Boy Color | `gbc` | `.gbc`, `.zip`, `.7z` | [Gambatte](https://github.com/luizfbalves/equinox-gambatte) |
+| Game Boy Advance | `gba` | `.gba`, `.zip`, `.7z` | [mGBA](https://github.com/eqnx-emu/equinox-mgba) |
+| Game Boy Color | `gbc` | `.gbc`, `.zip`, `.7z` | [Gambatte](https://github.com/eqnx-emu/equinox-gambatte) |
 
 1. On the home screen, open the **Add** card and pick the console. Equinox downloads the
    emulator to `sdmc:/equinox/emulators/<folder>/`.
