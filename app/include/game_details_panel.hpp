@@ -101,5 +101,6 @@ class GameDetailsPanel : public brls::Box {
     void applyAction();
     void applyMedia();
     void applyFacts();
+    void addFactRow();
     void startFade(bool animate);
 };

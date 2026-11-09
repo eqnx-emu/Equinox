@@ -113,9 +113,12 @@ bool MeshRaster::load(const std::string& file) {
         ok = readv(f, (float*)mats.data(), count * 5) && readv(f, &count);
     }
     if (ok) {
+        // In one read: the file holds them exactly as Tri lays them out.
+        static_assert(sizeof(Tri) == 10 * 4, "Tri must match the file's 9 floats and index");
         tris.resize(count);
-        for (auto& t : tris)
-            ok = ok && readv(f, t.v, 9) && readv(f, &t.mat) && t.mat < mats.size();
+        ok = readv(f, tris.data(), count);
+        for (const auto& t : tris)
+            ok = ok && t.mat < mats.size();
     }
     std::fclose(f);
     if (!ok) {

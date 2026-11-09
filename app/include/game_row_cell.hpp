@@ -69,7 +69,10 @@ class GameRowCell : public brls::Box {
     // Bumped when the row stops wanting the cover being decoded.
     std::shared_ptr<std::atomic<unsigned>> coverTicket =
         std::make_shared<std::atomic<unsigned>>(0);
-    std::string shownName, shownSub, shownYear;
+
+    // Theme colours used while drawing, read in applyColors: looking them up
+    // by name every frame for every row adds up.
+    NVGcolor ringColor{}, groundColor{}, emptyThumbColor{};
 
     brls::Label* nameLabel = nullptr;
     brls::Label* subLabel = nullptr;

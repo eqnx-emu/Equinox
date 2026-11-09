@@ -35,6 +35,14 @@ std::map<std::string, int>& lastCounts() {
     return counts;
 }
 
+// Last installed runner read per console, for the same reason: only the
+// first card of a console reads it on the UI thread (it can't start empty,
+// it would show "not installed" for a moment).
+std::map<std::string, std::optional<emu::Installed>>& lastInstalled() {
+    static std::map<std::string, std::optional<emu::Installed>> found;
+    return found;
+}
+
 std::string gamesText(int count) {
     return count == 1 ? "hosts/games_one"_i18n
                       : brls::getStr("hosts/games_count", count);
@@ -140,7 +148,12 @@ ConsoleCard::ConsoleCard(const emu::Console& console) : consoleRef(console) {
     auto it = lastCounts().find(console.slug);
     if (it != lastCounts().end())
         games = it->second;
-    installed = emu::readInstalled(emu::pathsFor(console).installed);
+    auto known = lastInstalled().find(console.slug);
+    if (known != lastInstalled().end())
+        installed = known->second;
+    else
+        installed = lastInstalled()[console.slug] =
+            emu::readInstalled(emu::pathsFor(console).installed);
 
     this->addGestureRecognizer(new TapGestureRecognizer(this));
     this->registerClickAction([this](View* view) {
@@ -168,6 +181,7 @@ void ConsoleCard::refresh() {
         brls::sync([ASYNC_TOKEN, found, count] {
             ASYNC_RELEASE
             installed = found;
+            lastInstalled()[consoleRef.slug] = found;
             if (count >= 0) {
                 games = count;
                 lastCounts()[consoleRef.slug] = count;
