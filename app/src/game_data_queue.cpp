@@ -141,7 +141,8 @@ void GameDataQueue::finishOne(const std::string& id) {
 
 void GameDataQueue::handle(const DlEvent& event) {
     if (event.id.rfind(prefix_, 0) != 0) {
-        if (event.id.rfind("gamedata:", 0) == 0 && stoppedAll(event.result)) dropHeld();
+        // A cover that hit a full card holds the game data back too.
+        if (stoppedAll(event.result)) dropHeld();
         return;
     }
     if (!active_.count(event.id)) {

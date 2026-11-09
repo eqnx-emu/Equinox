@@ -54,6 +54,9 @@ class DownloadService {
     void registerKind(emu::DlKind kind, Runner runner);
 
     bool submit(emu::DlTask task);
+    // Takes the lock once and posts one event, with an empty id, however many
+    // tasks it queued: for thousands of them on the UI thread.
+    void submitAll(std::vector<emu::DlTask> tasks);
     void setPriority(const std::string& id, emu::DlPriority priority);
     void pause(const std::string& id);
     void resume(const std::string& id);
@@ -91,6 +94,7 @@ class DownloadService {
     std::optional<emu::DlState> stateOf(const std::string& id) const;
     emu::SsConfig ssConfig() const;
     emu::DlResult runGameData(const emu::DlTask& task, DlContext& context);
+    emu::DlResult runCover(const emu::DlTask& task, DlContext& context);
 
     mutable std::mutex mutex_;
     std::condition_variable wake_;
@@ -120,5 +124,10 @@ namespace emu {
 std::string gameDataId(const std::string& slug, const std::string& fileName);
 // UI thread: reads the ScreenScraper settings to fill the hosts.
 DlTask gameDataTask(const Console& console, const RomEntry& rom, DlPriority priority);
+
+std::string coverId(const std::string& slug, const std::string& title);
+// `canonical` is the name the game's data found, or empty.
+DlTask coverTask(const Console& console, const std::string& title, const std::string& canonical,
+                 DlPriority priority);
 
 }  // namespace emu

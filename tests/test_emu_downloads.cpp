@@ -44,6 +44,46 @@ TEST_CASE("submit of the same id does not duplicate and raises the priority") {
     CHECK(q.tasks()[0].priority == DlPriority::Visible);
 }
 
+TEST_CASE("submitAll adds new ids once and counts what it changed") {
+    DownloadQueue q;
+    q.submit(task("a", DlPriority::Background));
+    std::vector<DlTask> batch{task("a", DlPriority::Visible), task("b"), task("b"), task("c")};
+    CHECK(q.submitAll(std::move(batch)) == 2);
+    CHECK(q.tasks().size() == 3);
+    CHECK(get(q, "a")->priority == DlPriority::Visible);
+}
+
+TEST_CASE("submitAll takes the new params of a Queued task and lowers its priority") {
+    DownloadQueue q;
+    DlTask first = task("a", DlPriority::Visible);
+    first.params = "old";
+    q.submit(first);
+    DlTask again = task("a", DlPriority::Background);
+    again.params = "new";
+    CHECK(q.submitAll({again}) == 0);
+    CHECK(get(q, "a")->params == "new");
+    CHECK(get(q, "a")->priority == DlPriority::Background);
+}
+
+TEST_CASE("submitAll gives a Failed or Paused task another go, not a Running one") {
+    DownloadQueue q;
+    DlTask failed = task("failed");
+    failed.state = DlState::Failed;
+    failed.failures = 4;
+    DlTask paused = task("paused");
+    paused.state = DlState::Paused;
+    q.submit(failed);
+    q.submit(paused);
+    q.submit(task("running", DlPriority::Interactive));
+    REQUIRE(q.next(0)->id == "running");
+    CHECK(q.submitAll({task("failed"), task("paused"), task("running", DlPriority::Background)}) == 2);
+    CHECK(get(q, "failed")->state == DlState::Queued);
+    CHECK(get(q, "failed")->failures == 0);
+    CHECK(get(q, "paused")->state == DlState::Queued);
+    CHECK(get(q, "running")->state == DlState::Running);
+    CHECK(get(q, "running")->priority == DlPriority::Interactive);
+}
+
 TEST_CASE("submit keeps a saved Paused or Failed state") {
     DownloadQueue q;
     DlTask p = task("p");

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <string>
@@ -41,6 +42,10 @@ class DownloadQueue {
   public:
     // False when the id already exists and only the priority was raised.
     bool submit(DlTask task);
+    // Many at once without the cost of submit per task. An id already known takes
+    // the params and priority given here, unless it is Running; a Failed or Paused
+    // one goes back to Queued. Returns how many tasks became runnable.
+    size_t submitAll(std::vector<DlTask> tasks);
     void setPriority(const std::string& id, DlPriority priority);
     // Marks the chosen task Running; nullptr if nothing can run or one is Running.
     DlTask* next(int64_t now);

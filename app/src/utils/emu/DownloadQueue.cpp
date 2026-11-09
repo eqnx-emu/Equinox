@@ -1,6 +1,7 @@
 #include "emu/DownloadQueue.hpp"
 
 #include <algorithm>
+#include <unordered_map>
 
 namespace emu {
 
@@ -31,6 +32,34 @@ bool DownloadQueue::submit(DlTask task) {
     if (task.state != DlState::Paused && task.state != DlState::Failed) task.state = DlState::Queued;
     tasks_.push_back(std::move(task));
     return true;
+}
+
+size_t DownloadQueue::submitAll(std::vector<DlTask> tasks) {
+    std::unordered_map<std::string, size_t> known;
+    known.reserve(tasks_.size() + tasks.size());
+    for (size_t i = 0; i < tasks_.size(); i++) known[tasks_[i].id] = i;
+
+    size_t changed = 0;
+    for (DlTask& task : tasks) {
+        auto found = known.find(task.id);
+        if (found == known.end()) {
+            known[task.id] = tasks_.size();
+            task.state = DlState::Queued;
+            tasks_.push_back(std::move(task));
+            changed++;
+            continue;
+        }
+        DlTask& existing = tasks_[found->second];
+        if (existing.state == DlState::Running) continue;
+        existing.priority = task.priority;
+        existing.params = std::move(task.params);
+        if (existing.state == DlState::Failed || existing.state == DlState::Paused) {
+            existing.state = DlState::Queued;
+            existing.failures = 0;
+            changed++;
+        }
+    }
+    return changed;
 }
 
 void DownloadQueue::setPriority(const std::string& id, DlPriority priority) {

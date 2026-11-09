@@ -3,8 +3,8 @@
 //  Equinox
 //
 //  A console's games as a library: the list on the left, the picked game's
-//  details on the right. Covers come from libretro, one at a time, while the
-//  library is open; the rest of a game's data only when asked for. A plays,
+//  details on the right. Covers come from libretro through the download
+//  service; the rest of a game's data only when asked for. A plays,
 //  Y stars, X opens the other actions in a side sheet, B goes
 //  back.
 //
@@ -27,20 +27,22 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
+struct DlEvent;
 class GameDataQueue;
 class GameDetailsPanel;
 class GameListPanel;
 class GameRowCell;
 struct GameDetails;
 
-// Opens a console game from outside its shelf (Favorites) once no cover is
-// downloading, like the shelf does: polls the shared cover-busy flag on the UI
-// thread, showing "Opening the game..." while it waits, and gives up after
-// a few seconds. onFail runs when the game was not opened (and `alive` is
-// still true). Switch only.
+// Opens a console game from outside its shelf (Favorites) once the downloads
+// have stopped, like the shelf does, showing "Opening the game..." while it
+// waits and giving up after a few seconds. onFail runs when the game was not
+// opened (and `alive` is still true). Switch only.
 void launchWhenCoversIdle(const emu::Console& console, const emu::RomEntry& rom,
                           emu::Origin origin, int filter,
                           std::shared_ptr<bool> alive,
@@ -59,8 +61,6 @@ class ConsoleShelfView : public brls::Box {
               brls::Style style, brls::FrameContext* ctx) override;
 
     using Game = emu::LibraryGame;
-    // Shared with the cover tasks on the async pool.
-    struct CoverQueue;
 
   private:
     const emu::Console& consoleRef;
@@ -70,14 +70,13 @@ class ConsoleShelfView : public brls::Box {
     std::vector<Game> games;
     std::optional<size_t> current;   // the game the details show
     brls::Time currentAt = 0;
-    // Bumped on each rebuild, so covers for the old cells are dropped.
+    // Bumped on each rebuild, so work begun for the old list is dropped.
     uint64_t generation = 0;
     bool scanning = false;
     bool launching = false;
     // Cleared on destruction. Work finishing in the background checks it on
     // the UI thread before touching the view.
     std::shared_ptr<bool> alive = std::make_shared<bool>(true);
-    std::shared_ptr<CoverQueue> covers;
 
     // Set by the first scan, together with dataQueue.
     std::shared_ptr<const emu::GameDb> db;
@@ -132,14 +131,15 @@ class ConsoleShelfView : public brls::Box {
         size_t index;
         emu::RomEntry rom;
         uint64_t generation;
+        std::shared_ptr<bool> stopped; // the downloads have stopped
     };
-    // Polls (on the UI thread) until the network is free, then launches;
-    // gives up after a few seconds.
+    // Polls (on the UI thread) until the downloads have stopped, then
+    // launches; gives up after a few seconds.
     void waitForCovers(const LaunchTarget& target, int attempt);
     void launch(const LaunchTarget& target);
-    // The launch did not happen: closes the "Opening" dialog, lets the covers
-    // resume and, with releaseGate, frees the network gate it held.
-    void endLaunch(bool releaseGate, bool notify);
+    // The launch did not happen: closes the "Opening" dialog and lets the
+    // downloads go on.
+    void endLaunch(bool notify);
     brls::Dialog* stopLoader = nullptr;
 
     const emu::GameInfo* infoFor(const Game& game) const;
@@ -173,15 +173,20 @@ class ConsoleShelfView : public brls::Box {
     // What the bottom notice's retry re-queues.
     std::optional<Retry> retry;
 
-    // Downloads the missing covers, nearest to `first` first.
+    // Queues the missing covers: those around `first` as Visible.
     void fetchCovers(size_t first);
-    void stopCovers();
-    std::shared_ptr<CoverQueue> newCoverQueue();
     // The game's data brought a canonical name: tries its cover once more.
     void retryCover(size_t index);
-    static void runNextCover(std::shared_ptr<CoverQueue> queue);
-    static void fetchOneCover(std::shared_ptr<CoverQueue> queue);
-    void coverArrived(uint64_t forGeneration, size_t index,
-                      const std::string& path);
-    void coverMissedOn(uint64_t forGeneration, size_t index);
+    bool coverVisible(size_t index, size_t focus) const;
+    void scheduleCoverPriorities();
+    void applyCoverPriorities();
+    void coverEvent(const DlEvent& event);
+    void coverArrived(size_t index);
+    void coverMissedOn(size_t index);
+    // The rows of each cover this list is waiting for. Cleared with the list,
+    // so a cover asked for by an earlier one finds no row.
+    std::unordered_map<std::string, std::vector<size_t>> coverRows;
+    std::set<std::string> visibleCovers; // ids queued as Visible
+    bool coverPrioritiesDue = false;
+    int coverToken = 0;
 };

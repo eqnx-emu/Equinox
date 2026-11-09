@@ -5,10 +5,13 @@
 
 #include "download_service.hpp"
 
+#include "HttpDownload.hpp"
+#include "emu/CoverName.hpp"
+#include "emu/CoverStore.hpp"
 #include "emu/DownloadStore.hpp"
 #include "emu/GameDataHttp.hpp"
 #include "emu/GameDb.hpp"
-#include "emu/NetGate.hpp"
+#include "emu/LibraryLog.hpp"
 #include "emu/PathUtf8.hpp"
 #include "emu/SsCredentials.hpp"
 
@@ -32,9 +35,8 @@ constexpr auto kProgressEvery = std::chrono::milliseconds(100);
 // Backoff and quota expire without anyone waking the worker.
 constexpr auto kIdlePoll = std::chrono::seconds(1);
 constexpr auto kIdleForever = std::chrono::hours(1);
-constexpr auto kGateRetry = std::chrono::milliseconds(200);
-// Between two games, so a launch or a cover polling the gate can get it.
-constexpr auto kGateYield = std::chrono::milliseconds(200);
+constexpr long kCoverTimeout = 20;
+constexpr const char* kCoverPrefix = "cover:";
 
 int64_t wallClock() { return static_cast<int64_t>(std::time(nullptr)); }
 
@@ -42,6 +44,9 @@ std::string stringField(const json_t* object, const char* key) {
     const json_t* value = json_object_get(object, key);
     return json_is_string(value) ? json_string_value(value) : std::string();
 }
+
+// Covers are not saved, so a change to one is no reason to write the queue.
+bool isCover(const std::string& id) { return id.rfind(kCoverPrefix, 0) == 0; }
 
 // Worker thread only. Loaded once per console and kept for the whole run.
 std::shared_ptr<const emu::GameDb> workerGameDb(const emu::Console& console) {
@@ -88,6 +93,33 @@ DlTask gameDataTask(const Console& console, const RomEntry& rom, DlPriority prio
     return task;
 }
 
+std::string coverId(const std::string& slug, const std::string& title) {
+    return kCoverPrefix + slug + ":" + title;
+}
+
+DlTask coverTask(const Console& console, const std::string& title, const std::string& canonical,
+                 DlPriority priority) {
+    DlTask task;
+    task.id = coverId(console.slug, title);
+    task.kind = DlKind::Cover;
+    task.priority = priority;
+    task.group = console.slug;
+    task.hosts = {kHostLibretro};
+    task.resumable = false;
+
+    json_t* params = json_object();
+    json_object_set_new(params, "console", json_string(console.slug.c_str()));
+    json_object_set_new(params, "title", json_string(title.c_str()));
+    json_object_set_new(params, "canonical", json_string(canonical.c_str()));
+    json_object_set_new(params, "path", json_string(coverPath(pathsFor(console), title).c_str()));
+    if (char* text = json_dumps(params, JSON_COMPACT)) {
+        task.params = text;
+        free(text);
+    }
+    json_decref(params);
+    return task;
+}
+
 }  // namespace emu
 
 DownloadService& DownloadService::instance() {
@@ -110,6 +142,9 @@ void DownloadService::start() {
     ss_ = emu::appSsConfig();
     runners_[emu::DlKind::GameData] = [this](const emu::DlTask& task, DlContext& context) {
         return runGameData(task, context);
+    };
+    runners_[emu::DlKind::Cover] = [this](const emu::DlTask& task, DlContext& context) {
+        return runCover(task, context);
     };
     started_ = true;
     thread_ = std::thread([this] { worker(); });
@@ -147,10 +182,21 @@ bool DownloadService::submit(emu::DlTask task) {
     return created;
 }
 
+void DownloadService::submitAll(std::vector<emu::DlTask> tasks) {
+    if (tasks.empty()) return;
+    std::lock_guard<std::mutex> lock(mutex_);
+    const bool saved = std::any_of(tasks.begin(), tasks.end(),
+                                   [](const emu::DlTask& task) { return !isCover(task.id); });
+    if (queue_.submitAll(std::move(tasks)) > 0)
+        post(DlEvent{std::string(), emu::DlState::Queued, 0.0f, emu::DlResult::Done, std::nullopt});
+    if (saved) dirty_ = true;
+    wake_.notify_all();
+}
+
 void DownloadService::setPriority(const std::string& id, emu::DlPriority priority) {
     std::lock_guard<std::mutex> lock(mutex_);
     queue_.setPriority(id, priority);
-    dirty_ = true;
+    if (!isCover(id)) dirty_ = true;
     wake_.notify_all();
 }
 
@@ -399,21 +445,6 @@ void DownloadService::runTask(const emu::DlTask& task, std::unique_lock<std::mut
     auto found = runners_.find(task.kind);
     if (found != runners_.end()) runner = found->second;
 
-    const bool usesGate = task.kind == emu::DlKind::GameData;
-    lock.unlock();
-    const bool gateHeld = usesGate && emu::netTryAcquire();
-    lock.lock();
-
-    if (usesGate && !gateHeld) {
-        // Covers or a launch have the network. Whatever happened to the task
-        // meanwhile (paused, cancelled) requeueRunning leaves it as it is.
-        queue_.requeueRunning();
-        runningId_.reset();
-        runningStop_.reset();
-        wake_.wait_for(lock, kGateRetry, [this] { return quitting_ || !stoppedWaiters_.empty(); });
-        return;
-    }
-
     post(DlEvent{id, emu::DlState::Running, 0.0f, emu::DlResult::Done, std::nullopt});
     lock.unlock();
 
@@ -439,14 +470,13 @@ void DownloadService::runTask(const emu::DlTask& task, std::unique_lock<std::mut
     } else {
         result = emu::DlResult::Cancelled;
     }
-    if (gateHeld) emu::netRelease();
 
     lock.lock();
     const StopReason reason = stopReason_;
     runningId_.reset();
     runningStop_.reset();
     stopReason_ = StopReason::None;
-    dirty_ = true;
+    if (!isCover(id)) dirty_ = true;
 
     DlEvent event{id, emu::DlState::Done, 1.0f, result, std::move(context.data)};
     if (reason == StopReason::Abandoned) {
@@ -470,9 +500,6 @@ void DownloadService::runTask(const emu::DlTask& task, std::unique_lock<std::mut
         post(std::move(event));
         if (state == emu::DlState::Done) queue_.cancel(id);
     }
-
-    if (usesGate)
-        wake_.wait_for(lock, kGateYield, [this] { return quitting_ || !stoppedWaiters_.empty(); });
 }
 
 emu::DlResult DownloadService::runGameData(const emu::DlTask& task, DlContext& context) {
@@ -518,4 +545,50 @@ emu::DlResult DownloadService::runGameData(const emu::DlTask& task, DlContext& c
         case emu::DataStop::Cancelled: return emu::DlResult::Cancelled;
     }
     return emu::DlResult::Invalid;
+}
+
+// Done: the cover is on the card. Gone: libretro clearly has none.
+emu::DlResult DownloadService::runCover(const emu::DlTask& task, DlContext& context) {
+    json_error_t err;
+    json_t* params = json_loads(task.params.c_str(), 0, &err);
+    if (!params) return emu::DlResult::Invalid;
+    const std::string slug = stringField(params, "console");
+    const std::string title = stringField(params, "title");
+    const std::string canonical = stringField(params, "canonical");
+    const std::string path = stringField(params, "path");
+    json_decref(params);
+
+    const emu::Console* console = emu::findConsole(slug);
+    if (!console || title.empty() || path.empty()) return emu::DlResult::Invalid;
+
+    std::error_code ec;
+    if (fs::is_regular_file(emu::fromUtf8(path), ec)) return emu::DlResult::Done;
+
+    const Progress keepGoing = [&context](uint64_t, uint64_t) { return !context.stop->load(); };
+    const std::string part = path + ".part";
+    for (const std::string& name : emu::thumbNameCandidates(canonical, title)) {
+        if (context.stop->load()) return emu::DlResult::Cancelled;
+        std::string error;
+        long status = 0;
+        bool writeFailed = false;
+        const bool ok = httpGetToFile(emu::coverUrl(*console, name), part, kCoverTimeout, keepGoing,
+                                      error, status, writeFailed);
+        if (ok && emu::looksLikePng(part)) {
+            if (emu::replaceFile(part, path)) return emu::DlResult::Done;
+            fs::remove(emu::fromUtf8(part), ec);
+            emu::liblog::bug("cover could not be saved: {}", path);
+            return emu::DlResult::Disk;
+        }
+        fs::remove(emu::fromUtf8(part), ec);
+        if (context.stop->load()) return emu::DlResult::Cancelled;
+        if (writeFailed) {
+            emu::liblog::bug("cover could not be saved: {}", path);
+            return emu::DlResult::Disk;
+        }
+        // A 200 that is not a PNG counts as a clear "no", like 404 and 403.
+        // No answer, a 5xx, a 429 or a body cut short says nothing.
+        if (!ok && status != 404 && status != 403) return emu::DlResult::Transient;
+    }
+    emu::markCoverMissed(emu::pathsFor(*console), title, APP_VERSION);
+    return emu::DlResult::Gone;
 }

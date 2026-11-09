@@ -8,13 +8,12 @@
 
 #if defined(PLATFORM_SWITCH)
 
-#include "HttpDownload.hpp"
 #include "Settings.hpp"
 #include "bold_label.hpp"
+#include "download_service.hpp"
 #include "emu/CoverName.hpp"
 #include "emu/CoverStore.hpp"
 #include "emu/EmuLauncher.hpp"
-#include "emu/NetGate.hpp"
 #include "emu/PathUtf8.hpp"
 #include "game_data_queue.hpp"
 #include "game_details_panel.hpp"
@@ -23,7 +22,6 @@
 #include "helper.hpp"
 
 #include <algorithm>
-#include <atomic>
 #include <cmath>
 #include <filesystem>
 #include <functional>
@@ -34,36 +32,14 @@
 using namespace brls;
 using namespace brls::literals;
 
-// One run of the cover queue. Each cover (all its names) is one task on
-// the brls::async pool; the next task is scheduled from the UI thread when
-// it ends, so the pool is free between covers.
-struct ConsoleShelfView::CoverQueue {
-    struct Job {
-        size_t index;
-        std::string title;
-        std::string canonical; // from the game's data, when it has any
-        std::string path;
-    };
-
-    std::atomic<bool> stop{false};
-    std::vector<Job> jobs; // UI thread only: jobs can be added while it runs
-    size_t next = 0;       // UI thread only
-    Job running;           // copy of jobs[next], written before its task starts
-    bool inFlight = false; // `running` was handed to the pool and has not ended
-    bool halted = false;   // stopped by a transient failure: nothing else will run
-    const emu::Console* console = nullptr;
-    emu::ConsolePaths where;
-    uint64_t generation = 0;
-    ConsoleShelfView* view = nullptr; // only used when *alive
-    std::shared_ptr<bool> alive;
-};
-
 namespace {
-constexpr long kCoverTimeout = 20;
-// Before playing, the cover task gets this long to stop (checked every
+// Before playing, the downloads get this long to stop (checked every
 // kStopPollMs on the UI thread).
 constexpr int kStopPollMs = 100;
 constexpr int kStopPolls = 50;
+// Rows on each side of the focused game whose covers go first.
+constexpr size_t kVisibleCoverRows = 12;
+constexpr int kCoverPriorityMs = 250;
 
 NVGcolor themeColor(const std::string& name) {
     return Application::getTheme().getColor(name);
@@ -81,12 +57,6 @@ bool fileExists(const std::string& path) {
     return std::filesystem::is_regular_file(emu::fromUtf8(path), ec);
 }
 
-void removeFile(const std::string& path) {
-    std::error_code ec;
-    std::filesystem::remove(emu::fromUtf8(path), ec);
-}
-
-constexpr int kBusyRetryMs = 200;
 // A tap on a row picks the game; only a tap on the picked one plays.
 constexpr brls::Time kTapPlayUsec = 350000;
 
@@ -159,25 +129,26 @@ struct LaunchRequest {
     std::shared_ptr<bool> alive;
     std::function<void()> onFail;
     Dialog* loader = nullptr;
+    std::shared_ptr<bool> stopped = std::make_shared<bool>(false);
 };
 
 void launchWhenIdle(std::shared_ptr<LaunchRequest> request, int attempt);
 
 void finishLaunch(std::shared_ptr<LaunchRequest> request) {
     if (!*request->alive) {
-        emu::netRelease();
+        DownloadService::instance().resumeAll();
         return;
     }
     if (emu::launchRom(*request->console, request->rom, request->origin,
                        request->filter))
-        return; // quitting; the cover flag stays set
-    emu::netRelease();
+        return; // quitting: the saved queue resumes on the next start
+    DownloadService::instance().resumeAll();
     if (request->onFail)
         request->onFail();
 }
 
 void launchWhenIdle(std::shared_ptr<LaunchRequest> request, int attempt) {
-    if (emu::netTryAcquire()) {
+    if (*request->stopped) {
         if (Dialog* loader = request->loader) {
             request->loader = nullptr;
             loader->close([request] { finishLaunch(request); });
@@ -188,7 +159,8 @@ void launchWhenIdle(std::shared_ptr<LaunchRequest> request, int attempt) {
     }
 
     if (attempt >= kStopPolls) {
-        brls::Logger::warning("Launch: cover task did not stop");
+        brls::Logger::warning("Launch: downloads did not stop");
+        DownloadService::instance().resumeAll();
         auto giveUp = [request] {
             if (!*request->alive)
                 return;
@@ -205,7 +177,8 @@ void launchWhenIdle(std::shared_ptr<LaunchRequest> request, int attempt) {
         return;
     }
 
-    if (attempt == 0) {
+    // From the second look: stopping usually takes less than one poll.
+    if (attempt == 1) {
         request->loader = createLoadingDialog("emu/opening"_i18n);
         request->loader->open();
     }
@@ -228,6 +201,8 @@ void launchWhenCoversIdle(const emu::Console& console, const emu::RomEntry& rom,
                           std::function<void()> onFail) {
     auto request = std::make_shared<LaunchRequest>(LaunchRequest{
         &console, rom, origin, filter, std::move(alive), std::move(onFail)});
+    std::shared_ptr<bool> stopped = request->stopped;
+    DownloadService::instance().suspend([stopped] { *stopped = true; });
     launchWhenIdle(request, 0);
 }
 
@@ -343,12 +318,15 @@ ConsoleShelfView::ConsoleShelfView(const emu::Console& console,
     }, true);
     applyActions();
 
+    coverToken = DownloadService::instance().subscribe(
+        [this](const DlEvent& event) { coverEvent(event); });
+
     openLibrary();
 }
 
 ConsoleShelfView::~ConsoleShelfView() {
     *alive = false;
-    stopCovers();
+    DownloadService::instance().unsubscribe(coverToken);
 }
 
 void ConsoleShelfView::willAppear(bool resetState) {
@@ -475,7 +453,6 @@ void ConsoleShelfView::applyFolderChange(const FolderChange& change, uint64_t fo
     }
     if (current)
         restoreRom = games[*current].rom.fileName;
-    stopCovers();
 
     std::vector<std::string> removed = change.removed;
     std::sort(removed.begin(), removed.end());
@@ -532,7 +509,6 @@ void ConsoleShelfView::rescan(bool clearMisses) {
     if (scanning)
         return;
     scanning = true;
-    stopCovers();
     // The rows are about to be numbered again.
     cancelData();
     failure.reset();
@@ -639,6 +615,8 @@ void ConsoleShelfView::createDataQueue() {
 
 void ConsoleShelfView::showGames(Scan& scan) {
     generation++;
+    coverRows.clear();
+    visibleCovers.clear();
     loading->setVisibility(Visibility::GONE);
     listPanel->setScanning(false);
     if (announceScan) {
@@ -689,7 +667,7 @@ void ConsoleShelfView::showGames(Scan& scan) {
         listPanel->focusGame(index);
     applyProgress();
 
-    // A launch waiting for the network restarts them if it gives up.
+    // A launch waiting for the downloads to stop asks again if it gives up.
     if (!launching)
         fetchCovers(current.value_or(index));
 }
@@ -783,6 +761,7 @@ void ConsoleShelfView::onCurrent(std::optional<size_t> index) {
     applyAmbient();
     applyProgress();
     applyActions();
+    scheduleCoverPriorities();
 }
 
 // The gameplay capture when there is one, else the cover.
@@ -988,26 +967,25 @@ void ConsoleShelfView::play(size_t index) {
         return;
     launching = true;
     // Nothing may be downloading or writing to the SD card while the app
-    // hands over: the game starts only once the network gate is free.
-    cancelData();
-    stopCovers();
-    waitForCovers({index, games[index].rom, generation}, 0);
+    // hands over.
+    auto stopped = std::make_shared<bool>(false);
+    DownloadService::instance().suspend([stopped] { *stopped = true; });
+    waitForCovers({index, games[index].rom, generation, stopped}, 0);
 }
 
 void ConsoleShelfView::waitForCovers(const LaunchTarget& target, int attempt) {
     if (target.generation != generation) {
-        endLaunch(false, false);
+        endLaunch(false);
         return;
     }
-    if (emu::netTryAcquire()) {
-        // Held until the app quits, or released below if it does not.
+    if (*target.stopped) {
         if (stopLoader) {
             Dialog* loader = stopLoader;
             stopLoader = nullptr;
             std::shared_ptr<bool> token = alive;
             loader->close([this, token, target] {
                 if (!*token) {
-                    emu::netRelease();
+                    DownloadService::instance().resumeAll();
                     return;
                 }
                 launch(target);
@@ -1019,13 +997,13 @@ void ConsoleShelfView::waitForCovers(const LaunchTarget& target, int attempt) {
     }
 
     if (attempt >= kStopPolls) {
-        brls::Logger::warning("ConsoleShelf: download did not stop");
-        endLaunch(false, true);
+        brls::Logger::warning("ConsoleShelf: downloads did not stop");
+        endLaunch(true);
         return;
     }
 
-    // Usually free right away; a download in flight stops within a second.
-    if (attempt == 0) {
+    // From the second look: stopping usually takes less than one poll.
+    if (attempt == 1) {
         stopLoader = createLoadingDialog("emu/opening"_i18n);
         stopLoader->open();
     }
@@ -1033,19 +1011,21 @@ void ConsoleShelfView::waitForCovers(const LaunchTarget& target, int attempt) {
     brls::delay(kStopPollMs, [this, token, target, attempt] {
         if (*token)
             waitForCovers(target, attempt + 1);
+        else
+            DownloadService::instance().resumeAll();
     });
 }
 
 void ConsoleShelfView::launch(const LaunchTarget& target) {
     // The list was rebuilt while waiting: the game may not be where it was.
     if (target.generation != generation) {
-        endLaunch(true, false);
+        endLaunch(false);
         return;
     }
     saveIndex(true);
     if (emu::launchRom(consoleRef, target.rom, emu::Origin::Shelf, -1))
-        return; // quitting; the network gate stays taken
-    emu::netRelease();
+        return; // quitting: the saved queue resumes on the next start
+    DownloadService::instance().resumeAll();
     launching = false;
 
     // The game may have been deleted since the shelf was filled.
@@ -1055,9 +1035,8 @@ void ConsoleShelfView::launch(const LaunchTarget& target) {
         fetchCovers(target.index);
 }
 
-void ConsoleShelfView::endLaunch(bool releaseGate, bool notify) {
-    if (releaseGate)
-        emu::netRelease();
+void ConsoleShelfView::endLaunch(bool notify) {
+    DownloadService::instance().resumeAll();
     launching = false;
     Dialog* loader = stopLoader;
     stopLoader = nullptr;
@@ -1075,47 +1054,33 @@ void ConsoleShelfView::endLaunch(bool releaseGate, bool notify) {
         resume();
 }
 
-void ConsoleShelfView::stopCovers() {
-    if (covers)
-        covers->stop.store(true);
-    covers.reset();
+bool ConsoleShelfView::coverVisible(size_t index, size_t focus) const {
+    return index + kVisibleCoverRows >= focus && index < focus + kVisibleCoverRows;
 }
 
 void ConsoleShelfView::fetchCovers(size_t first) {
-    stopCovers();
+    coverRows.clear();
+    visibleCovers.clear();
 
-    auto queue = newCoverQueue();
+    std::vector<emu::DlTask> tasks;
     for (size_t i = 0; i < games.size(); i++) {
         const Game& game = games[i];
         if (game.hasCover || game.missed)
             continue;
-        queue->jobs.push_back({i, game.rom.title,
-                               game.hasData ? game.meta.canonical : std::string(),
-                               emu::coverPath(paths, game.rom.title)});
+        // Two files of one game share a cover, and so a task.
+        std::vector<size_t>& rows = coverRows[emu::coverId(consoleRef.slug, game.rom.title)];
+        rows.push_back(i);
+        if (rows.size() > 1)
+            continue;
+        const bool visible = coverVisible(i, first);
+        tasks.push_back(emu::coverTask(consoleRef, game.rom.title,
+                                       game.hasData ? game.meta.canonical : std::string(),
+                                       visible ? emu::DlPriority::Visible
+                                               : emu::DlPriority::Background));
+        if (visible)
+            visibleCovers.insert(tasks.back().id);
     }
-    if (queue->jobs.empty())
-        return;
-    // The selected game first, then outwards.
-    const auto distance = [first](size_t index) {
-        return index > first ? index - first : first - index;
-    };
-    std::stable_sort(queue->jobs.begin(), queue->jobs.end(),
-                     [&](const CoverQueue::Job& a, const CoverQueue::Job& b) {
-                         return distance(a.index) < distance(b.index);
-                     });
-
-    covers = queue;
-    runNextCover(queue);
-}
-
-std::shared_ptr<ConsoleShelfView::CoverQueue> ConsoleShelfView::newCoverQueue() {
-    auto queue = std::make_shared<CoverQueue>();
-    queue->console = &consoleRef;
-    queue->where = paths;
-    queue->generation = generation;
-    queue->view = this;
-    queue->alive = alive;
-    return queue;
+    DownloadService::instance().submitAll(std::move(tasks));
 }
 
 void ConsoleShelfView::retryCover(size_t index) {
@@ -1130,143 +1095,83 @@ void ConsoleShelfView::retryCover(size_t index) {
     emu::clearCoverMiss(paths, game.rom.title);
     games[index].missed = false;
     indexDirty = true;
-    const CoverQueue::Job job{index, game.rom.title, game.meta.canonical,
-                              emu::coverPath(paths, game.rom.title)};
-    if (covers && !covers->halted && covers->next < covers->jobs.size()) {
-        // Waiting in the running queue: it just learned the name. The job
-        // at `next` may already be on the pool with the old one, so that
-        // game goes again at the end.
-        for (size_t i = covers->next + (covers->inFlight ? 1 : 0); i < covers->jobs.size(); i++) {
-            if (covers->jobs[i].index == index) {
-                covers->jobs[i].canonical = job.canonical;
-                return;
-            }
-        }
-        covers->jobs.push_back(job);
-        return;
-    }
-    stopCovers();
-    auto queue = newCoverQueue();
-    queue->jobs.push_back(job);
-    covers = queue;
-    runNextCover(queue);
+
+    const std::string id = emu::coverId(consoleRef.slug, game.rom.title);
+    const bool visible = current && coverVisible(index, *current);
+    // A run already under way has the old name: it is dropped and goes again.
+    DownloadService& service = DownloadService::instance();
+    service.cancel(id);
+    service.submit(emu::coverTask(consoleRef, game.rom.title, game.meta.canonical,
+                                  visible ? emu::DlPriority::Visible
+                                          : emu::DlPriority::Background));
+    std::vector<size_t>& rows = coverRows[id];
+    if (std::find(rows.begin(), rows.end(), index) == rows.end())
+        rows.push_back(index);
+    if (visible)
+        visibleCovers.insert(id);
 }
 
-// UI thread: hands the next cover to the pool.
-void ConsoleShelfView::runNextCover(std::shared_ptr<CoverQueue> queue) {
-    if (queue->stop.load() || !*queue->alive)
+// Scrolling moves the focus many times a second: only the last place counts.
+void ConsoleShelfView::scheduleCoverPriorities() {
+    if (coverPrioritiesDue)
         return;
-    if (queue->next >= queue->jobs.size()) {
-        queue->view->saveIndex();
-        return;
-    }
-    // A game's data waits for the same network gate and polls it less often
-    // than covers take it: covers give way until the data queue is idle.
-    if (queue->view->dataQueue && queue->view->dataQueue->running()) {
-        brls::delay(kBusyRetryMs, [queue] { runNextCover(queue); });
-        return;
-    }
-    queue->running = queue->jobs[queue->next];
-    queue->inFlight = true;
-    brls::async([queue] { fetchOneCover(queue); });
-}
-
-// Pool thread: one cover, every name it may have on libretro.
-void ConsoleShelfView::fetchOneCover(std::shared_ptr<CoverQueue> queue) {
-    if (queue->stop.load())
-        return;
-    // Another shelf's cover, a game's data or a launch has the network: try
-    // again soon, without holding this worker.
-    if (!emu::netTryAcquire()) {
-        brls::delay(kBusyRetryMs, [queue] {
-            queue->inFlight = false;
-            runNextCover(queue);
-        });
-        return;
-    }
-    if (queue->stop.load()) {
-        emu::netRelease();
-        return;
-    }
-
-    const CoverQueue::Job job = queue->running;
-    const Progress keepGoing = [queue](uint64_t, uint64_t) {
-        return !queue->stop.load();
-    };
-
-    // Fetched meanwhile by another shelf.
-    bool found = fileExists(job.path);
-    // A miss is remembered only when libretro clearly answered "no" for
-    // every name: 404/403, or a 200 that is not a PNG. Anything else (no
-    // answer, 5xx, 429, a body cut short) is like being offline: the queue
-    // stops and nothing is remembered.
-    bool transient = false, diskError = false;
-    const std::vector<std::string> names =
-        found ? std::vector<std::string>{}
-              : emu::thumbNameCandidates(job.canonical, job.title);
-    for (const std::string& name : names) {
-        if (queue->stop.load()) {
-            transient = true;
-            break;
-        }
-        const std::string part = job.path + ".part";
-        std::string error;
-        long status = 0;
-        const bool ok =
-            httpGetToFile(emu::coverUrl(*queue->console, name), part,
-                          kCoverTimeout, keepGoing, error, status);
-        const bool png = ok && emu::looksLikePng(part);
-        if (png) {
-            if (emu::replaceFile(part, job.path)) {
-                found = true;
-            } else {
-                removeFile(part);
-                diskError = true;
-            }
-            break;
-        }
-        removeFile(part);
-        const bool notThere = ok || status == 404 || status == 403;
-        if (!notThere) {
-            transient = true;
-            break;
-        }
-    }
-    const bool missed = !found && !transient && !diskError;
-    if (missed)
-        emu::markCoverMissed(queue->where, job.title, APP_VERSION);
-    emu::netRelease();
-
-    if (diskError)
-        emu::liblog::bug("cover could not be saved: {}", job.path);
-    brls::sync([queue, job, found, transient, missed] {
-        if (!*queue->alive)
+    coverPrioritiesDue = true;
+    std::shared_ptr<bool> token = alive;
+    brls::delay(kCoverPriorityMs, [this, token] {
+        if (!*token)
             return;
-        if (transient)
-            emu::liblog::note("cover downloads halted at '{}' (no answer or server error)",
-                              job.title);
-        if (found)
-            queue->view->coverArrived(queue->generation, job.index, job.path);
-        if (missed)
-            queue->view->coverMissedOn(queue->generation, job.index);
-        queue->inFlight = false;
-        if (transient) {
-            queue->halted = true; // generic covers; tried again next time
-            queue->view->saveIndex();
-            return;
-        }
-        queue->next++;
-        runNextCover(queue);
+        coverPrioritiesDue = false;
+        applyCoverPriorities();
     });
 }
 
-void ConsoleShelfView::coverArrived(uint64_t forGeneration, size_t index,
-                                    const std::string& path) {
-    if (forGeneration != generation || index >= games.size())
+void ConsoleShelfView::applyCoverPriorities() {
+    if (!current)
         return;
-    // The same game can be fetched twice (its data brought a new name); the
-    // cell takes one cover only.
-    if (games[index].hasCover)
+    const size_t focus = *current;
+    const size_t from = focus > kVisibleCoverRows ? focus - kVisibleCoverRows : 0;
+    const size_t to = std::min(focus + kVisibleCoverRows, games.size());
+    std::set<std::string> visible;
+    for (size_t i = from; i < to; i++) {
+        std::string id = emu::coverId(consoleRef.slug, games[i].rom.title);
+        if (coverRows.count(id))
+            visible.insert(std::move(id));
+    }
+
+    DownloadService& service = DownloadService::instance();
+    for (const std::string& id : visibleCovers)
+        if (!visible.count(id))
+            service.setPriority(id, emu::DlPriority::Background);
+    for (const std::string& id : visible)
+        if (!visibleCovers.count(id))
+            service.setPriority(id, emu::DlPriority::Visible);
+    visibleCovers = std::move(visible);
+}
+
+// Every task of the service comes through here: anything but a cover of this
+// list that has just ended leaves at the first two checks.
+void ConsoleShelfView::coverEvent(const DlEvent& event) {
+    if (event.state != emu::DlState::Done ||
+        (event.result != emu::DlResult::Done && event.result != emu::DlResult::Gone))
+        return;
+    auto found = coverRows.find(event.id);
+    if (found == coverRows.end())
+        return;
+    const std::vector<size_t> rows = std::move(found->second);
+    coverRows.erase(found);
+    visibleCovers.erase(event.id);
+    for (size_t index : rows) {
+        if (event.result == emu::DlResult::Done)
+            coverArrived(index);
+        else
+            coverMissedOn(index);
+    }
+    if (coverRows.empty())
+        saveIndex();
+}
+
+void ConsoleShelfView::coverArrived(size_t index) {
+    if (index >= games.size() || games[index].hasCover)
         return;
     games[index].hasCover = true;
     indexDirty = true;
@@ -1275,8 +1180,8 @@ void ConsoleShelfView::coverArrived(uint64_t forGeneration, size_t index,
         applyAmbient();
 }
 
-void ConsoleShelfView::coverMissedOn(uint64_t forGeneration, size_t index) {
-    if (forGeneration != generation || index >= games.size())
+void ConsoleShelfView::coverMissedOn(size_t index) {
+    if (index >= games.size())
         return;
     games[index].missed = true;
     indexDirty = true;
