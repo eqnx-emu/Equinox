@@ -652,6 +652,9 @@
         "login_notice": "ScreenScraper refused your login, so game data is on hold. Check your account in Settings.",
         "quota_notice": "ScreenScraper's daily limit was reached, so game data is on hold until {}.",
         "quota_today": "today at {}",
-        "quota_tomorrow": "tomorrow at {}"
+        "quota_tomorrow": "tomorrow at {}",
+        "try_now": "Try now",
+        "disk_notice": "SD card full — free space, then Resume all",
+        "disk_paused": "Downloads paused: the SD card is full. Free some space, then resume them in Downloads."
     }
 }

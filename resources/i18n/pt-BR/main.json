@@ -637,7 +637,7 @@
         },
         "extra_held": "{} em espera",
         "extra_paused": "{} em pausa",
-        "extra_failed": "{} falharam",
+        "extra_failed": "{} com falha",
         "count": "{} de {}",
         "percent": "{}%",
         "action": {
@@ -652,6 +652,9 @@
         "login_notice": "O ScreenScraper recusou seu login, então os dados dos jogos estão em espera. Confira sua conta nas Configurações.",
         "quota_notice": "O limite diário do ScreenScraper acabou, então os dados dos jogos estão em espera até {}.",
         "quota_today": "hoje às {}",
-        "quota_tomorrow": "amanhã às {}"
+        "quota_tomorrow": "amanhã às {}",
+        "try_now": "Tentar agora",
+        "disk_notice": "Cartão SD cheio — libere espaço e toque em Retomar tudo",
+        "disk_paused": "Downloads pausados: o cartão SD está cheio. Libere espaço e retome-os em Downloads."
     }
 }

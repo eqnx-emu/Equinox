@@ -187,7 +187,5 @@ class ConsoleShelfView : public brls::Box {
     std::unordered_map<std::string, std::vector<size_t>> coverRows;
     std::set<std::string> visibleCovers; // ids queued as Visible
     bool coverPrioritiesDue = false;
-    // A cover hit a full card: said once, until something is written again.
-    bool coverDiskNotified = false;
     int coverToken = 0;
 };

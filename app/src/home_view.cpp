@@ -1721,8 +1721,14 @@ void HomeView::watchRunnerTasks() {
         if (event.id.rfind(prefix, 0) != 0)
             return;
         auto found = runnerInstalls().find(event.id.substr(prefix.size()));
-        if (found == runnerInstalls().end())
+        if (found == runnerInstalls().end()) {
+            // Cancel pressed during the hash check or the swap: the runner
+            // was installed all the same, and the cards follow the SD card.
+            if (event.state == emu::DlState::Done &&
+                event.result == emu::DlResult::Done && instance)
+                instance->rebuildHosts();
             return;
+        }
         const std::shared_ptr<RunnerInstall> install = found->second;
         const emu::Console* console = install->console;
         auto showFailure = [console](emu::RunnerError code,
@@ -1837,6 +1843,15 @@ void HomeView::removeConsole(const emu::Console& target) {
         new Dialog(brls::getStr("emu/remove_message", target.name));
     confirm->addButton("common/cancel"_i18n, [] {});
     confirm->addButton("common/remove"_i18n, [console] {
+        // An install still fetching its manifest would submit its task after
+        // the removal and put the emulator back.
+        auto pending = runnerInstalls().find(console->slug);
+        if (pending != runnerInstalls().end()) {
+            const std::shared_ptr<RunnerInstall> install = pending->second;
+            runnerInstalls().erase(pending);
+            install->cancelled = true;
+            closeInstallDialog(*install, nullptr);
+        }
         DownloadService& service = DownloadService::instance();
         for (emu::DlKind kind : {emu::DlKind::Runner, emu::DlKind::GameData,
                                  emu::DlKind::Cover})

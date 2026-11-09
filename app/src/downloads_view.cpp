@@ -130,9 +130,25 @@ std::string quotaEnd(int64_t until) {
                         std::string(clock));
 }
 
-// A rounded card with a warning icon and a sentence.
-Box* makeNotice(Label** text) {
-    auto* box = new Box(Axis::ROW);
+// A rounded card with a warning icon and a sentence. With `action`, it can be
+// focused and pressed like a row, and A runs it.
+Box* makeNotice(Label** text, const std::string& actionHint = "",
+                std::function<void()> action = nullptr) {
+    Box* box;
+    if (action) {
+        auto* pressable = new PressableBox(Axis::ROW);
+        pressable->setHighlightCornerRadius(16);
+        pressable->setFocusable(true);
+        pressable->addGestureRecognizer(new TapGestureRecognizer(pressable));
+        pressable->registerClickAction([pressable, action](View*) {
+            pressable->press(action);
+            return true;
+        });
+        pressable->updateActionHint(BUTTON_A, actionHint);
+        box = pressable;
+    } else {
+        box = new Box(Axis::ROW);
+    }
     box->setAlignItems(AlignItems::CENTER);
     box->setPadding(14, 18, 14, 18);
     box->setCornerRadius(14);
@@ -341,12 +357,21 @@ DownloadsView::DownloadsView() : refresher([this] { refresh(); }) {
     auto* content = new Box(Axis::COLUMN);
     content->setPadding(30, 60, 30, 60);
 
+    // The user's "try now": lifts the ScreenScraper block for one more go.
+    auto tryNow = [this] {
+        DownloadService::instance().retryHost(emu::kHostScreenScraper);
+        refresher.now();
+    };
     Label* loginText = nullptr;
-    loginNotice = makeNotice(&loginText);
+    loginNotice = makeNotice(&loginText, "downloads/try_now"_i18n, tryNow);
     loginText->setText("downloads/login_notice"_i18n);
     content->addView(loginNotice);
-    quotaNotice = makeNotice(&quotaText);
+    quotaNotice = makeNotice(&quotaText, "downloads/try_now"_i18n, tryNow);
     content->addView(quotaNotice);
+    Label* diskText = nullptr;
+    diskNotice = makeNotice(&diskText);
+    diskText->setText("downloads/disk_notice"_i18n);
+    content->addView(diskNotice);
 
     // After a full card everything is Paused: this is how it goes on.
     auto* resume = new PressableBox(Axis::ROW);
@@ -438,6 +463,7 @@ void DownloadsView::refresh() {
     const bool anyPaused = std::any_of(overview.groups.begin(), overview.groups.end(),
                                        [](const emu::DlGroup& g) { return g.paused > 0; });
     resumeAll->setVisibility(anyPaused ? Visibility::VISIBLE : Visibility::GONE);
+    diskNotice->setVisibility(overview.diskFull ? Visibility::VISIBLE : Visibility::GONE);
 
     while (rows.size() < overview.groups.size()) {
         auto* row = new Row();
@@ -472,6 +498,29 @@ void DownloadsView::keepFocus(const std::string& focusedKey) {
     }
     if (!shownWithin(focus, this))
         Application::giveFocus(this);
+}
+
+// MARK: - Full card
+
+void watchDiskStops() {
+    static bool watching = false;
+    if (watching)
+        return;
+    watching = true;
+    // One stop sends an event per paused task: said once, until a task runs
+    // again after the user freed space and resumed.
+    auto said = std::make_shared<bool>(false);
+    // Never unsubscribed: it lives as long as the app.
+    DownloadService::instance().subscribe([said](const DlEvent& event) {
+        if (event.state == emu::DlState::Running) {
+            *said = false;
+            return;
+        }
+        if (event.result != emu::DlResult::Disk || *said)
+            return;
+        *said = true;
+        Application::notify("downloads/disk_paused"_i18n);
+    });
 }
 
 // MARK: - DownloadIndicator

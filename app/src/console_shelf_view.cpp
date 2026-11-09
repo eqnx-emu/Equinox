@@ -514,8 +514,8 @@ void ConsoleShelfView::rescan(bool clearMisses) {
     if (scanning)
         return;
     scanning = true;
-    // The rows are about to be numbered again.
-    cancelData();
+    // The downloads go on: the queue follows the games by file name, and
+    // showGames hands it the new numbering.
     failure.reset();
     listPanel->setBatchStopped(std::nullopt);
     showLoading();
@@ -1157,19 +1157,17 @@ void ConsoleShelfView::applyCoverPriorities() {
 // list that has just ended leaves early.
 void ConsoleShelfView::coverEvent(const DlEvent& event) {
     // The queue is paused whole: a batch that was running will not go on.
-    if (event.result == emu::DlResult::Disk && event.id.rfind("cover:", 0) == 0) {
+    // The app-wide listener (watchDiskStops) says so, once per stop.
+    // Covers come with their id or, paused many at once, with none; dataFinished
+    // handles the game data's own stop.
+    if (event.result == emu::DlResult::Disk &&
+        (event.id.empty() || event.id.rfind("cover:", 0) == 0)) {
         batchActive = false;
-        if (!coverDiskNotified) {
-            coverDiskNotified = true;
-            Application::notify(libraryStopText(emu::DataStop::Disk));
-        }
         return;
     }
     if (event.state != emu::DlState::Done ||
         (event.result != emu::DlResult::Done && event.result != emu::DlResult::Gone))
         return;
-    if (event.result == emu::DlResult::Done)
-        coverDiskNotified = false;
     auto found = coverRows.find(event.id);
     if (found == coverRows.end())
         return;

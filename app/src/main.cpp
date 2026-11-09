@@ -34,6 +34,7 @@
 #include "views/boolean_slider_cell.hpp"
 
 #if defined(PLATFORM_SWITCH)
+#include "downloads_view.hpp"
 #include "emu/EmuLauncher.hpp"
 #include "emu/LaunchLine.hpp"
 #endif
@@ -344,6 +345,9 @@ int main(int argc, char* argv[]) {
     brls::Application::enableDebuggingView(Settings::instance().write_log());
 
     DownloadService::instance().start();
+#if defined(PLATFORM_SWITCH)
+    watchDiskStops();
+#endif
 
     // Run the app.
     while (brls::Application::mainLoop()) {

@@ -61,6 +61,7 @@ class DownloadsView : public brls::Box {
     brls::Box* loginNotice = nullptr;
     brls::Box* quotaNotice = nullptr;
     brls::Label* quotaText = nullptr;
+    brls::Box* diskNotice = nullptr;
     brls::Box* resumeAll = nullptr;
     brls::Box* list = nullptr;
     brls::Box* empty = nullptr;
@@ -70,6 +71,10 @@ class DownloadsView : public brls::Box {
     // Focus left on something that just went away moves to what is shown.
     void keepFocus(const std::string& focusedKey);
 };
+
+// From start, for as long as the app runs: one notification each time a full
+// card pauses the downloads, whatever screen is open.
+void watchDiskStops();
 
 // The badge: an arrow and how many downloads are under way. Shown only while
 // something downloads; a tap opens the screen.
