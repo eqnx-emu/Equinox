@@ -8,6 +8,7 @@
 #include "mesh_raster.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 
@@ -26,11 +27,19 @@ constexpr float kLiveMargin = 1.3f; // room for poses past the still's framing
 // shelf's slide makes the slide stutter. The objects hold still while
 // selection changes (they keep moving as images) and carry on after it.
 // Matches kSlideMs in cover_carousel.cpp.
+// Moving, the object is drawn about 30 times a second with no supersampling
+// (a little under 33 ms, or a frame arriving early would skip to 20 a second);
+// once it rests it is drawn again at full quality.
 #ifdef __SWITCH__
 constexpr brls::Time kHoldOnSelectUs = 460000;
+constexpr brls::Time kRenderIntervalUs = 30000;
+constexpr int kMovingSamples = 1;
 #else
 constexpr brls::Time kHoldOnSelectUs = 0;
+constexpr brls::Time kRenderIntervalUs = 0;
+constexpr int kMovingSamples = 2;
 #endif
+constexpr int kRestingSamples = 2;
 brls::Time holdUntil = 0; // shared: the slide moves every object at once
 
 std::string fullPath(const std::string& path) {
@@ -38,12 +47,21 @@ std::string fullPath(const std::string& path) {
 }
 } // namespace
 
+// Shared with the worker, so a Turntable can go while a render is running.
+// While working is set the worker owns mesh and pixels; the UI thread touches
+// them only after seeing it clear.
+struct Turntable::LiveRender {
+    MeshRaster mesh;
+    std::vector<uint8_t> pixels;
+    std::atomic<bool> working{false};
+};
+
 Turntable::Turntable(std::string path) : file(fullPath(path)) {
     const std::string ext = ".mesh";
     if (path.size() > ext.size() &&
         path.compare(path.size() - ext.size(), ext.size(), ext) == 0) {
-        mesh = std::make_unique<MeshRaster>();
-        if (!mesh->load(file))
+        live = std::make_shared<LiveRender>();
+        if (!live->mesh.load(file))
             image = -1;
     }
 }
@@ -62,9 +80,11 @@ bool Turntable::exists(const std::string& path) {
 }
 
 void Turntable::setGlow(NVGcolor color, float emit) {
-    if (!mesh)
+    if (!live)
         return;
-    mesh->setGlow(color.r, color.g, color.b, emit);
+    glowColor = color;
+    glowEmit = emit;
+    glowPending = true;
     stale = true;
 }
 
@@ -87,7 +107,7 @@ void Turntable::setActive(bool on) {
 
 void Turntable::draw(NVGcontext* vg, float cx, float cy, float width,
                      float groundY, float alpha) {
-    if (image == 0 && !mesh) {
+    if (image == 0 && !live) {
         image = nvgCreateImage(vg, file.c_str(), 0);
         if (image <= 0)
             image = -1;
@@ -108,11 +128,11 @@ void Turntable::draw(NVGcontext* vg, float cx, float cy, float width,
         spin = d < 0 ? d + 360 : d;
     }
     int atlasW = 0, atlasH = 0;
-    if (!mesh)
+    if (!live)
         nvgImageSize(vg, image, &atlasW, &atlasH);
     const int rows = (kFrames + kCols - 1) / kCols;
-    const float frameW = mesh ? mesh->aspect() : (float)atlasW / kCols;
-    const float frameH = mesh ? 1.0f : (float)atlasH / rows;
+    const float frameW = live ? live->mesh.aspect() : (float)atlasW / kCols;
+    const float frameH = live ? 1.0f : (float)atlasH / rows;
     if (frameW <= 0 || frameH <= 0)
         return;
 
@@ -136,7 +156,7 @@ void Turntable::draw(NVGcontext* vg, float cx, float cy, float width,
     nvgFill(vg);
     nvgRestore(vg);
 
-    if (mesh) {
+    if (live) {
         // Eased, not set: while the object holds still the rock's target
         // keeps changing, and picking it up directly would make it jump.
         const float rock = kRockDegrees * f * std::sin(t * 2 * NVG_PI / kRockSeconds);
@@ -159,42 +179,83 @@ void Turntable::draw(NVGcontext* vg, float cx, float cy, float width,
     nvgFill(vg);
 }
 
+// Takes a finished render to the GPU. Here, not on the worker: the nanovg
+// context belongs to the UI thread.
+void Turntable::collectRender(NVGcontext* vg) {
+    if (!rendering || live->working.load(std::memory_order_acquire))
+        return;
+    rendering = false;
+    if (image > 0 && (jobW != imageW || jobH != imageH)) {
+        nvgDeleteImage(vg, image);
+        image = 0;
+    }
+    if (image == 0) {
+        // COPY_SWAP: the D3D11 backend's plain update path gets the row
+        // pitch of RGBA images wrong; its staging-texture path doesn't.
+        // Other backends ignore the flag.
+        image = nvgCreateImageRGBA(vg, jobW, jobH, NVG_IMAGE_COPY_SWAP,
+                                   live->pixels.data());
+        if (image <= 0) {
+            image = -1;
+            return;
+        }
+    } else {
+        nvgUpdateImage(vg, image, live->pixels.data());
+    }
+    imageW = jobW;
+    imageH = jobH;
+}
+
+void Turntable::startRender(int w, int h, float tilt, int samples) {
+    if (glowPending) {
+        live->mesh.setGlow(glowColor.r, glowColor.g, glowColor.b, glowEmit);
+        glowPending = false;
+    }
+    rendering = true;
+    jobW = w;
+    jobH = h;
+    stale = false;
+    drawnSpin = spin;
+    drawnTilt = tilt;
+    drawnSamples = samples;
+    nextRenderAt = getCPUTimeUsec() + kRenderIntervalUs;
+
+    live->working.store(true, std::memory_order_relaxed);
+    brls::async([job = live, w, h, pose = spin, tilt, samples] {
+        job->mesh.render(w, h, pose, tilt, kLiveMargin, samples, job->pixels);
+        job->working.store(false, std::memory_order_release);
+    });
+}
+
 void Turntable::drawLive(NVGcontext* vg, float cx, float cy, float w, float h,
                          float renderW, float tilt, float alpha) {
+    collectRender(vg);
+    if (image < 0)
+        return;
+
     // Rendered at the screen's own pixel size, again only when it moved.
     const float dw = w * kLiveMargin, dh = h * kLiveMargin;
     const int pw = (int)std::lround(renderW * kLiveMargin * Application::windowScale);
     const int ph = (int)std::lround(pw * h / w);
     if (pw <= 0 || ph <= 0)
         return;
-    const bool resized = pw != imageW || ph != imageH;
-    const bool mustRender = image == 0 || resized || stale;
-    const bool moved = std::fabs(spin - drawnSpin) > 0.02f ||
-                       std::fabs(tilt - drawnTilt) > 0.02f;
-    if (mustRender || (moved && getCPUTimeUsec() >= holdUntil)) {
-        mesh->render(pw, ph, spin, tilt, kLiveMargin, 2, pixels);
-        if (image > 0 && resized) {
-            nvgDeleteImage(vg, image);
-            image = 0;
+    if (!rendering) {
+        const bool mustRender = image == 0 || pw != imageW || ph != imageH || stale;
+        const bool moved = std::fabs(spin - drawnSpin) > 0.02f ||
+                           std::fabs(tilt - drawnTilt) > 0.02f;
+        const Time now = getCPUTimeUsec();
+        if (mustRender) {
+            startRender(pw, ph, tilt, kRestingSamples);
+        } else if (now >= holdUntil && now >= nextRenderAt) {
+            if (moved)
+                startRender(pw, ph, tilt, kMovingSamples);
+            else if (drawnSamples < kRestingSamples)
+                startRender(pw, ph, tilt, kRestingSamples);
         }
-        if (image == 0) {
-            // COPY_SWAP: the D3D11 backend's plain update path gets the row
-            // pitch of RGBA images wrong; its staging-texture path doesn't.
-            // Other backends ignore the flag.
-            image = nvgCreateImageRGBA(vg, pw, ph, NVG_IMAGE_COPY_SWAP, pixels.data());
-            if (image <= 0) {
-                image = -1;
-                return;
-            }
-        } else {
-            nvgUpdateImage(vg, image, pixels.data());
-        }
-        imageW = pw;
-        imageH = ph;
-        stale = false;
-        drawnSpin = spin;
-        drawnTilt = tilt;
     }
+    // The first render is still on its way.
+    if (image <= 0)
+        return;
 
     const float left = cx - dw / 2, top = cy - dh / 2;
     nvgBeginPath(vg);

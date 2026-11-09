@@ -21,8 +21,6 @@
 #include <string>
 #include <vector>
 
-class MeshRaster;
-
 class Turntable {
   public:
     // path: inside the resources, e.g. "img/3d/snes.png" or ".mesh".
@@ -45,15 +43,25 @@ class Turntable {
               float alpha);
 
   private:
+    struct LiveRender;
+
     void drawLive(NVGcontext* vg, float cx, float cy, float w, float h,
                   float renderW, float tilt, float alpha);
+    void collectRender(NVGcontext* vg);
+    void startRender(int w, int h, float tilt, int samples);
 
     std::string file;
-    std::unique_ptr<MeshRaster> mesh; // live source; null for the image
-    std::vector<uint8_t> pixels;
+    std::shared_ptr<LiveRender> live; // live source; null for the image
+    bool rendering = false; // a worker has, or just finished, a render
+    int jobW = 0, jobH = 0; // size of that render
+    brls::Time nextRenderAt = 0;
     int imageW = 0, imageH = 0;
-    float drawnSpin = -1, drawnTilt = 0;
+    float drawnSpin = -1, drawnTilt = 0; // the pose last sent to a worker
+    int drawnSamples = 0;
     bool stale = false; // the model changed: render it again
+    bool glowPending = false; // waits for no worker to be reading the model
+    NVGcolor glowColor{};
+    float glowEmit = 0;
     int image = 0; // loaded on the first draw; -1 when it can't be read
     float spin = 0; // degrees
     float shownTilt = 0; // degrees
