@@ -485,6 +485,8 @@
         "error_move": "Could not put the emulator in place. Check the SD card.",
         "error_installed": "Could not save the emulator version. Check the SD card.",
         "play": "Play",
+        "scanning": "Looking for games…",
+        "scan_done": "Search finished: {}",
         "rescan_short": "Look again",
         "empty_title": "No games yet",
         "empty_body": "Put your games ({}) in this folder on the SD card:",

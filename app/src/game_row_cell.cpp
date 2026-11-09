@@ -10,6 +10,7 @@
 #include "Settings.hpp"
 #include "bold_label.hpp"
 #include "cartridge_art.hpp"
+#include "emu/LibraryLog.hpp"
 
 #include <borealis/core/cache_helper.hpp>
 #include <borealis/extern/nanovg/stb_image.h>
@@ -21,8 +22,8 @@ using namespace brls;
 using namespace brls::literals;
 
 namespace {
-constexpr float kRowHeight = 48;
-constexpr float kCartridgeHeight = 216;
+constexpr float kRowHeight = GameRowCell::RowHeight;
+constexpr float kCartridgeHeight = GameRowCell::CartridgeHeight;
 constexpr int kHeightMs = 200;
 constexpr int kEntryMs = 250;
 constexpr int kFocusMs = 120;
@@ -65,18 +66,11 @@ std::shared_ptr<unsigned char> decodeCover(const std::string& path, int& width,
 }
 } // namespace
 
-GameRowCell::GameRowCell(const emu::Console&, size_t index) : rowIndex(index) {
+GameRowCell::GameRowCell() {
     setFocusable(true);
     setHeight(kRowHeight);
     setHighlightCornerRadius(kRowRadius + 3);
     setCornerRadius(kRowRadius);
-
-    // Only holds the cover's texture; drawn by this cell, never laid out.
-    texture = new Image();
-    texture->setVisibility(Visibility::GONE);
-    texture->setDetachedPosition(0, 0);
-    texture->setSize(Size(1, 1));
-    addView(texture);
 
     nameLabel = new BoldLabel();
     nameLabel->setSingleLine(true);
@@ -130,18 +124,54 @@ GameRowCell::GameRowCell(const emu::Console&, size_t index) : rowIndex(index) {
     updateActionHint(BUTTON_A, "emu/play"_i18n);
 }
 
+GameRowCell::~GameRowCell() {
+    clearCover();
+}
+
 bool GameRowCell::reduceMotion() const {
     return Settings::instance().reduce_motion();
 }
 
+void GameRowCell::rebind(size_t index, RowLook next) {
+    rowIndex = index;
+    setVisibility(Visibility::VISIBLE);
+    focusAlpha.reset(isFocused() ? 1.0f : 0.0f);
+    if (next != look)
+        setLook(next, false);
+    else
+        settle();
+}
+
+void GameRowCell::release() {
+    rowIndex = NoGame;
+    onPlay = nullptr;
+    clearCover();
+    setVisibility(Visibility::GONE);
+}
+
+void GameRowCell::settle() {
+    heightAnim.reset(targetHeight);
+    setHeight(targetHeight);
+    setClipsToBounds(false);
+    entry.reset(1.0f);
+    floatStart = getCPUTimeUsec();
+}
+
 void GameRowCell::setGame(const std::string& name, const std::string& sub,
                           const std::string& yearText) {
+    if (name == shownName && sub == shownSub && yearText == shownYear)
+        return;
+    shownName = name;
+    shownSub = sub;
+    shownYear = yearText;
     nameLabel->setText(name);
     subLabel->setText(sub);
     yearLabel->setText(yearText);
 }
 
 void GameRowCell::setDataState(bool data, std::optional<int> pct, bool queue) {
+    if (data == hasData && pct == percent && queue == queued)
+        return;
     hasData = data;
     percent = pct;
     queued = queue;
@@ -276,13 +306,29 @@ void GameRowCell::onFocusLost() {
 }
 
 void GameRowCell::setCover(const std::string& path) {
-    if (useCachedCover(path))
+    if (path == coverWanted)
         return;
+    clearCover();
+    coverWanted = path;
+    emu::liblog::covers.asked++;
+    if (useCachedCover(path)) {
+        emu::liblog::covers.cacheHits++;
+        return;
+    }
 
+    const unsigned ticket = coverTicket->load();
     ASYNC_RETAIN
-    brls::async([ASYNC_TOKEN, path]() {
+    brls::async([ASYNC_TOKEN, path, ticket, wanted = coverTicket]() {
         int width = 0, height = 0;
-        auto pixels = decodeCover(path, width, height);
+        std::shared_ptr<unsigned char> pixels;
+        if (wanted->load() == ticket) {
+            const int64_t started = emu::liblog::nowUs();
+            pixels = decodeCover(path, width, height);
+            const int64_t took = emu::liblog::nowUs() - started;
+            emu::liblog::covers.decoded++;
+            emu::liblog::covers.decodeTotalUs += took;
+            emu::liblog::raiseMax(emu::liblog::covers.decodeMaxUs, took);
+        }
         brls::sync([ASYNC_TOKEN, path, pixels, width, height]() {
             ASYNC_RELEASE
             applyCover(path, pixels, width, height);
@@ -293,13 +339,26 @@ void GameRowCell::setCover(const std::string& path) {
 void GameRowCell::applyCover(const std::string& path,
                              std::shared_ptr<unsigned char> pixels, int width,
                              int height) {
-    if (useCachedCover(path) || !pixels)
+    if (path != coverWanted) {
+        emu::liblog::covers.dropped++;
         return;
+    }
+    if (useCachedCover(path))
+        return;
+    if (!pixels) {
+        emu::liblog::bug("cover did not decode: {}", path);
+        return;
+    }
 
+    const int64_t started = emu::liblog::nowUs();
     const int tex = nvgCreateImageRGBA(Application::getNVGContext(), width,
                                        height, 0, pixels.get());
-    if (tex <= 0)
+    emu::liblog::raiseMax(emu::liblog::covers.uploadMaxUs,
+                          emu::liblog::nowUs() - started);
+    if (tex <= 0) {
+        emu::liblog::bug("no texture for cover ({}x{}): {}", width, height, path);
         return;
+    }
     setCoverTexture(tex);
     TextureCache::instance().addCache(path, tex);
 }
@@ -314,10 +373,15 @@ bool GameRowCell::useCachedCover(const std::string& path) {
 
 // Same bookkeeping as RomCell: the cache owns the textures.
 void GameRowCell::setCoverTexture(int tex) {
-    if (texture->getTexture() > 0)
-        TextureCache::instance().removeCache(texture->getTexture());
-    texture->setFreeTexture(false);
-    texture->innerSetImage(tex);
+    if (coverTex > 0)
+        TextureCache::instance().removeCache(coverTex);
+    coverTex = tex;
+}
+
+void GameRowCell::clearCover() {
+    coverWanted.clear();
+    coverTicket->fetch_add(1);
+    setCoverTexture(0);
 }
 
 void GameRowCell::draw(NVGcontext* vg, float x, float y, float width,
@@ -368,7 +432,7 @@ void GameRowCell::drawCartridgeLook(NVGcontext* vg, float x, float y,
     nvgRotate(vg, tilt);
 
     int texW = 0, texH = 0;
-    const int tex = texture->getTexture();
+    const int tex = coverTex;
     if (tex > 0)
         nvgImageSize(vg, tex, &texW, &texH);
     drawCartridge(vg, -kCartW / 2, -kCartH / 2, kCartW, kCartH, tex, texW,
@@ -380,7 +444,7 @@ void GameRowCell::drawCartridgeLook(NVGcontext* vg, float x, float y,
 void GameRowCell::drawThumb(NVGcontext* vg, float x, float y, float height) {
     const float tx = x + kThumbLeft;
     const float ty = y + (height - kThumbH) / 2;
-    const int tex = texture->getTexture();
+    const int tex = coverTex;
     int texW = 0, texH = 0;
     if (tex > 0)
         nvgImageSize(vg, tex, &texW, &texH);

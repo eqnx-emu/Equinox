@@ -18,6 +18,8 @@
 #include "emu/GameMeta.hpp"
 #include "emu/LaunchLine.hpp"
 #include "emu/Library.hpp"
+#include "emu/LibraryIndex.hpp"
+#include "emu/LibraryLog.hpp"
 #include "emu/RomScan.hpp"
 #include <borealis.hpp>
 
@@ -56,15 +58,7 @@ class ConsoleShelfView : public brls::Box {
     void draw(NVGcontext* vg, float x, float y, float width, float height,
               brls::Style style, brls::FrameContext* ctx) override;
 
-    struct Game {
-        emu::RomEntry rom;
-        bool hasCover = false;
-        bool missed = false; // libretro had no cover, as of this version
-        // A meta that still describes the ROM on the card.
-        bool hasData = false;
-        emu::GameMeta meta;
-        std::string snapPath, titlePath; // empty when the file is not there
-    };
+    using Game = emu::LibraryGame;
     // Shared with the cover tasks on the async pool.
     struct CoverQueue;
 
@@ -74,7 +68,6 @@ class ConsoleShelfView : public brls::Box {
     std::string restoreRom;
 
     std::vector<Game> games;
-    std::vector<GameRowCell*> cells; // owned by listPanel
     std::optional<size_t> current;   // the game the details show
     brls::Time currentAt = 0;
     // Bumped on each rebuild, so covers for the old cells are dropped.
@@ -99,14 +92,38 @@ class ConsoleShelfView : public brls::Box {
 
     brls::Box* library = nullptr;
     brls::Box* empty = nullptr;
+    brls::Box* loading = nullptr;
+    // The user asked for this look: say how it ended.
+    bool announceScan = false;
     GameListPanel* listPanel = nullptr;
     GameDetailsPanel* detailsPanel = nullptr;
 
     CoverAmbient ambient;
 
+    // The index on the card, when there is one, then a look at the folder.
+    void openLibrary();
+    // Every game on the card, read again.
     void rescan(bool clearMisses);
+    void showLoading();
+    // In the background: games put on or taken off the card since the index.
+    void checkFolder();
+    struct FolderChange {
+        std::vector<Game> added;
+        std::vector<std::string> removed; // file names
+    };
+    void applyFolderChange(const FolderChange& change, uint64_t forGeneration);
+    bool indexDirty = false;
+    bool indexSaving = false;
+    // wait: before the app closes, when a background save would not finish.
+    void saveIndex(bool wait = false);
     void openMore();
-    void showGames(std::vector<Game> found);
+    // A finished scan, all of it worked out off the UI thread.
+    struct Scan {
+        std::vector<Game> games;
+        std::vector<emu::LibraryItem> items; // items[i] names games[i]
+        emu::PreparedOrder order;
+    };
+    void showGames(Scan& scan);
     void onCurrent(std::optional<size_t> index);
     void play(size_t index);
     // The game as it was when play() started: the list may be rebuilt while
@@ -128,7 +145,7 @@ class ConsoleShelfView : public brls::Box {
     const emu::GameInfo* infoFor(const Game& game) const;
     emu::LibraryItem itemFor(const Game& game) const;
     GameDetails detailsFor(size_t index) const;
-    void applyRow(size_t index);
+    void bindRow(GameRowCell& cell, size_t index);
     void applyAmbient();
     void applyActions();
     // Rows, the details' action and the download-all area, from the queue.
@@ -166,4 +183,5 @@ class ConsoleShelfView : public brls::Box {
     static void fetchOneCover(std::shared_ptr<CoverQueue> queue);
     void coverArrived(uint64_t forGeneration, size_t index,
                       const std::string& path);
+    void coverMissedOn(uint64_t forGeneration, size_t index);
 };

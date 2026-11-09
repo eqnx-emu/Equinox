@@ -107,3 +107,17 @@ TEST_CASE("thumb urls, paths and name candidates") {
     CHECK(dup[0] == "zelda");
     CHECK(std::count(dup.begin(), dup.end(), "zelda") == 1);
 }
+
+TEST_CASE("the game count is remembered per console folder") {
+    fs::path dir = fs::temp_directory_path() /
+                   ("equinox_count_" +
+                    std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(dir);
+    emu::ConsolePaths paths;
+    paths.emulator = emu::toUtf8(dir);
+    CHECK(emu::readRomCount(paths) == -1);
+    emu::writeRomCount(paths, 1234);
+    CHECK(emu::readRomCount(paths) == 1234);
+    emu::writeRomCount(paths, 0);
+    CHECK(emu::readRomCount(paths) == 0);
+}

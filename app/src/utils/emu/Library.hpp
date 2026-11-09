@@ -19,6 +19,12 @@ struct LibraryItem {
 };
 // Indexes of the items that match the query, in the requested order. Year 0 and empty genre go last.
 std::vector<size_t> libraryOrder(const std::vector<LibraryItem>& items, const std::string& query, LibrarySort sort);
+// An order worked out ahead of time, and the query and sort it answers.
+struct PreparedOrder {
+    std::string query;
+    LibrarySort sort = LibrarySort::NameAsc;
+    std::vector<size_t> shown;
+};
 
 // Regions in the first (...) group of a No-Intro name; empty when that group is not a list of known regions.
 std::vector<std::string> noIntroRegions(const std::string& canonical);

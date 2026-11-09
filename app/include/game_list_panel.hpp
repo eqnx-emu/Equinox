@@ -15,6 +15,7 @@
 #include <borealis.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -28,16 +29,24 @@ class GameListPanel : public brls::Box {
     explicit GameListPanel(const emu::Console& console);
     ~GameListPanel() override;
 
-    // cells[i] is the row of items[i]. The panel takes them over: it frees the
-    // previous set, owns onFocused of every cell (onPlay stays the caller's)
-    // and sets their look from the mode. Covers and data state are the
-    // caller's. The query and the sort survive a new set, and the first
-    // result becomes the current game (reported through onFocusGame).
-    void setItems(std::vector<emu::LibraryItem> items, std::vector<GameRowCell*> cells);
+    // Only the rows near the screen exist; bindRow fills one for items[i]
+    // whenever it comes into view (name, cover, data state, onPlay). The
+    // query and the sort survive a new set, and the first result becomes the
+    // current game (reported through onFocusGame). prepared saves sorting here
+    // and is ignored if the query or the sort changed since orderRequest.
+    void setItems(std::vector<emu::LibraryItem> items, emu::PreparedOrder prepared);
+    // The query and sort to prepare an order for, off the UI thread.
+    emu::PreparedOrder orderRequest() const;
     // One game's name, year or genre changed; the order follows.
     void setItem(size_t index, emu::LibraryItem item);
+    // Fills that row again, if it exists now.
+    void refreshRow(size_t index);
+    void refreshRows();
+    std::function<void(GameRowCell&, size_t)> bindRow;
     // 0 cartridge for the picked game and names for the rest, 1 list with thumbnails.
     void setLook(int view);
+    // The count line says the folder is being read.
+    void setScanning(bool on);
 
     // The batch of "download all". done counts finished games, so the line
     // reads "Downloading min(done + 1, total) of total". A running batch
@@ -74,19 +83,26 @@ class GameListPanel : public brls::Box {
     std::function<void()> onDownloadAll, onRetry, onCancel;
 
     void willAppear(bool resetState = false) override;
+    void draw(NVGcontext* vg, float x, float y, float width, float height,
+              brls::Style style, brls::FrameContext* ctx) override;
 
   private:
     enum class Batch { Idle, Running, Done, Stopped };
 
     std::vector<emu::LibraryItem> items;
-    std::vector<GameRowCell*> cells;
     std::vector<size_t> shown; // indexes into items, in display order
+    std::vector<size_t> shownAt; // for each item, its place in shown, or NoGame
+    std::vector<GameRowCell*> pool; // every row; owned by list
+    std::vector<GameRowCell*> live; // the rows of shown[windowStart...], in order
+    size_t windowStart = 0;
+    bool windowDirty = true;
     std::optional<size_t> current; // the cartridge, even while the search has focus
     std::string query;
     int sort = 0;
     int mode = 0;
     unsigned recenterToken = 0;
     bool restoringFocus = false;
+    bool scanning = false;
     std::shared_ptr<bool> alive = std::make_shared<bool>(true);
 
     bool running = false;
@@ -134,8 +150,20 @@ class GameListPanel : public brls::Box {
     void applyBatch();
     void registerShortcuts(bool hidden);
     // resetScroll: the order or the filter changed, not just a game's data.
-    void applyOrder(bool resetScroll);
+    // ready: the new order when it is already known.
+    void applyOrder(bool resetScroll, std::vector<size_t>* ready = nullptr);
     void applyLooks(bool animate);
+    RowLook lookOf(size_t index) const;
+    // The place in shown the rows should gather around.
+    size_t anchorPlace();
+    void fillWindow(size_t anchor);
+    void placeRows();
+    void measureFrame(int64_t start, int64_t windowUs, int64_t drawUs);
+    void checkRows() const;
+    void checkFocusAndView() const;
+    GameRowCell* rowAt(size_t place) const;
+    brls::View* rowNextTo(brls::View* from, brls::FocusDirection direction) const;
+    brls::View* defaultRow() const;
     void setCurrent(std::optional<size_t> next, bool animate);
     void focusedGame(size_t index);
     void scheduleRecenter();
