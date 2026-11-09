@@ -4,6 +4,7 @@
 //
 
 #include "console_shelf_view.hpp"
+#include "console_card.hpp"
 #include "options_sheet.hpp"
 
 #if defined(PLATFORM_SWITCH)
@@ -645,10 +646,7 @@ void ConsoleShelfView::showGames(Scan& scan) {
     listPanel->setScanning(false);
     if (announceScan) {
         announceScan = false;
-        const size_t found = scan.games.size();
-        Application::notify(brls::getStr(
-            "emu/scan_done", found == 1 ? "hosts/games_one"_i18n
-                                        : brls::getStr("hosts/games_count", found)));
+        Application::notify(emuScanNotice(scan.games.size()));
     }
     // Nothing tied to the old numbering may outlive it.
     cancelData();

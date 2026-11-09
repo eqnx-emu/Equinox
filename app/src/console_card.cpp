@@ -7,11 +7,14 @@
 
 
 #include "bold_label.hpp"
+#include "emu/CoverStore.hpp"
 #include "emu/RomScan.hpp"
 
+#include <chrono>
 #include <cmath>
 #include <fmt/core.h>
 #include <map>
+#include <thread>
 
 using namespace brls;
 using namespace brls::literals;
@@ -41,11 +44,21 @@ std::string gamesText(int count) {
 std::string runnerName(const std::string& id) {
     if (id == "snes9x")
         return "Snes9x";
+    if (id == "mgba")
+        return "mGBA";
+    if (id == "gambatte")
+        return "Gambatte";
     return id;
 }
 
 std::string runnerIdFor(const emu::Console& console) {
-    return console.slug == "snes" ? "snes9x" : console.slug;
+    if (console.slug == "snes")
+        return "snes9x";
+    if (console.slug == "gba")
+        return "mgba";
+    if (console.slug == "gbc")
+        return "gambatte";
+    return console.slug;
 }
 } // namespace
 
@@ -60,6 +73,14 @@ std::string emuSizeText(uint64_t bytes) {
 
 std::string emuRunnerName(const emu::Manifest& manifest) {
     return runnerName(manifest.id);
+}
+
+std::string emuScanNotice(size_t found) {
+    if (found == 0)
+        return "emu/scan_none"_i18n;
+    return brls::getStr("emu/scan_done", found == 1
+                                             ? "hosts/games_one"_i18n
+                                             : brls::getStr("hosts/games_count", found));
 }
 
 ConsoleCard::ConsoleCard(const emu::Console& console) : consoleRef(console) {
@@ -156,6 +177,44 @@ void ConsoleCard::refresh() {
     });
 }
 
+void ConsoleCard::rescan() {
+    if (scanning)
+        return;
+    scanning = true;
+    scanDots = 1;
+    scanTimer.setCallback([this] {
+        scanDots = scanDots % 3 + 1;
+        update();
+    });
+    scanTimer.start(400);
+    update();
+
+    const emu::Console* console = &consoleRef;
+    ASYNC_RETAIN
+    brls::async([ASYNC_TOKEN, console] {
+        // A small folder is read at once: the search still shows one full
+        // round of the dots.
+        const auto shownUntil =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(1200);
+        const emu::ConsolePaths paths = emu::pathsFor(*console);
+        emu::ensureFolders(paths);
+        // Covers libretro lacked are tried again too.
+        emu::clearCoverMisses(paths);
+        const int count = static_cast<int>(emu::scanRoms(paths.roms, *console).size());
+        emu::writeRomCount(paths, count);
+        std::this_thread::sleep_until(shownUntil);
+        brls::sync([ASYNC_TOKEN, count] {
+            ASYNC_RELEASE
+            scanTimer.stop();
+            scanning = false;
+            games = count;
+            lastCounts()[consoleRef.slug] = count;
+            update();
+            Application::notify(emuScanNotice(count));
+        });
+    });
+}
+
 void ConsoleCard::setLatest(const emu::Manifest& latest) {
     latestManifest = latest;
     update();
@@ -190,6 +249,9 @@ void ConsoleCard::update() {
         break;
     }
 
+    if (scanning)
+        statusLine = "emu/searching_new"_i18n + std::string(scanDots, '.');
+
     detailLine = runnerName(runnerIdFor(consoleRef));
     if (installed)
         detailLine += "  ·  v" + installed->version;
@@ -202,7 +264,10 @@ void ConsoleCard::update() {
     // The card says only what changes: the count, or the update.
     const NVGcolor color = statusColor();
     statusDot->setBackgroundColor(color);
-    if (runnerAction == emu::RunnerAction::UpToDate) {
+    if (scanning) {
+        status->setTextColor(themeColor("equinox/muted"));
+        status->setText(statusLine);
+    } else if (runnerAction == emu::RunnerAction::UpToDate) {
         status->setTextColor(themeColor("equinox/muted"));
         status->setText(games < 0 ? std::string() : gamesText(games));
     } else {

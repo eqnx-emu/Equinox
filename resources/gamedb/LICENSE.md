@@ -1,6 +1,6 @@
 # Game data
 
-`snes.tsv` is derived from the libretro-database project.
+`snes.tsv`, `gba.tsv` and `gbc.tsv` are derived from the libretro-database project.
 
 - Source: https://github.com/libretro/libretro-database (`metadat/no-intro`, `genre`, `developer`, `publisher`, `releaseyear`, `maxusers`, `franchise`)
 - Commit: c4e17d41ec1bb744fb064f7cefeb61b878fc5d64

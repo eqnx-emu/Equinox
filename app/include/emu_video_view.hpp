@@ -13,4 +13,5 @@
 #include <borealis.hpp>
 
 // Content for an AppletFrame; its title is already set.
-brls::View* makeEmuVideoView(const emu::ConsolePaths& paths);
+brls::View* makeEmuVideoView(const emu::Console& console,
+                             const emu::ConsolePaths& paths);

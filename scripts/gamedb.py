@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
-"""Build resources/gamedb/snes.tsv from libretro-database.
+"""Build resources/gamedb/<slug>.tsv from libretro-database.
 
 Usage: gamedb.py <libretro-database commit> <output.tsv>
+The output's file name picks the console: snes.tsv, gba.tsv or gbc.tsv.
 """
+import os
 import re
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 
 BASE = "https://raw.githubusercontent.com/libretro/libretro-database/{commit}/metadat/{folder}/{file}"
-DAT = "Nintendo - Super Nintendo Entertainment System.dat"
+DATS = {
+    "snes": "Nintendo - Super Nintendo Entertainment System.dat",
+    "gba": "Nintendo - Game Boy Advance.dat",
+    "gbc": "Nintendo - Game Boy Color.dat",
+}
 
 # (folder, DAT field, output column)
 SOURCES = [
@@ -26,10 +33,16 @@ GAME_RE = re.compile(r"^game \(\n(.*?)^\)", re.M | re.S)
 ROM_CRC_RE = re.compile(r"\brom \(.*?\bcrc ([0-9A-Fa-f]{8})\b", re.S)
 
 
-def fetch(commit, folder):
-    url = BASE.format(commit=commit, folder=folder, file=urllib.parse.quote(DAT))
-    with urllib.request.urlopen(url, timeout=60) as resp:
-        return resp.read().decode("utf-8")
+def fetch(commit, folder, dat):
+    url = BASE.format(commit=commit, folder=folder, file=urllib.parse.quote(dat))
+    try:
+        with urllib.request.urlopen(url, timeout=60) as resp:
+            return resp.read().decode("utf-8")
+    except urllib.error.HTTPError as e:
+        # Smaller systems lack some of the optional metadata folders.
+        if e.code == 404 and folder != "no-intro":
+            return ""
+        raise
 
 
 def field(block, key):
@@ -56,14 +69,18 @@ def main():
     if len(sys.argv) != 3:
         sys.exit(__doc__)
     commit, out = sys.argv[1], sys.argv[2]
+    slug = os.path.splitext(os.path.basename(out))[0]
+    if slug not in DATS:
+        sys.exit("unknown console: %s" % slug)
+    dat = DATS[slug]
 
     rows = {}
-    for crc, name in parse(fetch(commit, "no-intro"), "name"):
+    for crc, name in parse(fetch(commit, "no-intro", dat), "name"):
         if name:
             rows.setdefault(crc, dict.fromkeys(COLUMNS, ""))["name"] = name
 
     for folder, key, column in SOURCES:
-        for crc, value in parse(fetch(commit, folder), key):
+        for crc, value in parse(fetch(commit, folder, dat), key):
             if crc in rows and value:
                 rows[crc][column] = value
 
