@@ -357,6 +357,7 @@ DlOverview DownloadQueue::overview(int64_t now) const {
             case DlState::Running:
                 group.running++;
                 group.runningId = task.id;
+                group.runningName = taskName(task);
                 break;
             case DlState::Queued:
                 if (!held(task, now)) {
@@ -385,6 +386,25 @@ size_t DlOverview::active() const {
     size_t count = 0;
     for (const DlGroup& group : groups) count += group.running + group.queued;
     return count;
+}
+
+float DlOverview::progress(float runningProgress) const {
+    const float running = std::clamp(runningProgress, 0.0f, 1.0f);
+    float done = 0;
+    size_t total = 0;
+    for (const DlGroup& group : groups) {
+        if (group.running + group.queued == 0) continue;
+        done += (float)group.finished + (group.running > 0 ? running : 0.0f);
+        total += group.total();
+    }
+    return total > 0 ? std::min(done / (float)total, 1.0f) : 0.0f;
+}
+
+std::string taskName(const DlTask& task) {
+    if (task.kind != DlKind::Cover && task.kind != DlKind::GameData) return {};
+    const std::string mark = ":" + task.group + ":";
+    const size_t at = task.id.find(mark);
+    return at == std::string::npos ? std::string() : task.id.substr(at + mark.size());
 }
 
 }  // namespace emu

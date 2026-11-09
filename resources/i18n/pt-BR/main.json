@@ -620,7 +620,8 @@
     },
     "downloads": {
         "title": "Downloads",
-        "actions": "Opções",
+        "open": "Abrir downloads",
+        "select": "Selecionar",
         "row": "{} · {}",
         "kind": {
             "cover": "Capas",
@@ -629,6 +630,14 @@
             "app_update": "Atualização do Equinox",
             "media": "Mídia"
         },
+        "unit": {
+            "cover": "capas",
+            "cover_one": "capa",
+            "game_data": "jogos",
+            "game_data_one": "jogo",
+            "media": "itens",
+            "media_one": "item"
+        },
         "state": {
             "running": "Baixando",
             "queued": "Aguardando a vez",
@@ -636,17 +645,34 @@
             "paused": "Pausado",
             "failed": "Falhou"
         },
-        "extra_held": "{} em espera",
-        "extra_paused": "{} em pausa",
-        "extra_failed": "{} com falha",
-        "count": "{} de {}",
+        "short": {
+            "queued": "na fila",
+            "quota": "cota",
+            "login": "login",
+            "paused": "pausado",
+            "failed": "falhou"
+        },
+        "summary_running": "{} baixando",
+        "summary_paused": "{} pausados",
+        "summary_paused_one": "{} pausado",
         "percent": "{}%",
+        "progress": "{} de {} {}",
+        "amount": "{} {}",
+        "tile": {
+            "now": "Agora",
+            "left": "Faltam",
+            "failed": "Com falha"
+        },
         "action": {
             "pause": "Pausar",
             "resume": "Retomar",
-            "retry": "Tentar de novo",
+            "retry_failed": "Tentar as {} falhas",
+            "retry_one": "Tentar a falha",
             "cancel": "Cancelar"
         },
+        "cancel_message": "Cancelar {}? O que já terminou fica no cartão SD.",
+        "keep": "Continuar baixando",
+        "pause_all": "Pausar tudo",
         "resume_all": "Retomar tudo",
         "empty_title": "Nada baixando",
         "empty_body": "Capas, dados dos jogos, emuladores e atualizações do app aparecem aqui enquanto baixam.",

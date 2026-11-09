@@ -514,6 +514,54 @@ TEST_CASE("overview shows no notice for a block no task waits on") {
     CHECK(view.active() == 1);
 }
 
+TEST_CASE("taskName reads the name after the group in a cover or game data id") {
+    CHECK(taskName(inGroup("cover:snes:Chrono Trigger (USA)", "snes", DlKind::Cover)) ==
+          "Chrono Trigger (USA)");
+    CHECK(taskName(inGroup("gamedata:snes:Foo: Bar.sfc", "snes", DlKind::GameData)) ==
+          "Foo: Bar.sfc");
+    CHECK(taskName(inGroup("runner:snes", "snes", DlKind::Runner)).empty());
+    CHECK(taskName(inGroup("appupdate", "", DlKind::AppUpdate)).empty());
+    CHECK(taskName(inGroup("odd", "snes", DlKind::Cover)).empty());
+}
+
+TEST_CASE("overview names the running task of each group, and only it") {
+    DownloadQueue q;
+    q.submit(inGroup("cover:snes:A", "snes", DlKind::Cover));
+    q.submit(inGroup("cover:snes:B", "snes", DlKind::Cover));
+    q.submit(inGroup("gamedata:nes:C.nes", "nes", DlKind::GameData));
+    CHECK(q.overview(kNow).groups[0].runningName.empty());
+
+    REQUIRE(q.next(kNow)->id == "cover:snes:A");
+    const DlOverview view = q.overview(kNow);
+    CHECK(view.groups[0].runningName == "A");
+    CHECK(view.groups[1].runningName.empty());
+}
+
+TEST_CASE("progress counts only groups with active tasks and the running fraction") {
+    DownloadQueue q;
+    CHECK(q.overview(kNow).progress(0.5f) == 0.0f);
+
+    q.submit(inGroup("a", "snes", DlKind::Cover));
+    q.submit(inGroup("b", "snes", DlKind::Cover));
+    q.submit(inGroup("c", "snes", DlKind::Cover));
+    q.submit(inGroup("d", "snes", DlKind::Cover));
+    REQUIRE(q.next(kNow)->id == "a");
+    q.finish("a", DlResult::Done, kHostLibretro, kNow);
+    q.cancel("a");
+    REQUIRE(q.next(kNow)->id == "b");
+    // 1 finished, b at half, 4 in all.
+    CHECK(q.overview(kNow).progress(0.5f) == doctest::Approx(1.5f / 4));
+
+    // A paused group adds nothing, active or not.
+    DlTask paused = inGroup("p", "nes", DlKind::Cover);
+    paused.state = DlState::Paused;
+    q.submit(paused);
+    CHECK(q.overview(kNow).progress(0.5f) == doctest::Approx(1.5f / 4));
+
+    // Out-of-range progress is clamped.
+    CHECK(q.overview(kNow).progress(7.0f) == doctest::Approx(2.0f / 4));
+}
+
 TEST_CASE("cancelGroup forgets the group's finished count") {
     DownloadQueue q;
     q.submit(inGroup("a", "snes", DlKind::Cover));

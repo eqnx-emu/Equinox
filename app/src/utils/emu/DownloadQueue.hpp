@@ -55,6 +55,9 @@ struct DlGroup {
     size_t failed = 0;
     size_t finished = 0;  // done since the group last emptied
     std::string runningId;
+    // What the running task fetches, as a person knows it: a cover's game
+    // title, a game data's file name. Empty for the other kinds.
+    std::string runningName;
 
     size_t remaining() const { return running + queued + held + paused + failed; }
     size_t total() const { return remaining() + finished; }
@@ -70,7 +73,14 @@ struct DlOverview {
 
     // Running and runnable Queued tasks: what runs without the user.
     size_t active() const;
+    // How far the groups with active tasks are, from 0 to 1: what finished
+    // over their total, the running task counted at `runningProgress`.
+    float progress(float runningProgress) const;
 };
+
+// The name in a task id "<kind>:<group>:<name>", for covers and game data;
+// empty otherwise.
+std::string taskName(const DlTask& task);
 
 // Scheduling state only: no threads, no I/O. The caller passes the clock in.
 class DownloadQueue {

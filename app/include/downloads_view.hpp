@@ -2,9 +2,10 @@
 //  downloads_view.hpp
 //  Equinox
 //
-//  The downloads screen: one row per console and kind (covers, game data,
-//  the emulator) and one for the app update, each with its count, progress
-//  and actions. A small badge elsewhere says something is downloading.
+//  The downloads screen: on the left, one compact row per console and kind
+//  (covers, game data, the emulator) and one for the app update, under a
+//  heading per console; on the right, the focused row in detail with its
+//  actions. A small ring on the home screen says something is downloading.
 //  Switch only.
 //
 
@@ -12,10 +13,15 @@
 
 #include <borealis.hpp>
 
+#include "emu/DownloadQueue.hpp"
+
 #include <chrono>
 #include <functional>
 #include <string>
 #include <vector>
+
+class LibraryProgressBar;
+class PressableBox;
 
 // Service events only mark the view stale; it reads the queue again at most
 // this often, while it is drawn.
@@ -35,6 +41,9 @@ class DownloadsRefresh {
     // Progress of the last task seen running.
     const std::string& runningId() const { return runningId_; }
     float progress() const { return progress_; }
+    // The progress of the group's running task, or 0 when it is not the one
+    // last seen running.
+    float progressOf(const emu::DlGroup& group) const;
 
   private:
     using Clock = std::chrono::steady_clock;
@@ -56,20 +65,54 @@ class DownloadsView : public brls::Box {
 
   private:
     class Row;
+    class Panes;
 
     DownloadsRefresh refresher;
+    brls::Label* summary = nullptr;  // in the header, on the right
+    brls::Box* notices = nullptr;
     brls::Box* loginNotice = nullptr;
     brls::Box* quotaNotice = nullptr;
     brls::Label* quotaText = nullptr;
     brls::Box* diskNotice = nullptr;
-    brls::Box* resumeAll = nullptr;
+    Panes* panes = nullptr;
     brls::Box* list = nullptr;
-    brls::Box* empty = nullptr;
     std::vector<Row*> rows;  // reused in place, hidden when not needed
+    brls::Box* empty = nullptr;
+
+    // The detail pane, showing the selected group.
+    brls::Label* paneConsole = nullptr;
+    brls::Label* paneTitle = nullptr;
+    brls::Label* panePercent = nullptr;
+    brls::Label* paneCount = nullptr;
+    LibraryProgressBar* paneBar = nullptr;
+    brls::Box* tiles = nullptr;
+    brls::Box* nowTile = nullptr;
+    brls::Label* nowValue = nullptr;
+    brls::Label* leftValue = nullptr;
+    brls::Label* failedValue = nullptr;
+    brls::Box* actions = nullptr;
+    PressableBox* pauseButton = nullptr;
+    brls::Label* pauseIcon = nullptr;
+    brls::Label* pauseLabel = nullptr;
+    PressableBox* retryButton = nullptr;
+    brls::Label* retryLabel = nullptr;
+    PressableBox* cancelButton = nullptr;
+
+    emu::DlOverview shown;    // the last overview read
+    std::string selectedKey;  // the group the pane shows
+    std::string yHint;        // what Y says now, to set it only on a change
 
     void refresh();
+    void select(const std::string& key);
+    void fillPane();
+    const emu::DlGroup* selectedGroup() const;
+    Row* selectedRow() const;
+    View* firstAction() const;
+    // Y: pauses everything, or resumes it when nothing runs and something
+    // is paused.
+    bool resumesAll() const;
     // Focus left on something that just went away moves to what is shown.
-    void keepFocus(const std::string& focusedKey);
+    void keepFocus();
 };
 
 // From start, for as long as the app runs: one notification each time a full
