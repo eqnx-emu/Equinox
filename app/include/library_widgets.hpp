@@ -26,10 +26,6 @@ class LibraryProgressBar : public brls::View {
     float fraction = 0;
 };
 
-// setText lays the label out again even when the text is the same; moving
-// through the list sets most texts to what they already are.
-void setTextIfChanged(brls::Label* label, const std::string& text);
-
 // Why a download stopped, as a sentence ending in a full stop. Empty for
 // None and Cancelled.
 std::string libraryStopText(emu::DataStop stop);

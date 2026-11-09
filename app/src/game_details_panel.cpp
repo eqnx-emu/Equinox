@@ -11,12 +11,10 @@
 #include "bold_label.hpp"
 #include "emu/PathUtf8.hpp"
 #include "emu/SsCredentials.hpp"
+#include "image_decode.hpp"
 #include "library_widgets.hpp"
 
-#include <borealis/extern/nanovg/stb_image.h>
-
 #include <algorithm>
-#include <atomic>
 #include <cmath>
 #include <filesystem>
 #include <memory>
@@ -33,7 +31,8 @@ constexpr float kPi = 3.14159265358979f;
 constexpr float kStickDeadzone = 0.2f;
 constexpr float kStickPixelsPerFrame = 8;
 constexpr float kSynopsisIndicatorRoom = 20;
-constexpr int kMaxFacts = 7; // the most applyFacts lists
+// Cells made up front; applyFacts adds rows if a game ever lists more.
+constexpr size_t kUsualFacts = 8;
 
 NVGcolor themeColor(const char* name) {
     return Application::getTheme().getColor(name);
@@ -47,15 +46,6 @@ int64_t fileStamp(const std::string& path) {
     std::error_code ec;
     const auto t = std::filesystem::last_write_time(emu::fromUtf8(path), ec);
     return ec ? 0 : static_cast<int64_t>(t.time_since_epoch().count());
-}
-
-std::shared_ptr<unsigned char> decodeImage(const std::string& path, int& width, int& height) {
-    int channels = 0;
-    unsigned char* px = stbi_load(path.c_str(), &width, &height, &channels, 4);
-    return std::shared_ptr<unsigned char>(px, [](unsigned char* p) {
-        if (p)
-            stbi_image_free(p);
-    });
 }
 
 void dashedFrame(NVGcontext* vg, float x, float y, float w, float h, float r, NVGcolor color) {
@@ -91,7 +81,7 @@ void dashedFrame(NVGcontext* vg, float x, float y, float w, float h, float r, NV
 // The file is decoded off the UI thread.
 class ArtFrame : public Box {
   public:
-    ArtFrame(float w, float h, float r, float fontSize) : radius(r) {
+    ArtFrame(float w, float h, float r, float fontSize) : radius(r), frameW(w), frameH(h) {
         setWidth(w);
         setHeight(h);
         setShrink(0);
@@ -101,18 +91,24 @@ class ArtFrame : public Box {
         label->setFontSize(fontSize);
         label->setWidth(w - 16);
         label->setHorizontalAlign(HorizontalAlign::CENTER);
-        label->setTextColor(themeColor("equinox/muted"));
         addView(label);
+        applyColors();
+    }
+
+    // Kept, not looked up by name while drawing.
+    void applyColors() {
+        muted = themeColor("equinox/muted");
+        empty = themeColor("equinox/card_inner");
+        label->setTextColor(muted);
     }
 
     ~ArtFrame() override { freeTexture(); }
 
     // An empty path shows the dashed frame, with placeholder in it.
     void set(const std::string& imagePath, const std::string& placeholder) {
-        setTextIfChanged(label, placeholder);
+        label->setText(placeholder);
         label->setVisibility(imagePath.empty() && !placeholder.empty() ? Visibility::VISIBLE
                                                                        : Visibility::GONE);
-        label->setTextColor(themeColor("equinox/muted"));
         // Same file: only a new download changes it. A different file is
         // stamped by the worker, so moving through the list costs no stat.
         // Still decoding it: that decode stays, a new one would only queue
@@ -129,28 +125,26 @@ class ArtFrame : public Box {
             return;
 
         const std::string file = path;
+        // No bigger than the frame on screen.
+        const int minW = static_cast<int>(std::ceil(frameW * Application::windowScale));
+        const int minH = static_cast<int>(std::ceil(frameH * Application::windowScale));
         ASYNC_RETAIN
-        async([ASYNC_TOKEN, wanted, file, current = ticket]() {
+        async([ASYNC_TOKEN, wanted, file, minW, minH, current = ticket]() {
             // Passed over while queued: the pool has few threads, and a
             // decode nobody waits for would hold up the one that is wanted.
-            int width = 0, height = 0;
-            int64_t stamp = 0;
-            std::shared_ptr<unsigned char> pixels;
-            if (current->load() == wanted) {
-                stamp = fileStamp(file);
-                pixels = decodeImage(file, width, height);
-            }
-            sync([ASYNC_TOKEN, wanted, pixels, width, height, stamp]() {
+            const int64_t stamp = current->load() == wanted ? fileStamp(file) : 0;
+            DecodedImage image = decodeIfWanted(current, wanted, file, minW, minH);
+            sync([ASYNC_TOKEN, wanted, image, stamp]() {
                 ASYNC_RELEASE
                 if (wanted != ticket->load())
                     return;
                 loadedStamp = stamp;
-                if (!pixels)
+                if (!image.pixels)
                     return;
-                tex = nvgCreateImageRGBA(Application::getNVGContext(), width, height,
-                                         NVG_IMAGE_NEAREST, pixels.get());
-                texW = width;
-                texH = height;
+                tex = nvgCreateImageRGBA(Application::getNVGContext(), image.width,
+                                         image.height, NVG_IMAGE_NEAREST, image.pixels.get());
+                texW = image.width;
+                texH = image.height;
             });
         });
     }
@@ -168,10 +162,10 @@ class ArtFrame : public Box {
         } else if (!path.empty()) {
             nvgBeginPath(vg);
             nvgRoundedRect(vg, x, y, width, height, radius);
-            nvgFillColor(vg, a(themeColor("equinox/card_inner")));
+            nvgFillColor(vg, a(empty));
             nvgFill(vg);
         } else {
-            NVGcolor dash = themeColor("equinox/muted");
+            NVGcolor dash = muted;
             dash.a *= 0.3f;
             dashedFrame(vg, x, y, width, height, radius, a(dash));
         }
@@ -180,12 +174,14 @@ class ArtFrame : public Box {
 
   private:
     float radius;
+    float frameW, frameH;
+    NVGcolor muted{}, empty{};
     Label* label = nullptr;
     static constexpr int64_t kPending = -1; // decoding: its stamp is not known yet
     std::string path;
     int64_t loadedStamp = 0;
     // Bumped when the frame stops wanting the image being decoded.
-    std::shared_ptr<std::atomic<unsigned>> ticket = std::make_shared<std::atomic<unsigned>>(0);
+    ImageTicket ticket = makeImageTicket();
     int tex = 0, texW = 0, texH = 0;
 
     void freeTexture() {
@@ -363,25 +359,8 @@ GameDetailsPanel::GameDetailsPanel() : Box(Axis::COLUMN) {
 
     factSentence = makeLabel(15);
     facts->addView(factSentence);
-    for (int r = 0; r < (kMaxFacts + 1) / 2; r++) {
-        auto* row = new Box(Axis::ROW);
-        row->setMarginBottom(14);
-        for (int c = 0; c < 2; c++) {
-            FactCell cell;
-            cell.box = new Box(Axis::COLUMN);
-            cell.box->setWidthPercentage(50);
-            cell.box->setPaddingRight(20);
-            cell.label = makeLabel(14);
-            cell.box->addView(cell.label);
-            cell.value = makeLabel(16);
-            cell.value->setMarginTop(3);
-            cell.box->addView(cell.value);
-            row->addView(cell.box);
-            factCells.push_back(cell);
-        }
-        facts->addView(row);
-        factRows.push_back(row);
-    }
+    while (factCells.size() < kUsualFacts)
+        addFactRow();
 
     // A long synopsis scrolls inside the room left, so "Fontes" stays in place.
     auto* synopsis = new Box(Axis::COLUMN);
@@ -429,13 +408,14 @@ void GameDetailsPanel::applyColors() {
     titleCaption->setTextColor(muted);
     sources->setTextColor(muted);
     factSentence->setTextColor(muted);
+    static_cast<ArtFrame*>(snapFrame)->applyColors();
+    static_cast<ArtFrame*>(titleFrame)->applyColors();
     for (const FactCell& cell : factCells)
         cell.label->setTextColor(muted);
     updateButton->setBackgroundColor(themeColor("equinox/card_inner"));
     // The account can change in Settings while the panel is off screen.
-    setTextIfChanged(sources, text(emu::ssConfigured(emu::appSsConfig())
-                                       ? "library/details/sources"
-                                       : "library/details/sources_free"));
+    sources->setText(text(emu::ssConfigured(emu::appSsConfig()) ? "library/details/sources"
+                                                                : "library/details/sources_free"));
 }
 
 void GameDetailsPanel::show(const GameDetails& next, bool animate) {
@@ -477,15 +457,14 @@ void GameDetailsPanel::startFade(bool animate) {
 }
 
 void GameDetailsPanel::applyDetails() {
-    setTextIfChanged(title, details.name);
+    title->setText(details.name);
     if (!details.identified)
-        setTextIfChanged(fileLine,
-                         brls::getStr("library/details/not_identified", details.fileName));
+        fileLine->setText(brls::getStr("library/details/not_identified", details.fileName));
     fileLine->setVisibility(details.identified ? Visibility::GONE : Visibility::VISIBLE);
     // With data downloaded, an empty synopsis is a fact, not an invitation.
-    setTextIfChanged(synopsisText, !details.synopsis.empty() ? details.synopsis
-                                   : details.hasData ? text("library/details/synopsis_empty")
-                                                     : text("library/details/synopsis_none"));
+    synopsisText->setText(!details.synopsis.empty() ? details.synopsis
+                          : details.hasData         ? text("library/details/synopsis_empty")
+                                                    : text("library/details/synopsis_none"));
     synopsisScroll->setContentOffsetY(0, false);
     applyAction();
     applyMedia();
@@ -511,15 +490,13 @@ void GameDetailsPanel::applyAction() {
     readyRow->setVisibility(shown(Action::Ready));
 
     if (step) {
-        setTextIfChanged(stepLabel, stepText(*step));
+        stepLabel->setText(stepText(*step));
         const float fraction = emu::stepProgress(*step);
-        setTextIfChanged(percentLabel,
-                         std::to_string(static_cast<int>(std::lround(fraction * 100))) + "%");
+        percentLabel->setText(std::to_string(static_cast<int>(std::lround(fraction * 100))) + "%");
         static_cast<LibraryProgressBar*>(bar)->setFraction(fraction);
     }
     if (failed)
-        setTextIfChanged(failedLabel,
-                         brls::getStr("library/details/failed", libraryStopText(*failed)));
+        failedLabel->setText(brls::getStr("library/details/failed", libraryStopText(*failed)));
 }
 
 void GameDetailsPanel::applyMedia() {
@@ -533,6 +510,29 @@ void GameDetailsPanel::applyMedia() {
 
     static_cast<ArtFrame*>(snapFrame)->set(data ? details.snapPath : "", snapNote);
     static_cast<ArtFrame*>(titleFrame)->set(data ? details.titlePath : "", titleNote);
+}
+
+// Two cells side by side, half the width each.
+void GameDetailsPanel::addFactRow() {
+    auto* row = new Box(Axis::ROW);
+    row->setMarginBottom(14);
+    const NVGcolor muted = themeColor("equinox/muted");
+    for (int c = 0; c < 2; c++) {
+        FactCell cell;
+        cell.box = new Box(Axis::COLUMN);
+        cell.box->setWidthPercentage(50);
+        cell.box->setPaddingRight(20);
+        cell.label = makeLabel(14);
+        cell.label->setTextColor(muted);
+        cell.box->addView(cell.label);
+        cell.value = makeLabel(16);
+        cell.value->setMarginTop(3);
+        cell.box->addView(cell.value);
+        row->addView(cell.box);
+        factCells.push_back(cell);
+    }
+    facts->addView(row);
+    factRows.push_back(row);
 }
 
 void GameDetailsPanel::applyFacts() {
@@ -568,16 +568,19 @@ void GameDetailsPanel::applyFacts() {
     }
 
     if (list.empty())
-        setTextIfChanged(factSentence, text(details.hasData ? "library/details/facts_none"
-                                                            : "library/details/facts_pending"));
+        factSentence->setText(text(details.hasData ? "library/details/facts_none"
+                                                   : "library/details/facts_pending"));
     factSentence->setVisibility(list.empty() ? Visibility::VISIBLE : Visibility::GONE);
+
+    while (factCells.size() < list.size())
+        addFactRow();
 
     for (size_t i = 0; i < factCells.size(); i++) {
         const FactCell& cell = factCells[i];
         // Emptied when hidden: an invisible cell still has a height, and the
         // previous game's long text would make its row taller.
-        setTextIfChanged(cell.label, i < list.size() ? text(list[i].label) : "");
-        setTextIfChanged(cell.value, i < list.size() ? list[i].value : "");
+        cell.label->setText(i < list.size() ? text(list[i].label) : "");
+        cell.value->setText(i < list.size() ? list[i].value : "");
         // An odd last fact keeps its half width: the empty cell holds the room.
         cell.box->setVisibility(i < list.size() ? Visibility::VISIBLE : Visibility::INVISIBLE);
     }

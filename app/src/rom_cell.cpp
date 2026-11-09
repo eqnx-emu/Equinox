@@ -8,9 +8,9 @@
 #if defined(PLATFORM_SWITCH)
 
 #include "bold_label.hpp"
+#include "image_decode.hpp"
 
 #include <borealis/core/cache_helper.hpp>
-#include <borealis/extern/nanovg/stb_image.h>
 
 using namespace brls;
 using namespace brls::literals;
@@ -22,16 +22,6 @@ constexpr float kRadius = 12;
 
 NVGcolor hex(unsigned rgb) {
     return nvgRGB((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
-}
-
-std::shared_ptr<unsigned char> decodeCover(const std::string& path, int& width,
-                                           int& height) {
-    int channels = 0;
-    unsigned char* px = stbi_load(path.c_str(), &width, &height, &channels, 4);
-    return std::shared_ptr<unsigned char>(px, [](unsigned char* p) {
-        if (p)
-            stbi_image_free(p);
-    });
 }
 } // namespace
 
@@ -162,11 +152,10 @@ void RomCell::loadCover(const std::string& path) {
 
     ASYNC_RETAIN
     brls::async([ASYNC_TOKEN, path]() {
-        int width = 0, height = 0;
-        auto pixels = decodeCover(path, width, height);
-        brls::sync([ASYNC_TOKEN, path, pixels, width, height]() {
+        DecodedImage image = decodeImageFile(path, kCoverMinW, kCoverMinH);
+        brls::sync([ASYNC_TOKEN, path, image]() {
             ASYNC_RELEASE
-            applyCover(path, pixels, width, height);
+            applyCover(path, image.pixels, image.width, image.height);
         });
     });
 }

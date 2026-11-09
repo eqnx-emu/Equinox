@@ -11,9 +11,9 @@
 #include "bold_label.hpp"
 #include "cartridge_art.hpp"
 #include "emu/LibraryLog.hpp"
+#include "image_decode.hpp"
 
 #include <borealis/core/cache_helper.hpp>
-#include <borealis/extern/nanovg/stb_image.h>
 
 #include <algorithm>
 #include <cmath>
@@ -44,6 +44,8 @@ constexpr float kThumbLeft = 8;
 constexpr float kRowRadius = 10;
 
 constexpr float kPi = 3.14159265358979f;
+// The focus ring and the cartridge's float reach a little past the row.
+constexpr float kCullMargin = 16;
 
 // The cartridge shell, the one colour that is not the theme's.
 const NVGcolor kCartridgeBody = nvgRGB(0xB4, 0xB4, 0xBC);
@@ -53,16 +55,6 @@ const char* const kDownloadGlyph = "\xEE\x8B\x84";
 
 NVGcolor themeColor(const char* name) {
     return Application::getTheme().getColor(name);
-}
-
-std::shared_ptr<unsigned char> decodeCover(const std::string& path, int& width,
-                                           int& height) {
-    int channels = 0;
-    unsigned char* px = stbi_load(path.c_str(), &width, &height, &channels, 4);
-    return std::shared_ptr<unsigned char>(px, [](unsigned char* p) {
-        if (p)
-            stbi_image_free(p);
-    });
 }
 } // namespace
 
@@ -159,11 +151,7 @@ void GameRowCell::settle() {
 
 void GameRowCell::setGame(const std::string& name, const std::string& sub,
                           const std::string& yearText) {
-    if (name == shownName && sub == shownSub && yearText == shownYear)
-        return;
-    shownName = name;
-    shownSub = sub;
-    shownYear = yearText;
+    // setText ignores a text the label already has.
     nameLabel->setText(name);
     subLabel->setText(sub);
     yearLabel->setText(yearText);
@@ -274,6 +262,9 @@ void GameRowCell::applyColors() {
     yearLabel->setTextColor(muted);
     statusLabel->setTextColor(muted);
     downloadIcon->setTextColor(muted);
+    ringColor = themeColor("brls/highlight/color1");
+    groundColor = themeColor("brls/background");
+    emptyThumbColor = themeColor("equinox/card_inner");
 }
 
 void GameRowCell::willAppear(bool resetState) {
@@ -316,22 +307,20 @@ void GameRowCell::setCover(const std::string& path) {
         return;
     }
 
-    const unsigned ticket = coverTicket->load();
+    const unsigned wanted = coverTicket->load();
     ASYNC_RETAIN
-    brls::async([ASYNC_TOKEN, path, ticket, wanted = coverTicket]() {
-        int width = 0, height = 0;
-        std::shared_ptr<unsigned char> pixels;
-        if (wanted->load() == ticket) {
-            const int64_t started = emu::liblog::nowUs();
-            pixels = decodeCover(path, width, height);
+    brls::async([ASYNC_TOKEN, path, wanted, ticket = coverTicket]() {
+        const int64_t started = emu::liblog::nowUs();
+        DecodedImage image = decodeIfWanted(ticket, wanted, path, kCoverMinW, kCoverMinH);
+        if (image.pixels) {
             const int64_t took = emu::liblog::nowUs() - started;
             emu::liblog::covers.decoded++;
             emu::liblog::covers.decodeTotalUs += took;
             emu::liblog::raiseMax(emu::liblog::covers.decodeMaxUs, took);
         }
-        brls::sync([ASYNC_TOKEN, path, pixels, width, height]() {
+        brls::sync([ASYNC_TOKEN, path, image]() {
             ASYNC_RELEASE
-            applyCover(path, pixels, width, height);
+            applyCover(path, image.pixels, image.width, image.height);
         });
     });
 }
@@ -386,6 +375,14 @@ void GameRowCell::clearCover() {
 
 void GameRowCell::draw(NVGcontext* vg, float x, float y, float width,
                        float height, Style style, FrameContext* ctx) {
+    // Box::draw skips only leaf views out of sight, and a row is a Box: the
+    // window keeps rows above and below the screen, drawn for nothing.
+    for (Box* bounds = getParent(); bounds; bounds = bounds->getParent()) {
+        float top, right, bottom, left;
+        bounds->getCullingBounds(&top, &right, &bottom, &left);
+        if (y + height + kCullMargin < top || y - kCullMargin > bottom)
+            return;
+    }
     if (look == RowLook::Cartridge)
         drawCartridgeLook(vg, x, y, width);
     else if (look == RowLook::Thumb)
@@ -436,8 +433,7 @@ void GameRowCell::drawCartridgeLook(NVGcontext* vg, float x, float y,
     if (tex > 0)
         nvgImageSize(vg, tex, &texW, &texH);
     drawCartridge(vg, -kCartW / 2, -kCartH / 2, kCartW, kCartH, tex, texW,
-                  texH, kCartridgeBody, themeColor("brls/highlight/color1"),
-                  themeColor("brls/background"), focusAlpha.getValue());
+                  texH, kCartridgeBody, ringColor, groundColor, focusAlpha.getValue());
     nvgRestore(vg);
 }
 
@@ -451,7 +447,7 @@ void GameRowCell::drawThumb(NVGcontext* vg, float x, float y, float height) {
     if (texW <= 0 || texH <= 0) {
         nvgBeginPath(vg);
         nvgRoundedRect(vg, tx, ty, kThumbW, kThumbH, 3);
-        nvgFillColor(vg, themeColor("equinox/card_inner"));
+        nvgFillColor(vg, emptyThumbColor);
         nvgFill(vg);
         return;
     }
