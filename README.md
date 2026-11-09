@@ -80,7 +80,7 @@ Equinox can also run Super Nintendo games on the console itself, with
 
 1. On the home screen, open the **Add** card and pick **Super Nintendo**. Equinox
    downloads the emulator to `sdmc:/equinox/emulators/snes/`.
-2. Copy your own game files (`.sfc`, `.smc` or `.zip`) to `sdmc:/equinox/roms/snes/`.
+2. Copy your own game files (`.sfc`, `.smc`, `.zip` or `.7z`) to `sdmc:/equinox/roms/snes/`.
 3. Select the Super Nintendo card to see your games. Covers are fetched on their own.
 
 Saves and save states live in `sdmc:/equinox/saves/snes/` and `sdmc:/equinox/states/snes/`.

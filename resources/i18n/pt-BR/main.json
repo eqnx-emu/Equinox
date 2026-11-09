@@ -485,6 +485,8 @@
         "error_move": "Não deu para colocar o emulador no lugar. Confira o cartão SD.",
         "error_installed": "Não deu para gravar a versão do emulador. Confira o cartão SD.",
         "play": "Jogar",
+        "scanning": "Procurando jogos…",
+        "scan_done": "Busca concluída: {}",
         "rescan_short": "Procurar de novo",
         "empty_title": "Nenhum jogo ainda",
         "empty_body": "Coloque seus jogos ({}) nesta pasta do cartão SD:",

@@ -66,32 +66,33 @@ bool loadMeta(const std::string& path, GameMeta& out) {
     json_error_t error;
     json_t* root = json_loadb(text.data(), text.size(), 0, &error);
     if (!root) return false;
-    bool ok = false;
-    if (json_is_object(root) && integerField(root, "v") == 1) {
-        GameMeta meta;
-        const json_int_t size = integerField(root, "size");
-        meta.size = size < 0 ? 0 : static_cast<uint64_t>(size);
-        meta.mtime = integerField(root, "mtime");
-        const json_t* identified = json_object_get(root, "identified");
-        meta.identified = identified && json_is_true(identified);
-        meta.crc = static_cast<uint32_t>(std::strtoul(stringField(root, "crc").c_str(), nullptr, 16));
-        meta.canonical = stringField(root, "canonical");
-        meta.snap = partFrom(root, "snap");
-        meta.title = partFrom(root, "title");
-        meta.synopsis = partFrom(root, "synopsis");
-        meta.synopsisText = stringField(root, "synopsisText");
-        meta.synopsisLang = stringField(root, "synopsisLang");
-        out = std::move(meta);
-        ok = true;
-    }
+    const bool ok = integerField(root, "v") == 1 && metaFromJson(root, out);
     json_decref(root);
     return ok;
 }
 
-bool saveMeta(const std::string& path, const GameMeta& meta) {
+bool metaFromJson(const json_t* object, GameMeta& out) {
+    if (!json_is_object(object)) return false;
+    GameMeta meta;
+    const json_int_t size = integerField(object, "size");
+    meta.size = size < 0 ? 0 : static_cast<uint64_t>(size);
+    meta.mtime = integerField(object, "mtime");
+    const json_t* identified = json_object_get(object, "identified");
+    meta.identified = identified && json_is_true(identified);
+    meta.crc = static_cast<uint32_t>(std::strtoul(stringField(object, "crc").c_str(), nullptr, 16));
+    meta.canonical = stringField(object, "canonical");
+    meta.snap = partFrom(object, "snap");
+    meta.title = partFrom(object, "title");
+    meta.synopsis = partFrom(object, "synopsis");
+    meta.synopsisText = stringField(object, "synopsisText");
+    meta.synopsisLang = stringField(object, "synopsisLang");
+    out = std::move(meta);
+    return true;
+}
+
+json_t* metaToJson(const GameMeta& meta) {
     json_t* root = json_object();
-    if (!root) return false;
-    json_object_set_new(root, "v", json_integer(1));
+    if (!root) return nullptr;
     json_object_set_new(root, "size", json_integer(static_cast<json_int_t>(meta.size)));
     json_object_set_new(root, "mtime", json_integer(meta.mtime));
     json_object_set_new(root, "identified", json_boolean(meta.identified));
@@ -104,6 +105,13 @@ bool saveMeta(const std::string& path, const GameMeta& meta) {
     setPart(root, "synopsis", meta.synopsis);
     json_object_set_new(root, "synopsisText", json_string(meta.synopsisText.c_str()));
     json_object_set_new(root, "synopsisLang", json_string(meta.synopsisLang.c_str()));
+    return root;
+}
+
+bool saveMeta(const std::string& path, const GameMeta& meta) {
+    json_t* root = metaToJson(meta);
+    if (!root) return false;
+    json_object_set_new(root, "v", json_integer(1));
     char* dumped = json_dumps(root, JSON_COMPACT);
     json_decref(root);
     if (!dumped) return false;

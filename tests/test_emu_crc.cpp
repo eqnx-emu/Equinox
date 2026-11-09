@@ -14,6 +14,7 @@
 #include "emu/Console.hpp"
 #include "emu/PathUtf8.hpp"
 #include "emu/RomCrc.hpp"
+#include "sevenz_fixtures.hpp"
 
 namespace fs = std::filesystem;
 
@@ -207,4 +208,39 @@ TEST_CASE("missing or broken file") {
     put(d / "bad.zip", zip.substr(0, 40) + zip.substr(cdPos));
     CHECK_FALSE(crcFor(d / "bad.zip", crc, err));
     fs::remove_all(d);
+}
+
+static std::string asString(const std::vector<uint8_t>& bytes) {
+    return std::string(bytes.begin(), bytes.end());
+}
+
+TEST_CASE("7z: uses the first rom's stored crc") {
+    const fs::path file = tempDir() / "game.7z";
+    put(file, asString(kSevenZipRom));
+    uint32_t crc = 0;
+    std::string error;
+    REQUIRE(emu::romCrc32(emu::toUtf8(file), *emu::findConsole("snes"), crc, error));
+    CHECK(crc == crcOf(asString(romFixture())));
+}
+
+TEST_CASE("7z: a copier header is left out of the crc") {
+    const fs::path file = tempDir() / "headered.7z";
+    put(file, asString(kSevenZipHeadered));
+    uint32_t crc = 0;
+    std::string error;
+    REQUIRE(emu::romCrc32(emu::toUtf8(file), *emu::findConsole("snes"), crc, error));
+    CHECK(crc == crcOf(asString(romFixture())));
+}
+
+TEST_CASE("7z: no rom inside, and damaged") {
+    const fs::path none = tempDir() / "none.7z";
+    put(none, asString(kSevenZipNoRom));
+    uint32_t crc = 0;
+    std::string error;
+    CHECK_FALSE(emu::romCrc32(emu::toUtf8(none), *emu::findConsole("snes"), crc, error));
+    CHECK(error == "no rom inside the 7z");
+    const fs::path bad = tempDir() / "bad.7z";
+    put(bad, std::string(64, '7'));
+    CHECK_FALSE(emu::romCrc32(emu::toUtf8(bad), *emu::findConsole("snes"), crc, error));
+    CHECK(error == "7z is damaged or not supported");
 }

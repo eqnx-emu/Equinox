@@ -9,7 +9,7 @@ const std::vector<Console>& consoles() {
     static const std::vector<Console> all = {
         {"snes",
          "Super Nintendo",
-         {".sfc", ".smc", ".zip"},
+         {".sfc", ".smc", ".zip", ".7z"},
          "Nintendo - Super Nintendo Entertainment System",
          "luizfbalves/equinox-snes9x",
          1,

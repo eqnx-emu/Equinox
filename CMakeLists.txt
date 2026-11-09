@@ -81,7 +81,8 @@ file(GLOB MAIN_SRC CONFIGURE_DEPENDS
     app/src/streaming/switch/*.cpp
     app/src/views/*.cpp
     app/src/utils/*.cpp
-    app/src/utils/emu/*.cpp)
+    app/src/utils/emu/*.cpp
+    extern/lzma/*.c)
 
 if (PLATFORM_SWITCH)
     list(REMOVE_ITEM MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/app/src/streaming/audio/SDLAudioRenderer.cpp)
@@ -157,6 +158,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
         app/src/streaming/video/deko3d
         app/src/utils
         extern/CImg
+        extern/lzma
         ${MBEDTLS_INCLUDE_DIRS}
         ${APP_PLATFORM_INCLUDE})
 target_compile_options(${PROJECT_NAME} PRIVATE

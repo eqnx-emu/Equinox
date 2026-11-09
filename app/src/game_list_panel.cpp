@@ -9,9 +9,11 @@
 
 #include "Settings.hpp"
 #include "bold_label.hpp"
+#include "emu/LibraryLog.hpp"
 #include "library_widgets.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 using namespace brls;
 using namespace brls::literals;
@@ -33,8 +35,45 @@ class LibraryScroll : public ScrollingFrame {
     void recenterNextFrame() { updateScrollingOnNextFrame = true; }
 };
 
+// The rows stand at positions the panel works out, in no particular child
+// order, so moving between them asks the panel.
+class LibraryList : public Box {
+  public:
+    using NextRow = std::function<View*(View*, FocusDirection)>;
+    using DefaultRow = std::function<View*()>;
+
+    LibraryList(NextRow next, DefaultRow first)
+        : Box(Axis::COLUMN), nextRow(std::move(next)), defaultRow(std::move(first)) {}
+
+    View* getNextFocus(FocusDirection direction, View* currentView) override {
+        View* next = nullptr;
+        if (direction == FocusDirection::UP || direction == FocusDirection::DOWN)
+            next = nextRow(currentView, direction);
+        next = getParentNavigationDecision(this, next, direction);
+        if (!next && hasParent())
+            next = getParent()->getNextFocus(direction, this);
+        return next;
+    }
+
+    View* getDefaultFocus() override {
+        return getVisibility() == Visibility::VISIBLE ? defaultRow() : nullptr;
+    }
+
+  private:
+    NextRow nextRow;
+    DefaultRow defaultRow;
+};
+
 namespace {
 constexpr float kPanelWidth = 384;
+// Enough to fill the column twice over, so the next row is always ready.
+constexpr size_t kPoolSize = 24;
+constexpr float kRowStep = GameRowCell::RowHeight + 2;
+constexpr float kCartridgeExtra = GameRowCell::CartridgeHeight - GameRowCell::RowHeight;
+constexpr float kListTop = 4;
+constexpr float kListSide = 6;
+constexpr float kRowWidth = kPanelWidth - 16 - 24 - 2 * kListSide;
+constexpr size_t kNoPlace = GameRowCell::NoGame;
 constexpr float kControl = 44;
 constexpr float kRowHeight = 48;
 constexpr float kRadius = 10;
@@ -104,6 +143,26 @@ Button* secondaryButton(const std::string& caption, std::function<void()> action
     });
     return button;
 }
+
+namespace liblog = emu::liblog;
+
+constexpr int64_t kSecondUs = 1000000;
+// Under 25 fps.
+constexpr int64_t kSlowFrameUs = 40000;
+constexpr int kSlowLinesPerSecond = 5;
+constexpr int64_t kIdleSummaryUs = 10 * kSecondUs;
+// The cartridge can push the middle of the column this many rows away.
+constexpr long kOffWindowMargin = 4;
+
+// One list is on screen at a time, and only the UI thread touches this.
+struct PanelStats {
+    int64_t lastDraw = 0, tickStart = 0;
+    int frames = 0, slow = 0, rebinds = 0, moves = 0;
+    int64_t sumGap = 0, maxGap = 0, maxWindow = 0, maxDraw = 0;
+    int64_t bindTotal = 0, maxBind = 0;
+    int frameRebinds = 0, prevRebinds = 0;
+    int64_t prevWindow = 0, prevDraw = 0;
+} stats;
 
 std::string sortName(int sort) {
     switch (sort) {
@@ -226,8 +285,18 @@ GameListPanel::GameListPanel(const emu::Console& console)
     addView(noneLabel);
 
     scroll = new LibraryScroll();
-    list = new Box(Axis::COLUMN);
-    list->setPadding(4, 6, 4, 6);
+    list = new LibraryList(
+        [this](View* from, FocusDirection direction) { return rowNextTo(from, direction); },
+        [this] { return defaultRow(); });
+    for (size_t i = 0; i < kPoolSize; i++) {
+        auto* cell = new GameRowCell();
+        cell->detach();
+        cell->setWidth(kRowWidth);
+        cell->setVisibility(Visibility::GONE);
+        cell->onFocused = [this, cell] { focusedGame(cell->index()); };
+        list->addView(cell);
+        pool.push_back(cell);
+    }
     scroll->setContentView(list);
     addView(scroll);
 
@@ -352,13 +421,20 @@ void GameListPanel::applyColors() {
 void GameListPanel::applyCount() {
     const size_t total = items.size();
     std::string text;
-    if (shown.size() != total)
+    if (scanning)
+        text = "emu/scanning"_i18n;
+    else if (shown.size() != total)
         text = brls::getStr("library/list/count_filtered", shown.size(), total);
     else if (total == 1)
         text = "library/list/count_one"_i18n;
     else
         text = brls::getStr("library/list/count_many", total);
     countLabel->setText(text);
+}
+
+void GameListPanel::setScanning(bool on) {
+    scanning = on;
+    applyCount();
 }
 
 void GameListPanel::applyQuery() {
@@ -396,78 +472,108 @@ void GameListPanel::toggleMode() {
     Settings::instance().save();
 }
 
+emu::PreparedOrder GameListPanel::orderRequest() const {
+    emu::PreparedOrder request;
+    request.query = query;
+    request.sort = static_cast<emu::LibrarySort>(sort);
+    return request;
+}
+
 void GameListPanel::setItems(std::vector<emu::LibraryItem> nextItems,
-                             std::vector<GameRowCell*> nextCells) {
+                             emu::PreparedOrder prepared) {
+    const int64_t started = liblog::nowUs();
     // The old rows are about to go; the focus waits on the search field.
     if (focusInList())
         Application::giveFocus(searchBox);
-    list->clearViews();
+    for (GameRowCell* cell : pool)
+        cell->release();
+    live.clear();
     const bool hadCurrent = current.has_value();
     current.reset();
     shown.clear();
 
     items = std::move(nextItems);
-    cells = std::move(nextCells);
-    for (size_t i = 0; i < cells.size(); i++) {
-        GameRowCell* cell = cells[i];
-        cell->setMarginBottom(2);
-        cell->onFocused = [this, i] { focusedGame(i); };
-        list->addView(cell);
-    }
-    applyOrder(true);
+    const bool stillValid = prepared.query == query &&
+                            prepared.sort == static_cast<emu::LibrarySort>(sort);
+    applyOrder(true, stillValid ? &prepared.shown : nullptr);
     // Nothing to pick in the new set; applyOrder only reports a first result.
     if (hadCurrent && !current && onFocusGame)
         onFocusGame(std::nullopt);
+    liblog::note("setItems: {} games, {} shown, prepared order {}, {} ms", items.size(),
+                 shown.size(), stillValid ? "used" : "discarded",
+                 (liblog::nowUs() - started) / 1000);
 }
 
 void GameListPanel::setItem(size_t index, emu::LibraryItem item) {
     if (index >= items.size())
         return;
+    const emu::LibraryItem& old = items[index];
+    const bool sameOrder =
+        old.name == item.name && old.year == item.year && old.genre == item.genre;
     items[index] = std::move(item);
+    refreshRow(index);
     // Only the data changed: the list stays where the user left it.
-    applyOrder(false);
+    if (!sameOrder)
+        applyOrder(false);
 }
 
-void GameListPanel::applyOrder(bool resetScroll) {
+void GameListPanel::refreshRow(size_t index) {
+    for (GameRowCell* cell : live)
+        if (cell->index() == index && bindRow)
+            bindRow(*cell, index);
+}
+
+void GameListPanel::refreshRows() {
+    if (!bindRow)
+        return;
+    for (GameRowCell* cell : live)
+        bindRow(*cell, cell->index());
+}
+
+void GameListPanel::applyOrder(bool resetScroll, std::vector<size_t>* ready) {
     const std::optional<size_t> focused = focusedIndex();
-    shown = emu::libraryOrder(items, query, static_cast<emu::LibrarySort>(sort));
-
-    std::vector<bool> visible(cells.size(), false);
-    for (size_t index : shown)
-        visible[index] = true;
-
-    list->clearViews(false);
-    for (size_t index : shown) {
-        cells[index]->setVisibility(Visibility::VISIBLE);
-        list->addView(cells[index]);
+    const int64_t started = liblog::nowUs();
+    if (ready) {
+        shown = std::move(*ready);
+    } else {
+        shown = emu::libraryOrder(items, query, static_cast<emu::LibrarySort>(sort));
+        liblog::note("order on UI thread: {} of {} games, sort {}, query '{}', {} ms",
+                     shown.size(), items.size(), sort, query,
+                     (liblog::nowUs() - started) / 1000);
     }
-    for (size_t i = 0; i < cells.size(); i++) {
-        if (visible[i])
-            continue;
-        cells[i]->setVisibility(Visibility::GONE);
-        list->addView(cells[i]);
-    }
+
+    shownAt.assign(items.size(), kNoPlace);
+    for (size_t place = 0; place < shown.size(); place++)
+        shownAt[shown[place]] = place;
+    const auto visible = [&](size_t index) { return shownAt[index] != kNoPlace; };
 
     const bool none = shown.empty() && !query.empty();
     noneLabel->setText(brls::getStr("library/list/none", query));
     noneLabel->setVisibility(none ? Visibility::VISIBLE : Visibility::GONE);
     applyCount();
 
+    const bool focusLeaves = focused && !visible(*focused);
+    if (resetScroll && !focused)
+        scroll->setContentOffsetY(0, false);
+    windowDirty = true;
+    fillWindow(focusLeaves ? 0 : anchorPlace());
+
     // The game that leaves the filter hands the focus to the first result.
-    if (focused && !visible[*focused]) {
-        if (!shown.empty())
-            Application::giveFocus(cells[shown.front()]);
+    if (focusLeaves) {
+        if (GameRowCell* first = rowAt(0))
+            Application::giveFocus(first);
         else
             Application::giveFocus(searchBox);
     }
     // Focus on the search field: the current game still follows the filter.
     std::optional<size_t> next = current;
-    if (next && !visible[*next])
+    if (next && !visible(*next))
         next.reset();
     if (!next && !shown.empty())
         next = shown.front();
     setCurrent(next, false);
     applyLooks(false);
+    placeRows();
 
     if (focusInList())
         scroll->recenterNextFrame();
@@ -476,14 +582,234 @@ void GameListPanel::applyOrder(bool resetScroll) {
     applyBatch();
 }
 
+RowLook GameListPanel::lookOf(size_t index) const {
+    if (mode != 0)
+        return RowLook::Name;
+    return current && *current == index ? RowLook::Cartridge : RowLook::Thumb;
+}
+
 void GameListPanel::applyLooks(bool animate) {
-    for (size_t i = 0; i < cells.size(); i++) {
-        RowLook look = RowLook::Name;
-        if (mode == 0)
-            look = current && *current == i ? RowLook::Cartridge : RowLook::Thumb;
-        const bool visible = cells[i]->getVisibility() == Visibility::VISIBLE;
-        cells[i]->setLook(look, animate && visible);
+    for (GameRowCell* cell : live)
+        cell->setLook(lookOf(cell->index()), animate);
+}
+
+size_t GameListPanel::anchorPlace() {
+    if (shown.empty())
+        return 0;
+    if (const auto focused = focusedIndex(); focused && shownAt[*focused] != kNoPlace)
+        return shownAt[*focused];
+    // Dragged by touch, nothing is focused: follow the middle of the column.
+    float middle = scroll->getContentOffsetY() + scroll->getHeight() / 2 - kListTop;
+    if (mode == 0 && current && shownAt[*current] != kNoPlace &&
+        middle > shownAt[*current] * kRowStep + kCartridgeExtra)
+        middle -= kCartridgeExtra;
+    if (middle <= 0)
+        return 0;
+    return std::min(static_cast<size_t>(middle / kRowStep), shown.size() - 1);
+}
+
+// Rows that still belong in the window stay as they are, the focused one
+// among them; only the ones that fell out take another game.
+void GameListPanel::fillWindow(size_t anchor) {
+    const size_t count = std::min(kPoolSize, shown.size());
+    size_t start = anchor > kPoolSize / 2 ? anchor - kPoolSize / 2 : 0;
+    start = std::min(start, shown.size() - count);
+    if (!windowDirty && start == windowStart && live.size() == count)
+        return;
+    windowDirty = false;
+    windowStart = start;
+
+    live.assign(count, nullptr);
+    std::vector<GameRowCell*> spare;
+    for (GameRowCell* cell : pool) {
+        const size_t index = cell->index();
+        const size_t place = index < shownAt.size() ? shownAt[index] : kNoPlace;
+        if (place != kNoPlace && place >= start && place < start + count) {
+            if (live[place - start])
+                liblog::bug("two rows hold game {} at place {}", index, place);
+            live[place - start] = cell;
+        } else {
+            spare.push_back(cell);
+        }
     }
+    for (size_t slot = 0; slot < count; slot++) {
+        if (live[slot])
+            continue;
+        GameRowCell* cell = spare.back();
+        spare.pop_back();
+        const size_t index = shown[start + slot];
+        cell->rebind(index, lookOf(index));
+        if (bindRow) {
+            const int64_t before = liblog::nowUs();
+            bindRow(*cell, index);
+            const int64_t took = liblog::nowUs() - before;
+            stats.bindTotal += took;
+            stats.maxBind = std::max(stats.maxBind, took);
+        }
+        stats.rebinds++;
+        stats.frameRebinds++;
+        live[slot] = cell;
+    }
+    for (GameRowCell* cell : spare)
+        if (cell->index() != GameRowCell::NoGame)
+            cell->release();
+    checkRows();
+}
+
+void GameListPanel::checkRows() const {
+    if (shownAt.size() != items.size())
+        liblog::bug("shownAt has {} entries for {} items", shownAt.size(), items.size());
+    if (live.size() != std::min(kPoolSize, shown.size()) ||
+        windowStart + live.size() > shown.size())
+        liblog::bug("window start {} with {} rows for {} shown", windowStart, live.size(),
+                    shown.size());
+    for (size_t slot = 0; slot < live.size() && windowStart + slot < shown.size(); slot++) {
+        if (!live[slot])
+            liblog::bug("empty row at slot {} (start {})", slot, windowStart);
+        else if (live[slot]->index() != shown[windowStart + slot])
+            liblog::bug("slot {} holds game {} but place {} is game {}", slot,
+                        live[slot]->index(), windowStart + slot, shown[windowStart + slot]);
+    }
+    if (current && *current >= items.size())
+        liblog::bug("current game {} of {}", *current, items.size());
+}
+
+// Not from fillWindow: a filter hides the focused row for a moment there.
+void GameListPanel::checkFocusAndView() const {
+    auto* cell = dynamic_cast<GameRowCell*>(Application::getCurrentFocus());
+    if (cell && std::find(pool.begin(), pool.end(), cell) != pool.end()) {
+        const size_t index = cell->index();
+        if (index == GameRowCell::NoGame)
+            liblog::bug("focus is on a released row");
+        else if (index >= shownAt.size() || shownAt[index] == kNoPlace)
+            liblog::bug("focus is on game {}, which is not shown", index);
+        else if (!rowAt(shownAt[index]))
+            liblog::bug("focused game {} at place {} is outside the window {}+{}", index,
+                        shownAt[index], windowStart, live.size());
+    }
+    if (live.empty())
+        return;
+    const long middle = static_cast<long>(
+        (scroll->getContentOffsetY() + scroll->getHeight() / 2 - kListTop) / kRowStep);
+    const long first = static_cast<long>(windowStart);
+    const long last = first + static_cast<long>(live.size());
+    if (middle + kOffWindowMargin < first || middle > last + kOffWindowMargin)
+        liblog::bug("blank list: screen is at row {}, rows exist for {}..{}", middle, first,
+                    last);
+}
+
+// A frame's duration is only known when the next one starts, so a slow gap
+// is reported with the work of the frame before it.
+void GameListPanel::measureFrame(int64_t start, int64_t windowUs, int64_t drawUs) {
+    const int64_t gap = start - stats.lastDraw;
+    if (gap > kSecondUs) {
+        // Off screen until now: this gap says nothing about the list.
+        stats = PanelStats{};
+        stats.lastDraw = stats.tickStart = start;
+        return;
+    }
+    stats.lastDraw = start;
+    stats.frames++;
+    stats.sumGap += gap;
+    stats.maxGap = std::max(stats.maxGap, gap);
+    stats.maxWindow = std::max(stats.maxWindow, windowUs);
+    stats.maxDraw = std::max(stats.maxDraw, drawUs);
+    const long place = current && *current < shownAt.size() && shownAt[*current] != kNoPlace
+                           ? static_cast<long>(shownAt[*current])
+                           : -1;
+    if (gap > kSlowFrameUs && stats.slow++ < kSlowLinesPerSecond)
+        liblog::note("slow frame {:.1f} ms: window {} us, panel draw {} us, {} rebinds, "
+                     "place {}/{}",
+                     gap / 1000.0, stats.prevWindow, stats.prevDraw, stats.prevRebinds, place,
+                     shown.size());
+    stats.prevWindow = windowUs;
+    stats.prevDraw = drawUs;
+    stats.prevRebinds = stats.frameRebinds;
+    stats.frameRebinds = 0;
+
+    const bool active = stats.rebinds > 0 || stats.moves > 0 || stats.slow > 0;
+    if (start - stats.tickStart < (active ? kSecondUs : kIdleSummaryUs))
+        return;
+
+    checkFocusAndView();
+    const int decoded = liblog::covers.decoded.exchange(0);
+    const int64_t decodeTotal = liblog::covers.decodeTotalUs.exchange(0);
+    liblog::note("fps {:.0f} (worst {:.1f} ms, {} slow) | moves {} rebinds {} bind avg {} max {} us "
+                 "| window max {} us, panel draw max {} us | covers asked {} cached {} decoded {} "
+                 "(avg {} ms, max {} ms) dropped {} upload max {} us | place {}/{} window {} | "
+                 "ram {} MB",
+                 stats.frames * 1e6 / stats.sumGap, stats.maxGap / 1000.0, stats.slow, stats.moves,
+                 stats.rebinds, stats.rebinds ? stats.bindTotal / stats.rebinds : 0, stats.maxBind,
+                 stats.maxWindow, stats.maxDraw, liblog::covers.asked.exchange(0),
+                 liblog::covers.cacheHits.exchange(0), decoded,
+                 decoded ? decodeTotal / decoded / 1000 : 0,
+                 liblog::covers.decodeMaxUs.exchange(0) / 1000, liblog::covers.dropped.exchange(0),
+                 liblog::covers.uploadMaxUs.exchange(0), place, shown.size(), windowStart,
+                 liblog::usedMemoryMb());
+    liblog::flushSoon();
+    const int64_t lastDraw = stats.lastDraw;
+    stats = PanelStats{};
+    stats.lastDraw = lastDraw;
+    stats.tickStart = start;
+}
+
+// Every frame while the cartridge eases, the rows under it follow.
+void GameListPanel::placeRows() {
+    const std::optional<size_t> cartridge =
+        mode == 0 && current && shownAt[*current] != kNoPlace
+            ? std::optional<size_t>(shownAt[*current])
+            : std::nullopt;
+    float y = kListTop + windowStart * kRowStep;
+    if (cartridge && *cartridge < windowStart)
+        y += kCartridgeExtra;
+    for (GameRowCell* cell : live) {
+        cell->setDetachedPosition(kListSide, y);
+        y += cell->currentHeight() + (kRowStep - GameRowCell::RowHeight);
+    }
+    const size_t after = windowStart + live.size();
+    y += (shown.size() - after) * kRowStep + kListTop;
+    if (cartridge && *cartridge >= after)
+        y += kCartridgeExtra;
+    if (std::abs(list->getHeight() - y) > 0.5f)
+        list->setHeight(y);
+}
+
+GameRowCell* GameListPanel::rowAt(size_t place) const {
+    if (place < windowStart || place - windowStart >= live.size())
+        return nullptr;
+    return live[place - windowStart];
+}
+
+View* GameListPanel::rowNextTo(View* from, FocusDirection direction) const {
+    auto* cell = dynamic_cast<GameRowCell*>(from);
+    if (!cell || cell->index() >= shownAt.size() || shownAt[cell->index()] == kNoPlace)
+        return nullptr;
+    const size_t place = shownAt[cell->index()];
+    const bool up = direction == FocusDirection::UP;
+    if (up ? place == 0 : place + 1 >= shown.size())
+        return nullptr;
+    GameRowCell* next = rowAt(up ? place - 1 : place + 1);
+    if (!next)
+        liblog::bug("navigation stuck at place {}: next row is outside the window {}+{}", place,
+                    windowStart, live.size());
+    return next;
+}
+
+View* GameListPanel::defaultRow() const {
+    if (current && *current < shownAt.size())
+        if (GameRowCell* cell = rowAt(shownAt[*current]))
+            return cell;
+    return live.empty() ? nullptr : live[live.size() / 2];
+}
+
+void GameListPanel::draw(NVGcontext* vg, float x, float y, float width, float height,
+                         Style style, FrameContext* ctx) {
+    const int64_t start = liblog::nowUs();
+    fillWindow(anchorPlace());
+    placeRows();
+    const int64_t placed = liblog::nowUs();
+    Box::draw(vg, x, y, width, height, style, ctx);
+    measureFrame(start, placed - start, liblog::nowUs() - placed);
 }
 
 // The one place where the current game changes; onFocusGame fires only then.
@@ -498,21 +824,21 @@ void GameListPanel::setCurrent(std::optional<size_t> next, bool animate) {
 }
 
 void GameListPanel::focusedGame(size_t index) {
+    stats.moves++;
     setCurrent(index, true);
 }
 
 void GameListPanel::focusGame(size_t index) {
-    GameRowCell* target = nullptr;
-    if (index < cells.size() && cells[index]->getVisibility() == Visibility::VISIBLE)
-        target = cells[index];
-    else if (!shown.empty())
-        target = cells[shown.front()];
-
-    if (!target) {
+    if (shown.empty()) {
         Application::giveFocus(searchBox);
         setCurrent(std::nullopt, true);
         return;
     }
+    const size_t place =
+        index < shownAt.size() && shownAt[index] != kNoPlace ? shownAt[index] : 0;
+    fillWindow(place);
+    placeRows();
+    GameRowCell* target = rowAt(place);
     Application::giveFocus(target);
     // Already focused, or the focus not yet on screen: the cell may not report it.
     setCurrent(target->index(), true);
@@ -537,7 +863,8 @@ bool GameListPanel::focusInList() const {
 
 std::optional<size_t> GameListPanel::focusedIndex() const {
     auto* cell = dynamic_cast<GameRowCell*>(Application::getCurrentFocus());
-    if (!cell || cell->index() >= cells.size() || cells[cell->index()] != cell)
+    if (!cell || cell->index() >= items.size() ||
+        std::find(pool.begin(), pool.end(), cell) == pool.end())
         return std::nullopt;
     return cell->index();
 }

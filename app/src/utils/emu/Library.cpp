@@ -86,7 +86,13 @@ std::vector<size_t> libraryOrder(const std::vector<LibraryItem>& items, const st
     for (size_t i = 0; i < items.size(); ++i)
         if (q.empty() || foldForSearch(items[i].name).find(q) != std::string::npos) idx.push_back(i);
 
-    auto byName = [&](size_t a, size_t b) { return nameKey(items[a].name) < nameKey(items[b].name); };
+    // Worked out once: a sort compares each game many times.
+    std::vector<std::string> names(items.size()), genres(items.size());
+    for (size_t i : idx) {
+        names[i] = nameKey(items[i].name);
+        if (sort == LibrarySort::Genre) genres[i] = foldForSearch(items[i].genre);
+    }
+    auto byName = [&](size_t a, size_t b) { return names[a] < names[b]; };
     std::stable_sort(idx.begin(), idx.end(), [&](size_t a, size_t b) {
         switch (sort) {
             case LibrarySort::NameAsc:
@@ -103,8 +109,7 @@ std::vector<size_t> libraryOrder(const std::vector<LibraryItem>& items, const st
             case LibrarySort::Genre: {
                 const bool ea = items[a].genre.empty(), eb = items[b].genre.empty();
                 if (ea != eb) return eb;
-                const std::string ga = foldForSearch(items[a].genre), gb = foldForSearch(items[b].genre);
-                if (ga != gb) return ga < gb;
+                if (genres[a] != genres[b]) return genres[a] < genres[b];
                 return byName(a, b);
             }
         }

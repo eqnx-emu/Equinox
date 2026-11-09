@@ -27,7 +27,7 @@ TEST_CASE("console lookup") {
     REQUIRE(emu::findConsole("snes") != nullptr);
     const emu::Console* snes = emu::findConsole("snes");
     CHECK(snes->name == "Super Nintendo");
-    CHECK(snes->extensions == std::vector<std::string>{".sfc", ".smc", ".zip"});
+    CHECK(snes->extensions == std::vector<std::string>{".sfc", ".smc", ".zip", ".7z"});
     CHECK(snes->libretroSystem == "Nintendo - Super Nintendo Entertainment System");
     CHECK(snes->repo == "luizfbalves/equinox-snes9x");
     CHECK(snes->protocol == 1);

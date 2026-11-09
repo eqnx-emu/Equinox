@@ -141,12 +141,16 @@ void ConsoleCard::refresh() {
     brls::async([ASYNC_TOKEN, console] {
         const emu::ConsolePaths paths = emu::pathsFor(*console);
         auto found = emu::readInstalled(paths.installed);
-        const int count = (int)emu::scanRoms(paths.roms, *console).size();
+        // The last count the shelf saved: walking the folder here would make
+        // every start pay for a library nobody opened yet.
+        const int count = emu::readRomCount(paths);
         brls::sync([ASYNC_TOKEN, found, count] {
             ASYNC_RELEASE
             installed = found;
-            games = count;
-            lastCounts()[consoleRef.slug] = count;
+            if (count >= 0) {
+                games = count;
+                lastCounts()[consoleRef.slug] = count;
+            }
             update();
         });
     });
@@ -200,7 +204,7 @@ void ConsoleCard::update() {
     statusDot->setBackgroundColor(color);
     if (runnerAction == emu::RunnerAction::UpToDate) {
         status->setTextColor(themeColor("equinox/muted"));
-        status->setText(games < 0 ? std::string("…") : gamesText(games));
+        status->setText(games < 0 ? std::string() : gamesText(games));
     } else {
         status->setTextColor(color);
         status->setText(statusLine);

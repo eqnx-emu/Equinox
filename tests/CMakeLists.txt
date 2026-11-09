@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.13)
-project(moonlight_tests CXX)
+project(moonlight_tests C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -95,13 +95,17 @@ find_library(Z_LIB z)
 if(NOT Z_LIB)
     message(FATAL_ERROR "zlib not found (needed by test_emu_crc)")
 endif()
+file(GLOB LZMA_SRC CONFIGURE_DEPENDS "${MOONLIGHT_ROOT}/extern/lzma/*.c")
 add_executable(test_emu_crc
     test_emu_crc.cpp
     "${MOONLIGHT_ROOT}/app/src/utils/emu/RomCrc.cpp"
-    "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp")
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/SevenZip.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp"
+    ${LZMA_SRC})
 target_include_directories(test_emu_crc PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
-    "${MOONLIGHT_ROOT}/extern")
+    "${MOONLIGHT_ROOT}/extern"
+    "${MOONLIGHT_ROOT}/extern/lzma")
 target_link_libraries(test_emu_crc PRIVATE ${Z_LIB})
 
 add_executable(test_emu_gamedb
@@ -120,6 +124,19 @@ target_include_directories(test_emu_meta PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
     "${MOONLIGHT_ROOT}/extern")
 target_link_libraries(test_emu_meta PRIVATE ${JANSSON_LIB})
+
+add_executable(test_emu_library_index
+    test_emu_library_index.cpp
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/LibraryIndex.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/GameMeta.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/RomScan.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/CoverStore.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/CoverName.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp")
+target_include_directories(test_emu_library_index PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
+target_link_libraries(test_emu_library_index PRIVATE ${JANSSON_LIB})
 
 add_executable(test_emu_screenscraper
     test_emu_screenscraper.cpp

@@ -5,6 +5,8 @@
 
 #include "emu/Console.hpp"
 
+struct json_t;
+
 namespace emu {
 
 enum class PartState { Unknown, Ok, Missing, Skipped };
@@ -25,6 +27,10 @@ std::string metaPath(const ConsolePaths& paths, const std::string& title);  // <
 bool loadMeta(const std::string& path, GameMeta& out);
 // Writes <path>.part, then swaps it in with replaceFile.
 bool saveMeta(const std::string& path, const GameMeta& meta);
+
+// The fields of a meta as JSON, for files that carry many of them. Owned by the caller.
+json_t* metaToJson(const GameMeta& meta);
+bool metaFromJson(const json_t* object, GameMeta& out);
 
 bool romStat(const std::string& romPath, uint64_t& size, int64_t& mtime);
 // The data still describes the ROM that is on the card.

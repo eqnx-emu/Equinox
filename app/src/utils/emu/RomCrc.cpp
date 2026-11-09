@@ -1,5 +1,6 @@
 #include "emu/RomCrc.hpp"
 #include "emu/PathUtf8.hpp"
+#include "emu/SevenZip.hpp"
 
 #include <zlib.h>
 
@@ -13,6 +14,10 @@ namespace {
 
 constexpr size_t kChunk = 64 * 1024;
 constexpr uint64_t kCopierHeader = 512;
+// The runner's limits: bigger archives could not be played anyway.
+constexpr uint64_t kMaxSevenZipBytes = 16u * 1024 * 1024;
+constexpr uint64_t kMaxSevenZipRom = 8u * 1024 * 1024;
+constexpr uint64_t kMaxSevenZipBlock = 32u * 1024 * 1024;
 
 std::string lower(std::string s) {
     for (char& c : s)
@@ -51,7 +56,7 @@ bool acceptedExtension(const std::string& name, const Console& console) {
     size_t dot = name.rfind('.');
     if (dot == std::string::npos) return false;
     std::string ext = lower(name.substr(dot));
-    if (ext == ".zip") return false;
+    if (ext == ".zip" || ext == ".7z") return false;
     return std::find(console.extensions.begin(), console.extensions.end(), ext) !=
            console.extensions.end();
 }
@@ -207,6 +212,43 @@ bool crcOfZipEntry(std::ifstream& f, const ZipEntry& e, uint64_t fileSize, CrcSi
     return true;
 }
 
+bool crcOfSevenZip(std::ifstream& f, uint64_t fileSize, const Console& console, uint32_t& crc,
+                   std::string& error) {
+    if (fileSize > kMaxSevenZipBytes) {
+        error = "7z is too big";
+        return false;
+    }
+    std::vector<unsigned char> archive(static_cast<size_t>(fileSize));
+    if (fileSize > 0 && !readAt(f, 0, archive.data(), archive.size())) {
+        error = "cannot read 7z";
+        return false;
+    }
+    const auto isRom = [&](const std::string& name) { return acceptedExtension(name, console); };
+    const auto fail = [&](sevenz::Status status) {
+        error = status == sevenz::Status::NoMatch  ? "no rom inside the 7z"
+                : status == sevenz::Status::TooBig ? "7z is too big"
+                                                   : "7z is damaged or not supported";
+        return false;
+    };
+
+    sevenz::Found found;
+    sevenz::Status status = sevenz::firstMatching(archive.data(), archive.size(), isRom,
+                                                  kMaxSevenZipRom, kMaxSevenZipBlock, false, found);
+    if (status != sevenz::Status::Ok) return fail(status);
+    if (found.hasCrc && !hasCopierHeader(found.size)) {
+        crc = found.crc;
+        return true;
+    }
+    status = sevenz::firstMatching(archive.data(), archive.size(), isRom, kMaxSevenZipRom,
+                                   kMaxSevenZipBlock, true, found);
+    if (status != sevenz::Status::Ok) return fail(status);
+    CrcSink sink;
+    if (hasCopierHeader(found.size)) sink.skip = kCopierHeader;
+    sink.feed(found.bytes.data(), found.bytes.size());
+    crc = static_cast<uint32_t>(sink.value);
+    return true;
+}
+
 bool compute(const std::string& path, const Console& console, uint32_t& crc, std::string& error) {
     std::ifstream f(fromUtf8(path), std::ios::binary);
     if (!f) {
@@ -222,7 +264,9 @@ bool compute(const std::string& path, const Console& console, uint32_t& crc, std
     uint64_t fileSize = static_cast<uint64_t>(end);
 
     size_t dot = path.rfind('.');
-    bool isZip = dot != std::string::npos && lower(path.substr(dot)) == ".zip";
+    const std::string ext = dot == std::string::npos ? "" : lower(path.substr(dot));
+    if (ext == ".7z") return crcOfSevenZip(f, fileSize, console, crc, error);
+    bool isZip = ext == ".zip";
 
     CrcSink sink;
     if (!isZip) {
