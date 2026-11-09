@@ -59,6 +59,32 @@ void GameDataQueue::adoptRunning() {
     total_ = done_ + active_.size();
 }
 
+// After another console's stop: bad login, quota and a full card hold back
+// this console's tasks too, and the service sends no event for those.
+void GameDataQueue::dropHeld() {
+    DownloadService& service = DownloadService::instance();
+    std::set<std::string> live;
+    for (const emu::DlTask& task : service.snapshot()) {
+        if (task.kind != emu::DlKind::GameData || task.group != console_->slug) continue;
+        if (task.state != emu::DlState::Queued && task.state != emu::DlState::Running) continue;
+        if (!service.blocked(task)) live.insert(task.id);
+    }
+    bool dropped = false;
+    for (auto it = active_.begin(); it != active_.end();) {
+        if (live.count(*it)) {
+            ++it;
+            continue;
+        }
+        if (currentId_ == *it) currentId_.reset();
+        it = active_.erase(it);
+        dropped = true;
+    }
+    if (!dropped) return;
+    total_ = active_.empty() ? 0 : done_ + active_.size();
+    if (active_.empty()) done_ = 0;
+    if (onAdvanced) onAdvanced();
+}
+
 void GameDataQueue::setGames(std::vector<std::string> fileNames) {
     names_ = std::move(fileNames);
     indexByName_.clear();
@@ -114,7 +140,10 @@ void GameDataQueue::finishOne(const std::string& id) {
 }
 
 void GameDataQueue::handle(const DlEvent& event) {
-    if (event.id.rfind(prefix_, 0) != 0) return;
+    if (event.id.rfind(prefix_, 0) != 0) {
+        if (event.id.rfind("gamedata:", 0) == 0 && stoppedAll(event.result)) dropHeld();
+        return;
+    }
     if (!active_.count(event.id)) {
         // Started without this view asking, such as after new credentials.
         if (event.state != emu::DlState::Running) return;
@@ -134,7 +163,8 @@ void GameDataQueue::handle(const DlEvent& event) {
     const bool needsUser = stoppedAll(event.result) || event.state == emu::DlState::Failed;
     if (event.state == emu::DlState::Queued && !needsUser) {
         // Will run again: a retry after a transient failure, or a suspend.
-        if (currentId_ == event.id) currentId_.reset();
+        if (currentId_ != event.id) return;
+        currentId_.reset();
         if (onAdvanced) onAdvanced();
         return;
     }

@@ -59,6 +59,7 @@ class GameDataQueue {
 
   private:
     void adoptRunning();
+    void dropHeld();
     void handle(const DlEvent& event);
     void finishOne(const std::string& id);
     std::optional<size_t> indexOf(const std::string& id) const;

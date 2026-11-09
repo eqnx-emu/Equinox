@@ -16,6 +16,7 @@
 #include <curl/curl.h>
 #include <jansson.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
@@ -489,7 +490,12 @@ emu::DlResult DownloadService::runGameData(const emu::DlTask& task, DlContext& c
     if (!console || !emu::romFileUsable(rom.path)) return emu::DlResult::Gone;
 
     const std::shared_ptr<const emu::GameDb> db = workerGameDb(*console);
-    const emu::GameDataRequest request{console, emu::pathsFor(*console), rom, db.get(), ssConfig()};
+    // Only a task listing the host is held back by a block on it, so only such
+    // a task may talk to ScreenScraper. The empty config skips the synopsis.
+    const bool usesSs = std::find(task.hosts.begin(), task.hosts.end(),
+                                  emu::kHostScreenScraper) != task.hosts.end();
+    const emu::GameDataRequest request{console, emu::pathsFor(*console), rom, db.get(),
+                                       usesSs ? ssConfig() : emu::SsConfig{}};
     emu::HttpDataTransport transport(context.stop);
     emu::DataOutcome outcome =
         emu::fetchGameData(request, transport, [&context](emu::DataStep step) {
