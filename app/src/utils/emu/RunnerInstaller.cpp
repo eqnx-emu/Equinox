@@ -16,11 +16,13 @@ namespace fs = std::filesystem;
 
 const long MANIFEST_TIMEOUT = 15;
 
-// Removes the .part: its bytes are no use to the next attempt.
+// Removes the .part and its control file: its bytes are no use to the next
+// attempt.
 InstallResult fail(const fs::path& part, const Manifest& manifest, RunnerError code,
                    const std::string& error) {
     std::error_code ec;
     fs::remove(part, ec);
+    removeResume(toUtf8(part));
     return {false, error, manifest, false, code};
 }
 

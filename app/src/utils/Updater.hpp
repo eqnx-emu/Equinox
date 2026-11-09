@@ -39,6 +39,10 @@ void offerStaged();
 // without a valid version file is not staged.
 std::string stagedVersionPath(const std::string& target);
 
+// <target>.new.part: the download before it is checked. Its resume control
+// file sits beside it (emu::removeResume).
+std::string downloadPartPath(const std::string& target);
+
 // A complete NRO: the "NRO0" magic and, unless 0, `expectedSize` bytes.
 bool looksLikeNro(const std::string& path, size_t expectedSize);
 

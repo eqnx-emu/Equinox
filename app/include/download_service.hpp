@@ -66,6 +66,7 @@ class DownloadService {
     void pause(const std::string& id);
     void resume(const std::string& id);
     void cancel(const std::string& id);
+    // Covers get one event with an empty id, the other kinds one per task.
     void cancelGroup(const std::string& group, emu::DlKind kind);
     // A whole group at once, under one lock. Game data and the other kinds
     // get one event per task; covers, however many changed, one event with an
@@ -76,6 +77,14 @@ class DownloadService {
     // Every Paused task, of any group: how the user goes on after a full card.
     void resumePaused();
     void retryFailed();
+    // The user's "try now" for one host (ScreenScraper after a bad login or
+    // the quota): lifts only its blocks and backoff and requeues the tasks it
+    // held or failed. The next request may set the block again.
+    void retryHost(const std::string& host);
+    // One Failed task back to Queued; nothing else changes.
+    void retry(const std::string& id);
+    // `host` refused the login or is out of quota.
+    bool hostBlocked(const std::string& host) const;
     void credentialsChanged();
 
     // Nested: each suspend needs one resumeAll. UI thread; `stopped` runs on the
@@ -113,6 +122,9 @@ class DownloadService {
     void post(DlEvent event);
     // After a group operation changed `ids` to `state`. Lock held.
     void postChanged(const std::vector<std::string>& ids, emu::DlState state);
+    // Events for `ids` that a full card paused: Paused with result Disk, the
+    // covers among them as one event with an empty id. Lock held.
+    void appendDiskStops(const std::vector<std::string>& ids, std::vector<DlEvent>& events);
     std::optional<emu::DlState> stateOf(const std::string& id) const;
     emu::SsConfig ssConfig() const;
     emu::DlResult runGameData(const emu::DlTask& task, DlContext& context);
@@ -130,6 +142,9 @@ class DownloadService {
     emu::DownloadQueue queue_;
     std::map<emu::DlKind, Runner> runners_;
     emu::SsConfig ss_;
+    // <launch path>.new.part, read on the UI thread at start; empty when the
+    // app cannot update itself.
+    std::string updatePart_;
 
     std::optional<std::string> runningId_;
     std::shared_ptr<std::atomic<bool>> runningStop_;

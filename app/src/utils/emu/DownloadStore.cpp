@@ -81,6 +81,7 @@ bool parseTask(const json_t* item, DlTask& out) {
     out.group = stringField(item, "group");
     out.params = stringField(item, "params");
     out.resumable = json_is_true(json_object_get(item, "resumable"));
+    out.diskPaused = out.state == DlState::Paused && json_is_true(json_object_get(item, "disk"));
     const json_t* failures = json_object_get(item, "failures");
     out.failures = json_is_integer(failures) ? static_cast<int>(json_integer_value(failures)) : 0;
 
@@ -122,6 +123,8 @@ bool saveDownloads(const std::string& path, const DownloadQueue& queue) {
         json_object_set_new(item, "params", json_string(t.params.c_str()));
         json_object_set_new(item, "state", json_string(stateName(t.state)));
         json_object_set_new(item, "failures", json_integer(t.failures));
+        if (t.state == DlState::Paused && t.diskPaused)
+            json_object_set_new(item, "disk", json_true());
         json_array_append_new(tasks, item);
     }
     json_object_set_new(root.get(), "tasks", tasks);

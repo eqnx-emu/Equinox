@@ -7,6 +7,9 @@
 
 #include "download_service.hpp"
 
+#include <borealis.hpp>
+
+#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -107,9 +110,23 @@ bool GameDataQueue::queued(size_t index) const {
 
 void GameDataQueue::enqueue(size_t index, const emu::RomEntry& rom, emu::DlPriority priority) {
     DownloadService& service = DownloadService::instance();
-    const std::string id = emu::gameDataId(console_->slug, rom.fileName);
+    emu::DlTask task = emu::gameDataTask(*console_, rom, priority);
+    const std::string id = task.id;
+    const bool usesSs = std::find(task.hosts.begin(), task.hosts.end(),
+                                  emu::kHostScreenScraper) != task.hosts.end();
+    // The user asked: a ScreenScraper block that holds the task is lifted for
+    // one more try, which sets it again if the server still says no. Other
+    // hosts, consoles and failed tasks are left as they are.
+    auto unblock = [&] {
+        if (!usesSs || *unblocked_ || !service.hostBlocked(emu::kHostScreenScraper)) return;
+        *unblocked_ = true;
+        brls::sync([flag = unblocked_] { *flag = false; });
+        service.retryHost(emu::kHostScreenScraper);
+    };
     if (active_.count(id)) {
-        if (priority == emu::DlPriority::Interactive) service.setPriority(id, priority);
+        // Raises the priority and, for Interactive, skips the host wait once.
+        if (priority == emu::DlPriority::Interactive) service.submit(std::move(task));
+        unblock();
         return;
     }
     if (index >= names_.size()) names_.resize(index + 1);
@@ -117,11 +134,12 @@ void GameDataQueue::enqueue(size_t index, const emu::RomEntry& rom, emu::DlPrior
     indexByName_[rom.fileName] = index;
     active_.insert(id);
     total_++;
-    if (!service.submit(emu::gameDataTask(*console_, rom, priority))) {
+    if (!service.submit(std::move(task))) {
         // Left behind by an earlier stop: this is the user asking again.
         service.resume(id);
-        service.retryFailed();
+        service.retry(id);
     }
+    unblock();
 }
 
 void GameDataQueue::cancel() {

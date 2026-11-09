@@ -526,6 +526,127 @@ TEST_CASE("cancelGroup forgets the group's finished count") {
     CHECK(q.overview(kNow).groups[0].finished == 0);
 }
 
+TEST_CASE("retryHost clears only that host and requeues only its held and failed tasks") {
+    DownloadQueue q;
+    DlTask ssHeld = task("ss-held", DlPriority::Batch, kHostScreenScraper);
+    ssHeld.hosts = {kHostLibretro, kHostScreenScraper};
+    q.submit(ssHeld);
+    DlTask ssFailed = task("ss-failed", DlPriority::Batch, kHostScreenScraper);
+    ssFailed.state = DlState::Failed;
+    ssFailed.failures = 4;
+    q.submit(ssFailed);
+    DlTask lrFailed = task("lr-failed");
+    lrFailed.state = DlState::Failed;
+    q.submit(lrFailed);
+    q.submit(task("gh", DlPriority::Batch, kHostGitHub));
+    q.setBlocks(kHostScreenScraper, {true, kNow + 500});
+    q.setBlocks(kHostGitHub, {false, kNow + 500});
+    // A transient failure on libretro leaves a backoff there.
+    q.submit(task("lr", DlPriority::Visible));
+    REQUIRE(q.next(kNow)->id == "lr");
+    q.finish("lr", DlResult::Transient, kHostLibretro, kNow);
+
+    const auto changed = q.retryHost(kHostScreenScraper, kNow);
+    CHECK(changed == std::vector<std::string>{"ss-held", "ss-failed"});
+    CHECK_FALSE(q.blocks(kHostScreenScraper).badLogin);
+    CHECK(q.blocks(kHostScreenScraper).quotaUntil == 0);
+    CHECK(q.blocks(kHostGitHub).quotaUntil == kNow + 500);
+    CHECK(get(q, "ss-failed")->state == DlState::Queued);
+    CHECK(get(q, "ss-failed")->failures == 0);
+    CHECK(get(q, "lr-failed")->state == DlState::Failed);
+    // libretro still waits out its backoff, so "ss-held" and "lr" wait too.
+    DlTask* next = q.next(kNow + 1);
+    REQUIRE(next != nullptr);
+    CHECK(next->id == "ss-failed");
+}
+
+TEST_CASE("retryHost on a host with nothing held changes nothing") {
+    DownloadQueue q;
+    q.submit(task("a"));
+    CHECK(q.retryHost(kHostScreenScraper, kNow).empty());
+    CHECK(get(q, "a")->state == DlState::Queued);
+}
+
+TEST_CASE("retry requeues one Failed task") {
+    DownloadQueue q;
+    DlTask a = task("a");
+    a.state = DlState::Failed;
+    a.failures = 4;
+    q.submit(a);
+    DlTask b = task("b");
+    b.state = DlState::Failed;
+    q.submit(b);
+    CHECK(q.retry("a"));
+    CHECK(get(q, "a")->state == DlState::Queued);
+    CHECK(get(q, "a")->failures == 0);
+    CHECK(get(q, "b")->state == DlState::Failed);
+    CHECK_FALSE(q.retry("a"));
+    CHECK_FALSE(q.retry("missing"));
+}
+
+TEST_CASE("an Interactive request for a known task also skips the host wait once") {
+    DownloadQueue q;
+    q.submit(task("a", DlPriority::Batch));
+    REQUIRE(q.next(kNow)->id == "a");
+    q.finish("a", DlResult::Transient, kHostLibretro, kNow);
+    CHECK(q.next(kNow + 1) == nullptr);
+    DlTask again = task("a", DlPriority::Interactive);
+    again.skipWait = true;
+    CHECK_FALSE(q.submit(again));
+    CHECK(get(q, "a")->priority == DlPriority::Interactive);
+    CHECK(get(q, "a")->skipWait);
+    CHECK(q.next(kNow + 1) != nullptr);
+}
+
+TEST_CASE("a full card returns the tasks it paused and marks them") {
+    DownloadQueue q;
+    q.submit(inGroup("a", "snes", DlKind::GameData));
+    q.submit(inGroup("b", "snes", DlKind::Cover));
+    q.submit(inGroup("c", "nes", DlKind::Runner));
+    DlTask failed = inGroup("f", "snes", DlKind::Cover);
+    failed.state = DlState::Failed;
+    q.submit(failed);
+    q.pause("c");  // the user's
+    REQUIRE(q.next(kNow)->id == "a");
+    CHECK_FALSE(q.overview(kNow).diskFull);
+
+    const auto paused = q.finish("a", DlResult::Disk, kHostLibretro, kNow);
+    CHECK(paused == std::vector<std::string>{"b"});
+    CHECK(get(q, "a")->diskPaused);
+    CHECK(get(q, "b")->diskPaused);
+    CHECK_FALSE(get(q, "c")->diskPaused);
+    CHECK(q.overview(kNow).diskFull);
+    CHECK(q.finish("missing", DlResult::Disk, kHostLibretro, kNow).empty());
+
+    q.resume("a");
+    CHECK_FALSE(get(q, "a")->diskPaused);
+    q.resumePaused();
+    CHECK_FALSE(q.overview(kNow).diskFull);
+}
+
+TEST_CASE("pauseAll returns the ids it changed") {
+    DownloadQueue q;
+    q.submit(task("a"));
+    q.submit(task("b"));
+    DlTask failed = task("f");
+    failed.state = DlState::Failed;
+    q.submit(failed);
+    CHECK(q.pauseAll() == std::vector<std::string>{"a", "b"});
+    CHECK(q.pauseAll().empty());
+}
+
+TEST_CASE("submitAll resumes a task a full card paused, not one the user paused") {
+    DownloadQueue q;
+    q.submit(task("card"));
+    q.submit(task("user"));
+    q.pause("user");
+    q.pauseAll();
+    CHECK(q.submitAll({task("card"), task("user")}) == 1);
+    CHECK(get(q, "card")->state == DlState::Queued);
+    CHECK_FALSE(get(q, "card")->diskPaused);
+    CHECK(get(q, "user")->state == DlState::Paused);
+}
+
 namespace {
 
 namespace fs = std::filesystem;
@@ -612,6 +733,22 @@ TEST_CASE("store restores Running as Queued and keeps Failed and Paused") {
     CHECK(get(loaded, "failed")->state == DlState::Failed);
     CHECK(get(loaded, "paused")->state == DlState::Paused);
     CHECK(get(loaded, "queued")->state == DlState::Queued);
+}
+
+TEST_CASE("store keeps whether a full card paused a task") {
+    const std::string path = tmpPath("disk.json");
+    DownloadQueue q;
+    q.submit(persisted("card", DlKind::GameData));
+    q.submit(persisted("user", DlKind::GameData));
+    q.pause("user");
+    q.pauseAll();
+    REQUIRE(saveDownloads(path, q));
+
+    DownloadQueue loaded;
+    REQUIRE(loadDownloads(path, loaded));
+    CHECK(get(loaded, "card")->diskPaused);
+    CHECK_FALSE(get(loaded, "user")->diskPaused);
+    CHECK(loaded.overview(kNow).diskFull);
 }
 
 TEST_CASE("store restores login and quota blocks") {

@@ -69,6 +69,10 @@ std::string stagedVersionPath(const std::string& target) {
     return target + ".new.version";
 }
 
+std::string downloadPartPath(const std::string& target) {
+    return target + ".new.part";
+}
+
 bool looksLikeNro(const std::string& path, size_t expectedSize) {
     FILE* file = fopen(path.c_str(), "rb");
     if (!file)
@@ -91,7 +95,7 @@ void clearStaged(const std::string& target) {
 StageResult stage(const std::string& target, const std::string& version) {
     const std::string staged = target + ".new";
     clearStaged(target);
-    if (rename((staged + ".part").c_str(), staged.c_str()) != 0)
+    if (rename(downloadPartPath(target).c_str(), staged.c_str()) != 0)
         return StageResult::MoveFailed;
 
     FILE* file = fopen(stagedVersionPath(target).c_str(), "wb");

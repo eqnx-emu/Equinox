@@ -31,6 +31,7 @@ bool DownloadQueue::hasRunning() const {
 bool DownloadQueue::submit(DlTask task) {
     if (DlTask* existing = find(task.id)) {
         if (task.priority < existing->priority) existing->priority = task.priority;
+        if (task.skipWait && task.priority == DlPriority::Interactive) existing->skipWait = true;
         return false;
     }
     if (task.state != DlState::Paused && task.state != DlState::Failed) task.state = DlState::Queued;
@@ -60,6 +61,10 @@ size_t DownloadQueue::submitAll(std::vector<DlTask> tasks) {
         if (existing.state == DlState::Failed) {
             existing.state = DlState::Queued;
             existing.failures = 0;
+            changed++;
+        } else if (existing.state == DlState::Paused && existing.diskPaused) {
+            existing.state = DlState::Queued;
+            existing.diskPaused = false;
             changed++;
         }
     }
@@ -123,10 +128,10 @@ bool DownloadQueue::shouldPreempt(int64_t now) const {
     return false;
 }
 
-void DownloadQueue::finish(const std::string& id, DlResult result, const std::string& host,
-                           int64_t now) {
+std::vector<std::string> DownloadQueue::finish(const std::string& id, DlResult result,
+                                               const std::string& host, int64_t now) {
     DlTask* task = find(id);
-    if (!task) return;
+    if (!task) return {};
     switch (result) {
         case DlResult::Done:
             task->state = DlState::Done;
@@ -159,12 +164,13 @@ void DownloadQueue::finish(const std::string& id, DlResult result, const std::st
             break;
         case DlResult::Disk:
             task->state = DlState::Paused;
-            pauseAll();
-            break;
+            task->diskPaused = true;
+            return pauseAll();
         case DlResult::Invalid:
             task->state = DlState::Failed;
             break;
     }
+    return {};
 }
 
 void DownloadQueue::requeueRunning() {
@@ -174,19 +180,29 @@ void DownloadQueue::requeueRunning() {
 
 void DownloadQueue::pause(const std::string& id) {
     DlTask* task = find(id);
-    if (task && (task->state == DlState::Queued || task->state == DlState::Running))
+    if (task && (task->state == DlState::Queued || task->state == DlState::Running)) {
         task->state = DlState::Paused;
+        task->diskPaused = false;
+    }
 }
 
-void DownloadQueue::pauseAll() {
-    for (DlTask& task : tasks_)
-        if (task.state == DlState::Queued || task.state == DlState::Running)
-            task.state = DlState::Paused;
+std::vector<std::string> DownloadQueue::pauseAll() {
+    std::vector<std::string> changed;
+    for (DlTask& task : tasks_) {
+        if (task.state != DlState::Queued && task.state != DlState::Running) continue;
+        task.state = DlState::Paused;
+        task.diskPaused = true;
+        changed.push_back(task.id);
+    }
+    return changed;
 }
 
 void DownloadQueue::resume(const std::string& id) {
     DlTask* task = find(id);
-    if (task && task->state == DlState::Paused) task->state = DlState::Queued;
+    if (task && task->state == DlState::Paused) {
+        task->state = DlState::Queued;
+        task->diskPaused = false;
+    }
 }
 
 void DownloadQueue::cancel(const std::string& id) {
@@ -219,6 +235,7 @@ std::vector<std::string> DownloadQueue::pauseGroup(const std::string& group, DlK
         if (task.group != group || task.kind != kind) continue;
         if (task.state != DlState::Queued && task.state != DlState::Running) continue;
         task.state = DlState::Paused;
+        task.diskPaused = false;
         changed.push_back(task.id);
     }
     return changed;
@@ -229,6 +246,7 @@ std::vector<std::string> DownloadQueue::resumeGroup(const std::string& group, Dl
     for (DlTask& task : tasks_) {
         if (task.group != group || task.kind != kind || task.state != DlState::Paused) continue;
         task.state = DlState::Queued;
+        task.diskPaused = false;
         changed.push_back(task.id);
     }
     return changed;
@@ -250,6 +268,7 @@ std::vector<std::string> DownloadQueue::resumePaused() {
     for (DlTask& task : tasks_) {
         if (task.state != DlState::Paused) continue;
         task.state = DlState::Queued;
+        task.diskPaused = false;
         changed.push_back(task.id);
     }
     return changed;
@@ -263,6 +282,31 @@ void DownloadQueue::retryFailed() {
     }
     blocks_.clear();
     backoff_.clear();
+}
+
+std::vector<std::string> DownloadQueue::retryHost(const std::string& host, int64_t now) {
+    std::vector<std::string> changed;
+    for (DlTask& task : tasks_) {
+        if (std::find(task.hosts.begin(), task.hosts.end(), host) == task.hosts.end()) continue;
+        if (task.state == DlState::Failed) {
+            task.state = DlState::Queued;
+            task.failures = 0;
+            changed.push_back(task.id);
+        } else if (task.state == DlState::Queued && held(task, now)) {
+            changed.push_back(task.id);
+        }
+    }
+    blocks_.erase(host);
+    backoff_.erase(host);
+    return changed;
+}
+
+bool DownloadQueue::retry(const std::string& id) {
+    DlTask* task = find(id);
+    if (!task || task->state != DlState::Failed) return false;
+    task->state = DlState::Queued;
+    task->failures = 0;
+    return true;
 }
 
 void DownloadQueue::clearLoginBlock() {
@@ -326,7 +370,10 @@ DlOverview DownloadQueue::overview(int64_t now) const {
                     if (ss.quotaUntil > now) out.quotaUntil = ss.quotaUntil;
                 }
                 break;
-            case DlState::Paused: group.paused++; break;
+            case DlState::Paused:
+                group.paused++;
+                if (task.diskPaused) out.diskFull = true;
+                break;
             case DlState::Failed: group.failed++; break;
             case DlState::Done: break;
         }

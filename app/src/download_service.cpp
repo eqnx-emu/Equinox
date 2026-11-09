@@ -6,6 +6,8 @@
 #include "download_service.hpp"
 
 #include "HttpDownload.hpp"
+#include "Settings.hpp"
+#include "Updater.hpp"
 #include "emu/CoverName.hpp"
 #include "emu/CoverStore.hpp"
 #include "emu/DownloadStore.hpp"
@@ -13,6 +15,7 @@
 #include "emu/GameDb.hpp"
 #include "emu/LibraryLog.hpp"
 #include "emu/PathUtf8.hpp"
+#include "emu/ResumeState.hpp"
 #include "emu/SsCredentials.hpp"
 
 #include <borealis.hpp>
@@ -167,8 +170,13 @@ void DownloadService::start() {
     const bool exists =
         fs::exists(file, ec) || fs::exists(emu::fromUtf8(std::string(kQueueFile) + ".old"), ec);
 
+    std::string updatePart;
+    if (Updater::supported())
+        updatePart = Updater::downloadPartPath(Settings::instance().launch_path());
+
     std::lock_guard<std::mutex> lock(mutex_);
     if (started_) return;
+    updatePart_ = std::move(updatePart);
     if (!emu::loadDownloads(kQueueFile, queue_) && exists)
         brls::Logger::warning("DownloadService: {} is corrupt, starting empty", kQueueFile);
     ss_ = emu::appSsConfig();
@@ -270,6 +278,13 @@ void DownloadService::cancelGroup(const std::string& group, emu::DlKind kind) {
     for (const emu::DlTask& task : queue_.tasks()) {
         if (task.group != group || task.kind != kind) continue;
         if (runningId_ == task.id) requestStop(StopReason::Abandoned);
+        // Thousands of covers make one event, as in postChanged.
+        if (kind == emu::DlKind::Cover) {
+            if (events.empty())
+                events.push_back({std::string(), emu::DlState::Done, 0.0f,
+                                  emu::DlResult::Cancelled, std::nullopt});
+            continue;
+        }
         events.push_back({task.id, emu::DlState::Done, 0.0f, emu::DlResult::Cancelled, std::nullopt});
     }
     if (events.empty()) return;
@@ -326,6 +341,46 @@ void DownloadService::postChanged(const std::vector<std::string>& ids, emu::DlSt
     if (!events.empty()) dirty_ = true;
     if (covers) events.push_back({std::string(), state, 0.0f, emu::DlResult::Done, std::nullopt});
     post(std::move(events));
+}
+
+void DownloadService::appendDiskStops(const std::vector<std::string>& ids,
+                                      std::vector<DlEvent>& events) {
+    bool covers = false;
+    for (const std::string& id : ids) {
+        if (isCover(id)) {
+            covers = true;
+            continue;
+        }
+        events.push_back({id, emu::DlState::Paused, 0.0f, emu::DlResult::Disk, std::nullopt});
+        dirty_ = true;
+    }
+    if (covers)
+        events.push_back(
+            {std::string(), emu::DlState::Paused, 0.0f, emu::DlResult::Disk, std::nullopt});
+}
+
+void DownloadService::retryHost(const std::string& host) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const std::vector<std::string> changed = queue_.retryHost(host, wallClock());
+    // The blocks are saved even when no task waited on them.
+    dirty_ = true;
+    if (!changed.empty()) postChanged(changed, emu::DlState::Queued);
+    else post(DlEvent{std::string(), emu::DlState::Queued, 0.0f, emu::DlResult::Done, std::nullopt});
+    wake_.notify_all();
+}
+
+void DownloadService::retry(const std::string& id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!queue_.retry(id)) return;
+    dirty_ = true;
+    post(DlEvent{id, emu::DlState::Queued, 0.0f, emu::DlResult::Done, std::nullopt});
+    wake_.notify_all();
+}
+
+bool DownloadService::hostBlocked(const std::string& host) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const emu::DlHostBlocks blocks = queue_.blocks(host);
+    return blocks.badLogin || blocks.quotaUntil > wallClock();
 }
 
 void DownloadService::retryFailed() {
@@ -469,12 +524,31 @@ bool DownloadService::saveQueue(std::unique_lock<std::mutex>& lock, bool force) 
 }
 
 // A .part no task owns was left by a crash. Only the folders game data and
-// covers write to: the ROM folders can hold thousands of files.
+// covers write to: the ROM folders can hold thousands of files. Runs before the
+// worker picks its first task, so nothing owns a runner's or the update's
+// .part yet: neither is saved with the queue, and each resumes only within the
+// session that started it. A staged update (.new and its .version) is finished
+// and stays.
 void DownloadService::removeOrphans() {
     std::vector<std::string> found;
     std::error_code ec;
+    std::string updatePart;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        updatePart = updatePart_;
+    }
+    size_t large = 0;
+    auto removeLarge = [&large, &ec](const std::string& part) {
+        const bool had = fs::exists(emu::fromUtf8(part), ec) ||
+                         fs::exists(emu::fromUtf8(part + ".resume"), ec);
+        fs::remove(emu::fromUtf8(part), ec);
+        emu::removeResume(part);
+        if (had) large++;
+    };
+    if (!updatePart.empty()) removeLarge(updatePart);
     for (const emu::Console& console : emu::consoles()) {
         const emu::ConsolePaths paths = emu::pathsFor(console);
+        removeLarge(paths.runner + ".part");
         for (const std::string& dir : {paths.snaps, paths.titles, paths.covers}) {
             fs::directory_iterator it(emu::fromUtf8(dir), ec);
             for (const fs::directory_iterator end; !ec && it != end; it.increment(ec)) {
@@ -491,9 +565,12 @@ void DownloadService::removeOrphans() {
         std::lock_guard<std::mutex> lock(mutex_);
         orphans = emu::orphanPartials(found, queue_);
     }
-    for (const std::string& path : orphans) fs::remove(emu::fromUtf8(path), ec);
-    if (!orphans.empty())
-        brls::Logger::info("DownloadService: removed {} unfinished files", orphans.size());
+    for (const std::string& path : orphans) {
+        fs::remove(emu::fromUtf8(path), ec);
+        emu::removeResume(path);
+    }
+    if (!orphans.empty() || large > 0)
+        brls::Logger::info("DownloadService: removed {} unfinished files", orphans.size() + large);
 }
 
 void DownloadService::worker() {
@@ -584,7 +661,11 @@ void DownloadService::runTask(const emu::DlTask& task, std::unique_lock<std::mut
     DlEvent event{id, emu::DlState::Done, 1.0f, result, std::move(context.data),
                   std::move(context.install)};
     if (reason == StopReason::Abandoned) {
-        // cancel() already told everyone, and the id may have been submitted again.
+        // cancel() already told everyone. A run that ended anyway (Cancel pressed
+        // during the hash check or the swap) left its file in place, so the
+        // views that follow the card hear of it, unless the id was submitted
+        // again meanwhile.
+        if (result == emu::DlResult::Done && !stateOf(id)) post(std::move(event));
     } else if (result != emu::DlResult::Done && reason == StopReason::Requeue) {
         queue_.requeueRunning();
         event.state = emu::DlState::Queued;
@@ -598,11 +679,16 @@ void DownloadService::runTask(const emu::DlTask& task, std::unique_lock<std::mut
     } else {
         std::string host = context.failedHost;
         if (host.empty() && !task.hosts.empty()) host = task.hosts.front();
-        queue_.finish(id, result, host, wallClock());
+        const std::vector<std::string> diskPaused = queue_.finish(id, result, host, wallClock());
         const std::optional<emu::DlState> state = stateOf(id);
         event.state = state.value_or(emu::DlState::Done);
         event.progress = event.state == emu::DlState::Done ? 1.0f : 0.0f;
-        post(std::move(event));
+        // A full card paused every other task too: each hears of it, so no
+        // view waits on a task that will not run.
+        std::vector<DlEvent> events;
+        events.push_back(std::move(event));
+        appendDiskStops(diskPaused, events);
+        post(std::move(events));
         if (state == emu::DlState::Done) queue_.cancel(id);
     }
 }
@@ -722,8 +808,11 @@ emu::DlResult DownloadService::runRunner(const emu::DlTask& task, DlContext& con
     };
     emu::InstallResult result = emu::installRunner(*console, *manifest, progress);
 
-    // A pause or a launch keeps the .part to continue it; a cancel does not.
-    if (!result.ok && context.abandoned()) emu::discardRunnerDownload(*console);
+    // A pause or a launch keeps the .part to continue it; a cancel does not,
+    // and neither does a clear "no" from the server (a 4xx but 429).
+    if (!result.ok && (context.abandoned() || (result.code == emu::RunnerError::Network &&
+                                               !emu::retryable(result.httpStatus))))
+        emu::discardRunnerDownload(*console);
 
     const emu::RunnerError code = result.code;
     const long status = result.httpStatus;

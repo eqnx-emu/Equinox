@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <functional>
 #include <map>
+#include <memory>
 #include <optional>
 #include <set>
 #include <string>
@@ -38,6 +39,8 @@ class GameDataQueue {
     void setGames(std::vector<std::string> fileNames);
 
     // When the game is already waiting, only raises an Interactive request.
+    // A ScreenScraper block that holds the game is lifted for one more try, at
+    // most once per pass of the UI loop, so a "download all" costs one request.
     void enqueue(size_t index, const emu::RomEntry& rom,
                  emu::DlPriority priority = emu::DlPriority::Interactive);
     // Stops the game in progress and drops the rest. No callback fires.
@@ -74,4 +77,6 @@ class GameDataQueue {
     std::optional<std::string> currentId_;
     size_t total_ = 0;
     size_t done_ = 0;
+    // Set while a ScreenScraper block was lifted in this pass of the UI loop.
+    std::shared_ptr<bool> unblocked_ = std::make_shared<bool>(false);
 };

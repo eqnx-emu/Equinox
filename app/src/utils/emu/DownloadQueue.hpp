@@ -34,6 +34,8 @@ struct DlTask {
     DlState state = DlState::Queued;
     int failures = 0;
     bool skipWait = false;  // an Interactive task may ignore a host backoff once
+    // Paused by a full card, not by the user: a fresh request may resume it.
+    bool diskPaused = false;
 };
 
 struct DlHostBlocks {
@@ -63,6 +65,8 @@ struct DlOverview {
     // ScreenScraper blocks that hold a task back.
     bool badLogin = false;
     int64_t quotaUntil = 0;
+    // A task is Paused because the card was full.
+    bool diskFull = false;
 
     // Running and runnable Queued tasks: what runs without the user.
     size_t active() const;
@@ -71,21 +75,27 @@ struct DlOverview {
 // Scheduling state only: no threads, no I/O. The caller passes the clock in.
 class DownloadQueue {
   public:
-    // False when the id already exists and only the priority was raised.
+    // False when the id already exists and only the priority was raised (and,
+    // for an Interactive request, its skipWait set).
     bool submit(DlTask task);
     // Many at once without the cost of submit per task. An id already known takes
     // the params and priority given here, unless it is Running; a Failed one goes
-    // back to Queued, a Paused one stays. Returns how many tasks became runnable.
+    // back to Queued, and so does one a full card paused; one the user paused
+    // stays. Returns how many tasks became runnable.
     size_t submitAll(std::vector<DlTask> tasks);
     void setPriority(const std::string& id, DlPriority priority);
     // Marks the chosen task Running; nullptr if nothing can run or one is Running.
     DlTask* next(int64_t now);
     // True when the Running task is resumable and a higher priority task could run.
     bool shouldPreempt(int64_t now) const;
-    void finish(const std::string& id, DlResult result, const std::string& host, int64_t now);
+    // For Disk, returns the other tasks the full card paused; otherwise empty.
+    std::vector<std::string> finish(const std::string& id, DlResult result,
+                                    const std::string& host, int64_t now);
     void requeueRunning();  // suspend or preemption: back to Queued, no failure counted
     void pause(const std::string& id);
-    void pauseAll();  // SD card full
+    // SD card full: pauses every Queued or Running task, marked as paused by
+    // the card. Returns the ids it changed.
+    std::vector<std::string> pauseAll();
     void resume(const std::string& id);
     void cancel(const std::string& id);
     void cancelGroup(const std::string& group, DlKind kind);
@@ -95,6 +105,11 @@ class DownloadQueue {
     std::vector<std::string> retryGroup(const std::string& group, DlKind kind);  // Failed only
     std::vector<std::string> resumePaused();  // every Paused task, as after a full card
     void retryFailed();  // requeues Failed tasks, clears blocks and backoff
+    // The user's "try now" for one host: clears its blocks and backoff and
+    // requeues its Failed tasks. Returns the ids it held or failed.
+    std::vector<std::string> retryHost(const std::string& host, int64_t now);
+    // One Failed task back to Queued. False when it is not Failed.
+    bool retry(const std::string& id);
     void clearLoginBlock();
     const std::vector<DlTask>& tasks() const { return tasks_; }
     DlHostBlocks blocks(const std::string& host) const;

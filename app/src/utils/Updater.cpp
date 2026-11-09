@@ -71,7 +71,7 @@ std::string takeError() {
     return error;
 }
 
-std::string partPath(const std::string& target) { return target + ".new.part"; }
+std::string partPath(const std::string& target) { return downloadPartPath(target); }
 
 void discardPart(const std::string& target) {
     remove(partPath(target).c_str());
