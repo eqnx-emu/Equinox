@@ -7,6 +7,7 @@
 
 #include "emu/DownloadQueue.hpp"
 #include "emu/DownloadStore.hpp"
+#include "emu/ResumeState.hpp"
 
 using namespace emu;
 
@@ -462,4 +463,60 @@ TEST_CASE("orphanPartials returns parts no saved task owns") {
     auto orphans = orphanPartials(
         {"/sd/owned.part", "/sd/stray.part", "/sd/nopart.part"}, q);
     CHECK(orphans == std::vector<std::string>{"/sd/stray.part", "/sd/nopart.part"});
+}
+
+namespace {
+
+std::string partIn(const char* name) {
+    std::filesystem::path dir = std::filesystem::temp_directory_path() / "eqx_resume_test";
+    std::filesystem::create_directories(dir);
+    std::string part = (dir / name).string();
+    std::filesystem::remove(part);
+    std::filesystem::remove(part + ".resume");
+    return part;
+}
+
+void writePart(const std::string& part, size_t bytes) {
+    std::ofstream(part, std::ios::binary) << std::string(bytes, 'x');
+}
+
+}  // namespace
+
+TEST_CASE("resumeOffset is 0 without a control file") {
+    std::string part = partIn("none.part");
+    writePart(part, 100);
+    CHECK(resumeOffset(part, "https://h/a") == 0);
+}
+
+TEST_CASE("resumeOffset is 0 when the url differs") {
+    std::string part = partIn("url.part");
+    writePart(part, 100);
+    REQUIRE(saveResume(part, {"https://h/a", "\"etag\"", 500}));
+    CHECK(resumeOffset(part, "https://h/b") == 0);
+}
+
+TEST_CASE("resumeOffset is 0 when the part is larger than total") {
+    std::string part = partIn("big.part");
+    writePart(part, 600);
+    REQUIRE(saveResume(part, {"https://h/a", "\"etag\"", 500}));
+    CHECK(resumeOffset(part, "https://h/a") == 0);
+}
+
+TEST_CASE("resumeOffset returns the part size when valid") {
+    std::string part = partIn("ok.part");
+    writePart(part, 100);
+    REQUIRE(saveResume(part, {"https://h/a", "\"etag\"", 500}));
+    CHECK(resumeOffset(part, "https://h/a") == 100);
+}
+
+TEST_CASE("ResumeState round-trips and is removed") {
+    std::string part = partIn("rt.part");
+    REQUIRE(saveResume(part, {"https://h/a", "W/\"v\"", 42}));
+    auto loaded = loadResume(part);
+    REQUIRE(loaded.has_value());
+    CHECK(loaded->url == "https://h/a");
+    CHECK(loaded->validator == "W/\"v\"");
+    CHECK(loaded->total == 42);
+    removeResume(part);
+    CHECK_FALSE(loadResume(part).has_value());
 }

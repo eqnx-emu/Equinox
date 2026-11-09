@@ -186,6 +186,7 @@ add_executable(test_emu_downloads
     test_emu_downloads.cpp
     "${MOONLIGHT_ROOT}/app/src/utils/emu/DownloadQueue.cpp"
     "${MOONLIGHT_ROOT}/app/src/utils/emu/DownloadStore.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/ResumeState.cpp"
     "${MOONLIGHT_ROOT}/app/src/utils/emu/ReplaceFile.cpp")
 target_include_directories(test_emu_downloads PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
