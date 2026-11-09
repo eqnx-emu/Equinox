@@ -6,7 +6,7 @@
 </p>
 
 Equinox is a game streaming client for the Nintendo Switch. It is built to pair with
-[Solstice](https://github.com/luizfbalves/Solstice), and it also works with
+[Solstice](https://github.com/eqnx-emu/Solstice), and it also works with
 [Sunshine](https://github.com/LizardByte/Sunshine).
 
 > [!NOTE]
@@ -35,7 +35,7 @@ Equinox is a game streaming client for the Nintendo Switch. It is built to pair 
 
 # Installing
 
-1. Download the latest Equinox [release](https://github.com/luizfbalves/Equinox/releases).
+1. Download the latest Equinox [release](https://github.com/eqnx-emu/Equinox/releases).
 2. Copy `Equinox.nro` to `sdmc:/switch/Equinox/`.
 3. Open the Homebrew Menu through *title redirection* (hold R while launching a game), so
    Equinox gets full RAM access.
@@ -76,7 +76,7 @@ changed in Settings.
 ## Super Nintendo
 
 Equinox can also run Super Nintendo games on the console itself, with
-[snes9x](https://github.com/luizfbalves/equinox-snes9x).
+[snes9x](https://github.com/eqnx-emu/equinox-snes9x).
 
 1. On the home screen, open the **Add** card and pick **Super Nintendo**. Equinox
    downloads the emulator to `sdmc:/equinox/emulators/snes/`.
@@ -111,7 +111,7 @@ Translations live in `resources/i18n/<language>/main.json`. Pull requests are we
 ## Build
 
 ```bash
-git clone https://github.com/luizfbalves/Equinox.git --recursive
+git clone https://github.com/eqnx-emu/Equinox.git --recursive
 cd Equinox
 ```
 
