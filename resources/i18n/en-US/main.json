@@ -487,6 +487,7 @@
         "play": "Play",
         "scanning": "Looking for games…",
         "scan_done": "Search finished: {}",
+        "scan_none": "No games found",
         "rescan_short": "Look again",
         "empty_title": "No games yet",
         "empty_body": "Put your games ({}) in this folder on the SD card:",

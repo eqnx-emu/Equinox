@@ -35,6 +35,9 @@ class ConsoleCard : public PressableBox, public ShelfItem {
     // Re-reads the installed runner and counts the ROMs again, off the UI
     // thread.
     void refresh();
+    // Walks the ROM folder, updates the count and tells the result in a
+    // notification, off the UI thread.
+    void rescan();
     // Result of the update check: shows "Update available" when it is newer.
     void setLatest(const emu::Manifest& latest);
 
@@ -90,3 +93,5 @@ class ConsoleCard : public PressableBox, public ShelfItem {
 std::string emuSizeText(uint64_t bytes);
 // Display name of the emulator a manifest ships ("snes9x" -> "Snes9x").
 std::string emuRunnerName(const emu::Manifest& manifest);
+// Notification text for a finished search of the ROM folder.
+std::string emuScanNotice(size_t found);

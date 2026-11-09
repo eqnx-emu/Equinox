@@ -487,6 +487,7 @@
         "play": "Jogar",
         "scanning": "Procurando jogos…",
         "scan_done": "Busca concluída: {}",
+        "scan_none": "Nenhum jogo encontrado",
         "rescan_short": "Procurar de novo",
         "empty_title": "Nenhum jogo ainda",
         "empty_body": "Coloque seus jogos ({}) nesta pasta do cartão SD:",

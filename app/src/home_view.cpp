@@ -1497,14 +1497,8 @@ std::vector<HomeOption> HomeView::consoleOptions(ConsoleCard* card) {
                                    makeEmuVideoView(*console, paths));
                                Application::pushActivity(new Activity(frame));
                            }});
-    // Covers libretro lacked are tried again too.
-    options.push_back({"", "emu/rescan"_i18n, "", [card, console] {
-                           const emu::ConsolePaths paths =
-                               emu::pathsFor(*console);
-                           brls::async(
-                               [paths] { emu::clearCoverMisses(paths); });
-                           card->refresh();
-                       }});
+    options.push_back(
+        {"", "emu/rescan"_i18n, "", [card] { card->rescan(); }});
     HomeOption remove{"", "emu/remove"_i18n, "",
                       [this, console] { removeConsole(*console); }};
     remove.danger = true;

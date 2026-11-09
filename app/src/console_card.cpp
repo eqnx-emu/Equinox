@@ -7,6 +7,7 @@
 
 
 #include "bold_label.hpp"
+#include "emu/CoverStore.hpp"
 #include "emu/RomScan.hpp"
 
 #include <cmath>
@@ -70,6 +71,14 @@ std::string emuSizeText(uint64_t bytes) {
 
 std::string emuRunnerName(const emu::Manifest& manifest) {
     return runnerName(manifest.id);
+}
+
+std::string emuScanNotice(size_t found) {
+    if (found == 0)
+        return "emu/scan_none"_i18n;
+    return brls::getStr("emu/scan_done", found == 1
+                                             ? "hosts/games_one"_i18n
+                                             : brls::getStr("hosts/games_count", found));
 }
 
 ConsoleCard::ConsoleCard(const emu::Console& console) : consoleRef(console) {
@@ -162,6 +171,26 @@ void ConsoleCard::refresh() {
                 lastCounts()[consoleRef.slug] = count;
             }
             update();
+        });
+    });
+}
+
+void ConsoleCard::rescan() {
+    const emu::Console* console = &consoleRef;
+    ASYNC_RETAIN
+    brls::async([ASYNC_TOKEN, console] {
+        const emu::ConsolePaths paths = emu::pathsFor(*console);
+        emu::ensureFolders(paths);
+        // Covers libretro lacked are tried again too.
+        emu::clearCoverMisses(paths);
+        const int count = static_cast<int>(emu::scanRoms(paths.roms, *console).size());
+        emu::writeRomCount(paths, count);
+        brls::sync([ASYNC_TOKEN, count] {
+            ASYNC_RELEASE
+            games = count;
+            lastCounts()[consoleRef.slug] = count;
+            update();
+            Application::notify(emuScanNotice(count));
         });
     });
 }
