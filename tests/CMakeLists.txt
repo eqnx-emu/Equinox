@@ -69,6 +69,7 @@ add_executable(test_emu_installer
     test_emu_installer.cpp
     "${MOONLIGHT_ROOT}/app/src/utils/emu/RunnerInstaller.cpp"
     "${MOONLIGHT_ROOT}/app/src/utils/emu/ReplaceFile.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/ResumeState.cpp"
     "${MOONLIGHT_ROOT}/app/src/utils/emu/RunnerManifest.cpp"
     "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp")
 target_include_directories(test_emu_installer PRIVATE

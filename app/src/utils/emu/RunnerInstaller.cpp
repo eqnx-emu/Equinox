@@ -2,6 +2,7 @@
 
 #include "emu/PathUtf8.hpp"
 #include "emu/ReplaceFile.hpp"
+#include "emu/ResumeState.hpp"
 
 #include <ctime>
 #include <filesystem>
@@ -14,14 +15,13 @@ namespace {
 namespace fs = std::filesystem;
 
 const long MANIFEST_TIMEOUT = 15;
-const long RUNNER_TIMEOUT = 300;
 
+// Removes the .part: its bytes are no use to the next attempt.
 InstallResult fail(const fs::path& part, const Manifest& manifest, RunnerError code,
                    const std::string& error) {
     std::error_code ec;
     fs::remove(part, ec);
-    const bool cancelled = code == RunnerError::Cancelled;
-    return {false, error, manifest, cancelled, code};
+    return {false, error, manifest, false, code};
 }
 
 }  // namespace
@@ -69,10 +69,15 @@ InstallResult installRunner(const Console& console, const Manifest& manifest,
         };
     }
 
-    std::string error;
-    if (!httpGetToFile(assetUrl(console, manifest), partPath, RUNNER_TIMEOUT, tracked, error))
-        return fail(part, manifest, cancelled ? RunnerError::Cancelled : RunnerError::Network,
-                    error.empty() ? "download failed" : error);
+    const ResumableResult download = httpGetResumable(assetUrl(console, manifest), partPath, tracked);
+    if (!download.ok) {
+        // The .part stays: a later attempt continues it.
+        const RunnerError code = cancelled              ? RunnerError::Cancelled
+                                 : download.writeFailed ? RunnerError::Disk
+                                                        : RunnerError::Network;
+        return {false, download.error.empty() ? "download failed" : download.error, manifest,
+                cancelled, code};
+    }
 
     if (!verifyFile(partPath, manifest))
         return fail(part, manifest, RunnerError::Mismatch,
@@ -93,6 +98,13 @@ InstallResult installRunner(const Console& console, const Manifest& manifest,
                 RunnerError::WriteInstalled};
 
     return {true, "", manifest};
+}
+
+void discardRunnerDownload(const Console& console, const std::string& root) {
+    const std::string partPath = pathsFor(console, root).runner + ".part";
+    std::error_code ec;
+    fs::remove(fromUtf8(partPath), ec);
+    removeResume(partPath);
 }
 
 bool removeRunner(const Console& console, const std::string& root) {

@@ -180,9 +180,15 @@ class HomeView : public brls::Box {
     std::vector<HomeOption> hostOptions(HostCard* card);
     std::vector<HomeOption> consoleOptions(ConsoleCard* card);
 
-    // Downloads and installs (or updates) the console's emulator.
+    // Downloads and installs (or updates) the console's emulator, as a
+    // DownloadService task the dialog shows; it goes on in the background
+    // once the user leaves the dialog.
     void installConsole(const emu::Console& console);
-    void consoleInstalled(const emu::Console& console, bool first);
+    // background: the user left the dialog, so the shelf is not opened.
+    void consoleInstalled(const emu::Console& console, bool first,
+                          bool background);
+    // Handles the emulator tasks' events for as long as the app runs.
+    static void watchRunnerTasks();
     // Re-reads the installed version and the games, with the latest
     // manifest seen.
     void refreshConsole(const emu::Console& console);

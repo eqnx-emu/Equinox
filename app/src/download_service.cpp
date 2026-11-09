@@ -37,6 +37,7 @@ constexpr auto kIdlePoll = std::chrono::seconds(1);
 constexpr auto kIdleForever = std::chrono::hours(1);
 constexpr long kCoverTimeout = 20;
 constexpr const char* kCoverPrefix = "cover:";
+constexpr const char* kRunnerPrefix = "runner:";
 
 int64_t wallClock() { return static_cast<int64_t>(std::time(nullptr)); }
 
@@ -120,6 +121,37 @@ DlTask coverTask(const Console& console, const std::string& title, const std::st
     return task;
 }
 
+std::string runnerId(const std::string& slug) { return kRunnerPrefix + slug; }
+
+DlTask runnerTask(const Console& console, const Manifest& manifest) {
+    DlTask task;
+    task.id = runnerId(console.slug);
+    task.kind = DlKind::Runner;
+    task.priority = DlPriority::Interactive;
+    task.skipWait = true;
+    task.group = console.slug;
+    task.hosts = {kHostGitHub};
+    task.resumable = true;
+
+    json_t* fields = json_object();
+    json_object_set_new(fields, "id", json_string(manifest.id.c_str()));
+    json_object_set_new(fields, "console", json_string(manifest.console.c_str()));
+    json_object_set_new(fields, "version", json_string(manifest.version.c_str()));
+    json_object_set_new(fields, "asset", json_string(manifest.asset.c_str()));
+    json_object_set_new(fields, "sha256", json_string(manifest.sha256.c_str()));
+    json_object_set_new(fields, "protocol", json_integer(manifest.protocol));
+    json_object_set_new(fields, "size", json_integer(static_cast<json_int_t>(manifest.size)));
+    json_t* params = json_object();
+    json_object_set_new(params, "console", json_string(console.slug.c_str()));
+    json_object_set_new(params, "manifest", fields);
+    if (char* text = json_dumps(params, JSON_COMPACT)) {
+        task.params = text;
+        free(text);
+    }
+    json_decref(params);
+    return task;
+}
+
 }  // namespace emu
 
 DownloadService& DownloadService::instance() {
@@ -145,6 +177,9 @@ void DownloadService::start() {
     };
     runners_[emu::DlKind::Cover] = [this](const emu::DlTask& task, DlContext& context) {
         return runCover(task, context);
+    };
+    runners_[emu::DlKind::Runner] = [this](const emu::DlTask& task, DlContext& context) {
+        return runRunner(task, context);
     };
     started_ = true;
     thread_ = std::thread([this] { worker(); });
@@ -284,6 +319,11 @@ void DownloadService::resumeAll() {
 std::vector<emu::DlTask> DownloadService::snapshot() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return queue_.tasks();
+}
+
+bool DownloadService::active(const std::string& id) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return runningId_ == id || stateOf(id).has_value();
 }
 
 bool DownloadService::blocked(const emu::DlTask& task) const {
@@ -478,7 +518,8 @@ void DownloadService::runTask(const emu::DlTask& task, std::unique_lock<std::mut
     stopReason_ = StopReason::None;
     if (!isCover(id)) dirty_ = true;
 
-    DlEvent event{id, emu::DlState::Done, 1.0f, result, std::move(context.data)};
+    DlEvent event{id, emu::DlState::Done, 1.0f, result, std::move(context.data),
+                  std::move(context.install)};
     if (reason == StopReason::Abandoned) {
         // cancel() already told everyone, and the id may have been submitted again.
     } else if (result != emu::DlResult::Done && reason == StopReason::Requeue) {
@@ -487,6 +528,7 @@ void DownloadService::runTask(const emu::DlTask& task, std::unique_lock<std::mut
         event.progress = 0.0f;
         event.result = emu::DlResult::Done;
         event.data.reset();
+        event.install.reset();
         post(std::move(event));
     } else if (result != emu::DlResult::Done && reason == StopReason::Paused) {
         // pause() already told everyone.
@@ -591,4 +633,46 @@ emu::DlResult DownloadService::runCover(const emu::DlTask& task, DlContext& cont
     }
     emu::markCoverMissed(emu::pathsFor(*console), title, APP_VERSION);
     return emu::DlResult::Gone;
+}
+
+emu::DlResult DownloadService::runRunner(const emu::DlTask& task, DlContext& context) {
+    json_error_t err;
+    json_t* params = json_loads(task.params.c_str(), 0, &err);
+    if (!params) return emu::DlResult::Invalid;
+    const std::string slug = stringField(params, "console");
+    std::optional<emu::Manifest> manifest;
+    if (char* text = json_dumps(json_object_get(params, "manifest"), JSON_COMPACT)) {
+        manifest = emu::parseManifest(text);
+        free(text);
+    }
+    json_decref(params);
+
+    const emu::Console* console = emu::findConsole(slug);
+    if (!console || !manifest) return emu::DlResult::Invalid;
+
+    const Progress progress = [&context, size = manifest->size](uint64_t done, uint64_t total) {
+        if (context.stop->load()) return false;
+        if (total == 0) total = size;
+        if (total > 0) context.progress(static_cast<float>(std::min(done, total)) / total);
+        return true;
+    };
+    emu::InstallResult result = emu::installRunner(*console, *manifest, progress);
+
+    // A pause or a launch keeps the .part to continue it; a cancel does not.
+    bool abandoned = false;
+    if (!result.ok) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        abandoned = stopReason_ == StopReason::Abandoned;
+    }
+    if (abandoned) emu::discardRunnerDownload(*console);
+
+    const emu::RunnerError code = result.code;
+    context.install = std::move(result);
+    switch (code) {
+        case emu::RunnerError::None: return emu::DlResult::Done;
+        case emu::RunnerError::Network: return emu::DlResult::Transient;
+        case emu::RunnerError::Disk: return emu::DlResult::Disk;
+        case emu::RunnerError::Cancelled: return emu::DlResult::Cancelled;
+        default: return emu::DlResult::Invalid;
+    }
 }

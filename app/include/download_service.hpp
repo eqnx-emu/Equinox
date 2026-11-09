@@ -13,6 +13,7 @@
 #include "emu/DownloadQueue.hpp"
 #include "emu/GameDataJob.hpp"
 #include "emu/RomScan.hpp"
+#include "emu/RunnerInstaller.hpp"
 #include "emu/ScreenScraper.hpp"
 
 #include <atomic>
@@ -33,6 +34,7 @@ struct DlContext {
     // Set by the runner when the result blames a host other than the task's first.
     std::string failedHost;
     std::optional<emu::DataOutcome> data;  // GameData only
+    std::optional<emu::InstallResult> install;  // Runner only
 };
 
 struct DlEvent {
@@ -41,6 +43,7 @@ struct DlEvent {
     float progress;
     emu::DlResult result;  // meaningful once the run ended; otherwise Done
     std::optional<emu::DataOutcome> data;
+    std::optional<emu::InstallResult> install = std::nullopt;  // Runner, once it ran
 };
 
 class DownloadService {
@@ -71,6 +74,9 @@ class DownloadService {
     void resumeAll();
 
     std::vector<emu::DlTask> snapshot() const;
+    // The task is in the queue (in any state), or the worker still runs it
+    // after a cancel.
+    bool active(const std::string& id) const;
     // A host of the task is blocked by a bad login or the quota.
     bool blocked(const emu::DlTask& task) const;
 
@@ -95,6 +101,7 @@ class DownloadService {
     emu::SsConfig ssConfig() const;
     emu::DlResult runGameData(const emu::DlTask& task, DlContext& context);
     emu::DlResult runCover(const emu::DlTask& task, DlContext& context);
+    emu::DlResult runRunner(const emu::DlTask& task, DlContext& context);
 
     mutable std::mutex mutex_;
     std::condition_variable wake_;
@@ -129,5 +136,9 @@ std::string coverId(const std::string& slug, const std::string& title);
 // `canonical` is the name the game's data found, or empty.
 DlTask coverTask(const Console& console, const std::string& title, const std::string& canonical,
                  DlPriority priority);
+
+std::string runnerId(const std::string& slug);
+// Installs `manifest`'s runner; not saved with the queue.
+DlTask runnerTask(const Console& console, const Manifest& manifest);
 
 }  // namespace emu
