@@ -88,19 +88,28 @@ void clearStaged(const std::string& target) {
     remove(stagedVersionPath(target).c_str());
 }
 
-bool stage(const std::string& target, const std::string& version) {
+StageResult stage(const std::string& target, const std::string& version) {
     const std::string staged = target + ".new";
     clearStaged(target);
     if (rename((staged + ".part").c_str(), staged.c_str()) != 0)
-        return false;
+        return StageResult::MoveFailed;
 
     FILE* file = fopen(stagedVersionPath(target).c_str(), "wb");
     bool ok = file && fwrite(version.data(), 1, version.size(), file) == version.size();
     if (file && fclose(file) != 0)
         ok = false;
-    if (!ok)
+    if (!ok) {
         clearStaged(target);
-    return ok;
+        return StageResult::WriteFailed;
+    }
+    return StageResult::Staged;
+}
+
+bool restoreBackup(const std::string& target) {
+    const std::string backup = target + ".old";
+    if (exists(target) || !exists(backup))
+        return false;
+    return rename(backup.c_str(), target.c_str()) == 0;
 }
 
 std::optional<std::string> stagedUpdate(const std::string& target,

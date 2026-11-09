@@ -74,6 +74,8 @@ class DownloadService {
     // UI thread once nothing is transferring.
     void suspend(std::function<void()> stopped);
     void resumeAll();
+    // A suspend is in force: a game may be about to replace the process.
+    bool suspended() const;
 
     std::vector<emu::DlTask> snapshot() const;
     // The task is in the queue (in any state), or the worker still runs it

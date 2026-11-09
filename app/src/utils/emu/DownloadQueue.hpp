@@ -19,6 +19,10 @@ inline constexpr const char* kHostScreenScraper = "screenscraper";
 inline constexpr const char* kHostLibretro = "libretro";
 inline constexpr const char* kHostGitHub = "github";
 
+// Whether a failed transfer is worth trying again: no HTTP error (no answer, a
+// body cut short), a 5xx or a 429. Any other 4xx is the server's clear "no".
+bool retryable(long httpStatus);
+
 struct DlTask {
     std::string id;  // "gamedata:snes:Foo.sfc"
     DlKind kind = DlKind::Cover;

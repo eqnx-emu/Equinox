@@ -60,7 +60,7 @@ TEST_CASE("looksLikeNro wants the magic and the advertised size") {
 TEST_CASE("stage moves the part into place, then writes the version") {
     const std::string target = freshTarget();
     writeFile(target + ".new.part", nro());
-    REQUIRE(Updater::stage(target, "2.0.0"));
+    REQUIRE(Updater::stage(target, "2.0.0") == Updater::StageResult::Staged);
     CHECK_FALSE(exists(target + ".new.part"));
     CHECK(exists(target + ".new"));
     CHECK(Updater::stagedUpdate(target, "1.0.0") == std::optional<std::string>("2.0.0"));
@@ -74,13 +74,13 @@ TEST_CASE("stage replaces an earlier staged update") {
     writeFile(target + ".new", nro());
     writeFile(Updater::stagedVersionPath(target), "1.5.0");
     writeFile(target + ".new.part", nro());
-    REQUIRE(Updater::stage(target, "2.0.0"));
+    REQUIRE(Updater::stage(target, "2.0.0") == Updater::StageResult::Staged);
     CHECK(Updater::stagedUpdate(target, "1.0.0") == std::optional<std::string>("2.0.0"));
 }
 
 TEST_CASE("stage without a part stages nothing") {
     const std::string target = freshTarget();
-    CHECK_FALSE(Updater::stage(target, "2.0.0"));
+    CHECK(Updater::stage(target, "2.0.0") == Updater::StageResult::MoveFailed);
     CHECK_FALSE(exists(target + ".new"));
     CHECK_FALSE(exists(Updater::stagedVersionPath(target)));
 }
@@ -128,4 +128,27 @@ TEST_CASE("an unreadable version goes") {
     writeFile(Updater::stagedVersionPath(target), "");
     CHECK_FALSE(Updater::stagedUpdate(target, "1.0.0"));
     CHECK_FALSE(exists(target + ".new"));
+}
+
+TEST_CASE("a backup left alone by a stopped install is put back") {
+    const std::string target = freshTarget();
+    writeFile(target + ".old", nro());
+    CHECK(Updater::restoreBackup(target));
+    CHECK(exists(target));
+    CHECK_FALSE(exists(target + ".old"));
+}
+
+TEST_CASE("a backup next to the NRO is left alone") {
+    const std::string target = freshTarget();
+    writeFile(target, nro());
+    writeFile(target + ".old", "old");
+    CHECK_FALSE(Updater::restoreBackup(target));
+    CHECK(exists(target + ".old"));
+    CHECK(Updater::looksLikeNro(target, 0));
+}
+
+TEST_CASE("no backup, nothing to put back") {
+    const std::string target = freshTarget();
+    CHECK_FALSE(Updater::restoreBackup(target));
+    CHECK_FALSE(exists(target));
 }

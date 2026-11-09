@@ -13,6 +13,10 @@ constexpr int kMaxFailures = 4;
 
 }  // namespace
 
+bool retryable(long httpStatus) {
+    return httpStatus < 400 || httpStatus == 429 || httpStatus >= 500;
+}
+
 DlTask* DownloadQueue::find(const std::string& id) {
     for (DlTask& task : tasks_)
         if (task.id == id) return &task;

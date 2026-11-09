@@ -76,7 +76,7 @@ InstallResult installRunner(const Console& console, const Manifest& manifest,
                                  : download.writeFailed ? RunnerError::Disk
                                                         : RunnerError::Network;
         return {false, download.error.empty() ? "download failed" : download.error, manifest,
-                cancelled, code};
+                cancelled, code, download.status};
     }
 
     if (!verifyFile(partPath, manifest))

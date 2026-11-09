@@ -42,9 +42,18 @@ std::string stagedVersionPath(const std::string& target);
 // A complete NRO: the "NRO0" magic and, unless 0, `expectedSize` bytes.
 bool looksLikeNro(const std::string& path, size_t expectedSize);
 
+enum class StageResult { Staged, MoveFailed, WriteFailed };
+
 // Moves the checked <target>.new.part to <target>.new, then writes `version`
-// beside it. False, with nothing staged, when either step fails.
-bool stage(const std::string& target, const std::string& version);
+// beside it. Nothing is staged when either step fails.
+StageResult stage(const std::string& target, const std::string& version);
+
+// An install stopped between its two renames leaves only <target>.old: puts
+// it back. True when it did.
+bool restoreBackup(const std::string& target);
+
+// At start, before anything reads the NRO: restoreBackup on the launch path.
+void recoverInstall();
 
 // The version staged for `target` when <target>.new is an NRO newer than
 // `current`. Anything else staged (older, invalid, without its version) is

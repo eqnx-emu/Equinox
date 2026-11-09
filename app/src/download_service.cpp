@@ -316,6 +316,11 @@ void DownloadService::resumeAll() {
     wake_.notify_all();
 }
 
+bool DownloadService::suspended() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return suspended_ > 0;
+}
+
 std::vector<emu::DlTask> DownloadService::snapshot() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return queue_.tasks();
@@ -631,9 +636,10 @@ emu::DlResult DownloadService::runCover(const emu::DlTask& task, DlContext& cont
             emu::liblog::bug("cover could not be saved: {}", path);
             return emu::DlResult::Disk;
         }
-        // A 200 that is not a PNG counts as a clear "no", like 404 and 403.
-        // No answer, a 5xx, a 429 or a body cut short says nothing.
-        if (!ok && status != 404 && status != 403) return emu::DlResult::Transient;
+        // A 200 that is not a PNG counts as a clear "no", like 404, 403 and
+        // any other 4xx but 429. No answer, a 5xx, a 429 or a body cut short
+        // says nothing.
+        if (!ok && emu::retryable(status)) return emu::DlResult::Transient;
     }
     emu::markCoverMissed(emu::pathsFor(*console), title, APP_VERSION);
     return emu::DlResult::Gone;
@@ -666,10 +672,13 @@ emu::DlResult DownloadService::runRunner(const emu::DlTask& task, DlContext& con
     if (!result.ok && context.abandoned()) emu::discardRunnerDownload(*console);
 
     const emu::RunnerError code = result.code;
+    const long status = result.httpStatus;
     context.install = std::move(result);
     switch (code) {
         case emu::RunnerError::None: return emu::DlResult::Done;
-        case emu::RunnerError::Network: return emu::DlResult::Transient;
+        // A 404 fails at once, with the install error.
+        case emu::RunnerError::Network:
+            return emu::retryable(status) ? emu::DlResult::Transient : emu::DlResult::Invalid;
         case emu::RunnerError::Disk: return emu::DlResult::Disk;
         case emu::RunnerError::Cancelled: return emu::DlResult::Cancelled;
         default: return emu::DlResult::Invalid;

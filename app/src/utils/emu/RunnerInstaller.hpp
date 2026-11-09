@@ -29,6 +29,7 @@ struct InstallResult {
     Manifest manifest;
     bool cancelled = false;  // the Progress callback returned false
     RunnerError code = RunnerError::None;
+    long httpStatus = 0;  // Network: the status the server answered with, 0 for none
 };
 
 // Downloads and parses the console's latest manifest. nullopt with `error`

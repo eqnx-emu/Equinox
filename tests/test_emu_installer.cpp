@@ -18,6 +18,7 @@ std::string body;   // what a download returns
 bool fail = false;  // the transfer fails after writing the whole body
 bool writeFail = false;  // the .part cannot be written (full card)
 bool holdPart = false;  // keep the downloaded file open after the download
+long failStatus = 0;  // the HTTP status a failed transfer reports
 std::unique_ptr<std::ifstream> held;
 std::string lastUrl;
 }  // namespace fake
@@ -42,7 +43,7 @@ ResumableResult httpGetResumable(const std::string& url, const std::string& part
     f.flush();
     if (progress && !progress(total / 2, total)) return {false, false, false, 200, "cancelled"};
     f.write(fake::body.data() + total / 2, static_cast<std::streamsize>(total - total / 2));
-    if (fake::fail) return {false, false, false, 0, "network down"};
+    if (fake::fail) return {false, false, false, fake::failStatus, "network down"};
     f.close();
     if (fake::holdPart) fake::held = std::make_unique<std::ifstream>(partPath, std::ios::binary);
     return {true, false, false, 200, {}};
@@ -82,6 +83,7 @@ struct Sandbox {
         fake::fail = false;
         fake::writeFail = false;
         fake::holdPart = false;
+        fake::failStatus = 0;
         fake::held.reset();
         fake::lastUrl.clear();
     }
@@ -166,6 +168,15 @@ TEST_CASE("installRunner keeps the .part after a network failure") {
     CHECK(readAll(s.paths.runner) == "old");
     // The next attempt in this session continues it.
     CHECK(fs::exists(s.paths.runner + ".part"));
+}
+
+TEST_CASE("installRunner reports the HTTP status of a failed download") {
+    Sandbox s;
+    fake::fail = true;
+    fake::failStatus = 404;
+    InstallResult r = installRunner(s.snes, s.manifest, Progress(), s.root.string());
+    CHECK(r.code == RunnerError::Network);
+    CHECK(r.httpStatus == 404);
 }
 
 TEST_CASE("installRunner reports a full card as a disk error") {

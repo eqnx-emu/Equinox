@@ -159,8 +159,13 @@ emu::DlResult runUpdate(const emu::DlTask& task, DlContext& context) {
         if (context.stop->load())
             return emu::DlResult::Cancelled;
         setError(download.error.empty() ? "download failed" : download.error);
-        return download.writeFailed ? emu::DlResult::Disk
-                                    : emu::DlResult::Transient;
+        if (download.writeFailed)
+            return emu::DlResult::Disk;
+        if (emu::retryable(download.status))
+            return emu::DlResult::Transient;
+        // A clear "no" from the server: nothing to continue.
+        discardPart(target);
+        return emu::DlResult::Invalid;
     }
 
     if (!looksLikeNro(part, size)) {
@@ -168,12 +173,19 @@ emu::DlResult runUpdate(const emu::DlTask& task, DlContext& context) {
         setError("downloaded file is not a valid NRO");
         return emu::DlResult::Invalid;
     }
-    if (!stage(target, version)) {
+    switch (stage(target, version)) {
+    case StageResult::Staged:
+        return emu::DlResult::Done;
+    case StageResult::WriteFailed:
         discardPart(target);
         setError("could not save the update");
-        return emu::DlResult::Invalid;
+        return emu::DlResult::Disk;
+    case StageResult::MoveFailed:
+        break;
     }
-    return emu::DlResult::Done;
+    discardPart(target);
+    setError("could not save the update");
+    return emu::DlResult::Invalid;
 }
 
 // Swap the downloaded NRO in for the running one. The running NRO is still
@@ -271,7 +283,9 @@ void watchTask() {
             pending().reset();
             if (event.result == emu::DlResult::Done) {
                 brls::Logger::info("Updater: downloaded {}", job.version);
-                askRestart(job.version, job.target);
+                // A game launch is under way; the next start offers it.
+                if (!DownloadService::instance().suspended())
+                    askRestart(job.version, job.target);
             } else if (!DownloadService::instance().active(TASK_ID)) {
                 // Cancelled while it waited; a running one removes it itself.
                 discardPart(job.target);
@@ -350,6 +364,16 @@ bool supported() {
            path.compare(path.size() - 4, 4, ".nro") == 0;
 #else
     return false;
+#endif
+}
+
+void recoverInstall() {
+#ifdef __SWITCH__
+    if (!supported())
+        return;
+    const std::string target = Settings::instance().launch_path();
+    if (restoreBackup(target))
+        brls::Logger::warning("Updater: put back {} from its backup", target);
 #endif
 }
 

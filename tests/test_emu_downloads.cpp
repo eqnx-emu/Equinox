@@ -575,3 +575,16 @@ TEST_CASE("resumeOffset is 0 for a corrupt control file") {
     CHECK(resumeOffset(part, "https://h/a") == 0);
     CHECK_FALSE(loadResume(part).has_value());
 }
+
+TEST_CASE("only no answer, a cut body, 5xx and 429 are worth retrying") {
+    CHECK(retryable(0));
+    CHECK(retryable(200));
+    CHECK(retryable(429));
+    CHECK(retryable(500));
+    CHECK(retryable(503));
+    CHECK_FALSE(retryable(400));
+    CHECK_FALSE(retryable(403));
+    CHECK_FALSE(retryable(404));
+    CHECK_FALSE(retryable(410));
+    CHECK_FALSE(retryable(416));
+}
