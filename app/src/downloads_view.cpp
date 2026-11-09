@@ -674,8 +674,10 @@ DownloadsView::DownloadsView() : refresher([this] { refresh(); }) {
             return true;
         const emu::DlGroup target = *group;
         cancelButton->press([target] {
-            auto* confirm =
-                new Dialog(brls::getStr("downloads/cancel_message", groupTitle(target)));
+            auto* confirm = new Dialog(
+                target.kind == emu::DlKind::AppUpdate
+                    ? "downloads/cancel_update_message"_i18n
+                    : brls::getStr("downloads/cancel_message", groupTitle(target)));
             confirm->addButton("downloads/keep"_i18n, [] {});
             confirm->addButton("downloads/action/cancel"_i18n,
                                [target] { cancelGroup(target); });

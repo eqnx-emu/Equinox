@@ -671,6 +671,7 @@
             "cancel": "Cancelar"
         },
         "cancel_message": "Cancelar os downloads de {}?",
+        "cancel_update_message": "Cancelar a atualização do Equinox?",
         "keep": "Continuar baixando",
         "pause_all": "Pausar tudo",
         "resume_all": "Retomar tudo",
