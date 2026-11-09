@@ -33,10 +33,16 @@ TEST_CASE("ssConfigured needs dev and user credentials") {
     CHECK_FALSE(ssConfigured(c));
 }
 
-TEST_CASE("ssSystemId maps snes only") {
+TEST_CASE("ssSystemId maps the known consoles") {
     Console snes;
     snes.slug = "snes";
     CHECK(ssSystemId(snes) == 4);
+    Console gba;
+    gba.slug = "gba";
+    CHECK(ssSystemId(gba) == 12);
+    Console gbc;
+    gbc.slug = "gbc";
+    CHECK(ssSystemId(gbc) == 10);
     Console other;
     other.slug = "nes";
     CHECK(ssSystemId(other) == 0);

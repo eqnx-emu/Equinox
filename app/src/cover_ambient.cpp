@@ -94,9 +94,9 @@ void CoverAmbient::select(const std::string& path, bool onDisk,
     });
 }
 
-void CoverAmbient::clear() {
+void CoverAmbient::clear(int fadeMs) {
     selected.clear();
-    show(Colors{});
+    show(Colors{}, fadeMs);
 }
 
 void CoverAmbient::attach(View* owner) {
@@ -120,13 +120,15 @@ void CoverAmbient::drawFallback(NVGcontext* vg, float x, float y,
         paint(vg, x, y, width, height);
 }
 
-void CoverAmbient::show(const Colors& colors) {
+void CoverAmbient::show(const Colors& colors, int fadeMs) {
     if (!colors.valid && !shown.valid)
         return;
+    // A glow still coming in goes out from where it stands, not from full.
+    const float from = colors.valid ? 0.0f : 1.0f - fade.getValue();
     previous = shown;
     shown = colors;
-    fade.reset(0.0f);
-    fade.addStep(1.0f, 650, EasingFunction::quadraticInOut);
+    fade.reset(from);
+    fade.addStep(1.0f, fadeMs, EasingFunction::quadraticInOut);
     fade.start();
 }
 
@@ -142,8 +144,14 @@ void CoverAmbient::paintOne(NVGcontext* vg, const Colors& colors, float alpha,
     if (!colors.valid || alpha <= 0.01f)
         return;
     auto glow = [&](float cx, float cy, float r, NVGcolor c, float a) {
+        // Past r the gradient is clear: fill only the circle's square, not
+        // the whole screen (three of these, six while fading).
+        const float left = std::max(x, cx - r), top = std::max(y, cy - r);
+        const float right = std::min(x + width, cx + r), bottom = std::min(y + height, cy + r);
+        if (right <= left || bottom <= top)
+            return;
         nvgBeginPath(vg);
-        nvgRect(vg, x, y, width, height);
+        nvgRect(vg, left, top, right - left, bottom - top);
         nvgFillPaint(vg, nvgRadialGradient(vg, cx, cy, 0, r,
                                            nvgRGBAf(c.r, c.g, c.b, a * alpha),
                                            nvgRGBAf(c.r, c.g, c.b, 0)));

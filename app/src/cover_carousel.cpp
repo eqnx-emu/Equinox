@@ -317,20 +317,21 @@ void CarouselDots::draw(NVGcontext* vg, float x, float y, float width,
                                     : "brls/applet_frame/separator"];
     const NVGcolor accent = Application::getTheme()["brls/accent"];
 
-    float full = 0;
-    std::vector<float> widths(total);
-    for (size_t i = 0; i < total; i++) {
-        const float k = std::max(0.0f, 1.0f - std::fabs((float)i - pos));
-        widths[i] = dot + (wide - dot) * k;
-        full += widths[i] + (i ? gap : 0);
-    }
+    // How far each dot has grown toward the wide one: 1 at pos, 0 a step away.
+    const auto grown = [pos](size_t i) {
+        return std::max(0.0f, 1.0f - std::fabs((float)i - pos));
+    };
+    float full = (total - 1) * gap;
+    for (size_t i = 0; i < total; i++)
+        full += dot + (wide - dot) * grown(i);
     float cx = x + (width - full) / 2;
     for (size_t i = 0; i < total; i++) {
-        const float k = std::max(0.0f, 1.0f - std::fabs((float)i - pos));
+        const float k = grown(i);
+        const float w = dot + (wide - dot) * k;
         nvgBeginPath(vg);
-        nvgRoundedRect(vg, cx, y + (height - dot) / 2, widths[i], dot, dot / 2);
+        nvgRoundedRect(vg, cx, y + (height - dot) / 2, w, dot, dot / 2);
         nvgFillColor(vg, nvgLerpRGBA(idle, accent, k));
         nvgFill(vg);
-        cx += widths[i] + gap;
+        cx += w + gap;
     }
 }

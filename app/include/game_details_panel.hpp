@@ -79,7 +79,18 @@ class GameDetailsPanel : public brls::Box {
     brls::View* titleFrame = nullptr;
     brls::Label* titleCaption = nullptr;
     brls::Box* facts = nullptr;
+    // Made once and filled in: rebuilding them on every game was most of
+    // the cost of moving through the list.
+    brls::Label* factSentence = nullptr; // "no facts" / "not downloaded"
+    struct FactCell {
+        brls::Box* box = nullptr;
+        brls::Label* label = nullptr;
+        brls::Label* value = nullptr;
+    };
+    std::vector<brls::Box*> factRows;   // two cells each
+    std::vector<FactCell> factCells;
     brls::Label* synopsisHeading = nullptr;
+    brls::ScrollingFrame* synopsisScroll = nullptr;
     brls::Label* synopsisText = nullptr;
     brls::Label* sources = nullptr;
 
@@ -90,5 +101,6 @@ class GameDetailsPanel : public brls::Box {
     void applyAction();
     void applyMedia();
     void applyFacts();
+    void addFactRow();
     void startFade(bool animate);
 };

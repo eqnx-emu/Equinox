@@ -38,8 +38,13 @@ class GameListPanel : public brls::Box {
     void setItems(std::vector<emu::LibraryItem> items, emu::PreparedOrder prepared);
     // The query and sort to prepare an order for, off the UI thread.
     emu::PreparedOrder orderRequest() const;
-    // One game's name, year or genre changed; the order follows.
+    // One game's name, year or genre changed; the order follows, at once or,
+    // while held, when the hold ends.
     void setItem(size_t index, emu::LibraryItem item);
+    // A download of many games renames them one after another: sorting the
+    // whole library again for each would be wasted, and the rows would keep
+    // moving under the user. Held, the order waits for the end.
+    void holdOrder(bool hold);
     // Fills that row again, if it exists now.
     void refreshRow(size_t index);
     void refreshRows();
@@ -107,6 +112,8 @@ class GameListPanel : public brls::Box {
     std::vector<GameRowCell*> live; // the rows of shown[windowStart...], in order
     size_t windowStart = 0;
     bool windowDirty = true;
+    bool orderHeld = false;
+    bool orderStale = false; // setItem changed the order while it was held
     std::optional<size_t> current; // the cartridge, even while the search has focus
     std::string query;
     int sort = 0;

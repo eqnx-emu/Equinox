@@ -13,7 +13,12 @@ bool ssConfigured(const SsConfig& cfg) {
            !cfg.password.empty();
 }
 
-int ssSystemId(const Console& console) { return console.slug == "snes" ? 4 : 0; }
+int ssSystemId(const Console& console) {
+    if (console.slug == "snes") return 4;
+    if (console.slug == "gba") return 12;
+    if (console.slug == "gbc") return 10;
+    return 0;
+}
 
 std::string ssUrl(const SsConfig& cfg, const SsQuery& q) {
     char crc[16];

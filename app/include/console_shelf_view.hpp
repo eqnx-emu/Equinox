@@ -68,8 +68,12 @@ class ConsoleShelfView : public brls::Box {
     std::string restoreRom;
 
     std::vector<Game> games;
-    std::optional<size_t> current;   // the game the details show
+    std::optional<size_t> current;   // the game picked in the list
     brls::Time currentAt = 0;
+    // The game the details show: lags current while the list moves fast.
+    std::optional<size_t> shownIndex;
+    unsigned detailsTicket = 0;
+    bool rebuilding = false; // showGames is filling the list
     // Bumped on each rebuild, so work begun for the old list is dropped.
     uint64_t generation = 0;
     bool scanning = false;
@@ -98,6 +102,8 @@ class ConsoleShelfView : public brls::Box {
     GameDetailsPanel* detailsPanel = nullptr;
 
     CoverAmbient ambient;
+    bool ambientHeld = false;
+    unsigned ambientTicket = 0;
 
     // The index on the card, when there is one, then a look at the folder.
     void openLibrary();
@@ -124,6 +130,10 @@ class ConsoleShelfView : public brls::Box {
     };
     void showGames(Scan& scan);
     void onCurrent(std::optional<size_t> index);
+    // The details of current, now.
+    void showDetails();
+    // The details' download state, when they show current.
+    void applyDetailsProgress();
     void play(size_t index);
     // The game as it was when play() started: the list may be rebuilt while
     // the launch waits.
@@ -147,9 +157,15 @@ class ConsoleShelfView : public brls::Box {
     GameDetails detailsFor(size_t index) const;
     void bindRow(GameRowCell& cell, size_t index);
     void applyAmbient();
+    // No glow until the user has stayed on one game for a moment.
+    void holdAmbient();
     void applyActions();
     // Rows, the details' action and the download-all area, from the queue.
     void applyProgress();
+    // Lighter, for each step of one game: its row only.
+    void applyStep(size_t index);
+    // The download-all area; holds the list's order while the queue runs.
+    void applyBatchProgress();
     // The details' button that had the focus may have just gone.
     void keepFocus();
 
@@ -161,6 +177,8 @@ class ConsoleShelfView : public brls::Box {
     void retryStopped();
     void cancelData();
     void dataFinished(size_t index, const emu::DataOutcome& outcome);
+    // The finished game's data, read in the background, taken into games.
+    void dataRead(size_t index, const Game& read);
     void dataStopped(emu::DataStop stop);
     std::optional<size_t> stoppedIndex;
     // Set by downloadAll, cleared when the queue empties or stops.
