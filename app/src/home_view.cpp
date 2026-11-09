@@ -2029,8 +2029,10 @@ void HomeView::draw(NVGcontext* vg, float x, float y, float width,
                     float height, Style style, FrameContext* ctx) {
     const float chrome = chromeFade.getValue();
     header->setAlpha(chrome);
+#if defined(PLATFORM_SWITCH)
     if (downloadBadge)
         downloadBadge->setAlpha(chrome);
+#endif
     for (Shelf* shelf : {&home, &pcs}) {
         shelf->crumb->getParent()->setAlpha(chrome);
         shelf->info->setAlpha(chrome);
