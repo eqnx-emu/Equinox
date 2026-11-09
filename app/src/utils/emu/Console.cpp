@@ -11,7 +11,7 @@ const std::vector<Console>& consoles() {
          "Super Nintendo",
          {".sfc", ".smc", ".zip", ".7z"},
          "Nintendo - Super Nintendo Entertainment System",
-         "luizfbalves/equinox-snes9x",
+         "eqnx-emu/equinox-snes9x",
          1,
          0x3a2f52,
          0x1b1828,

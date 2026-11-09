@@ -1,10 +1,10 @@
 [submodule "extern/borealis"]
 	path = extern/borealis
-	url = https://github.com/luizfbalves/borealis.git
+	url = https://github.com/eqnx-emu/borealis.git
 	branch = moonlight-low-latency
 [submodule "extern/moonlight-common-c"]
 	path = extern/moonlight-common-c
-	url = https://github.com/luizfbalves/moonlight-common-c.git
+	url = https://github.com/eqnx-emu/moonlight-common.git
 	branch = switch-join-termination
 [submodule "extern/CImg"]
 	path = extern/CImg

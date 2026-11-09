@@ -1302,7 +1302,7 @@ std::vector<HomeOption> HomeView::aboutOptions() {
     std::vector<HomeOption> options;
     options.push_back({"", "about/link_github"_i18n, "", [] {
                            Application::getPlatform()->openBrowser(
-                               "https://github.com/luizfbalves/Equinox");
+                               "https://github.com/eqnx-emu/Equinox");
                        }});
     options.push_back({"", "about/fork_title"_i18n, "", [] {
                            Application::getPlatform()->openBrowser(

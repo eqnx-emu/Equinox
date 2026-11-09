@@ -64,6 +64,8 @@ constexpr long kCoverTimeout = 20;
 // Before playing, the cover task gets this long to stop (checked every
 // kStopPollMs on the UI thread).
 constexpr int kStopPollMs = 100;
+constexpr int kAmbientOutMs = 150;
+constexpr int kAmbientSettleMs = 600;
 constexpr int kStopPolls = 50;
 
 NVGcolor themeColor(const std::string& name) {
@@ -771,13 +773,28 @@ void ConsoleShelfView::onCurrent(std::optional<size_t> index) {
         detailsPanel->setVisibility(Visibility::VISIBLE);
         detailsPanel->show(detailsFor(*current), true);
     }
-    applyAmbient();
+    holdAmbient();
     applyProgress();
     applyActions();
 }
 
+void ConsoleShelfView::holdAmbient() {
+    ambient.clear(kAmbientOutMs);
+    ambientHeld = true;
+    const unsigned ticket = ++ambientTicket;
+    std::shared_ptr<bool> token = alive;
+    brls::delay(kAmbientSettleMs, [this, token, ticket] {
+        if (!*token || ticket != ambientTicket)
+            return;
+        ambientHeld = false;
+        applyAmbient();
+    });
+}
+
 // The gameplay capture when there is one, else the cover.
 void ConsoleShelfView::applyAmbient() {
+    if (ambientHeld)
+        return;
     if (!current) {
         ambient.clear();
         return;
