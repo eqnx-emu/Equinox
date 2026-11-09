@@ -66,6 +66,11 @@ constexpr long kCoverTimeout = 20;
 constexpr int kStopPollMs = 100;
 constexpr int kAmbientOutMs = 150;
 constexpr int kAmbientSettleMs = 600;
+// Holding the stick moves the list several games a second: the details
+// follow once it slows down. A move this soon after the last one waits
+// kDetailsSettleMs (restarted by each move) before the details change.
+constexpr brls::Time kDetailsBurstUs = 150000;
+constexpr int kDetailsSettleMs = 120;
 constexpr int kStopPolls = 50;
 
 NVGcolor themeColor(const std::string& name) {
@@ -260,7 +265,7 @@ ConsoleShelfView::ConsoleShelfView(const emu::Console& console,
     library->addView(listPanel);
     detailsPanel = new GameDetailsPanel();
     detailsPanel->onDownload = [this] {
-        if (current)
+        if (current && shownIndex == current)
             download(*current);
     };
     library->addView(detailsPanel);
@@ -642,6 +647,8 @@ void ConsoleShelfView::createDataQueue() {
 
 void ConsoleShelfView::showGames(Scan& scan) {
     generation++;
+    // Its index is in the old numbering.
+    shownIndex.reset();
     loading->setVisibility(Visibility::GONE);
     listPanel->setScanning(false);
     if (announceScan) {
@@ -661,13 +668,16 @@ void ConsoleShelfView::showGames(Scan& scan) {
     games = std::move(scan.games);
     const bool none = games.empty();
 
-    // The panel reports its first result as current while it fills.
+    // The panel reports its first result as current while it fills, then
+    // focusGame picks the game to restore: the details wait for that one.
+    rebuilding = true;
     listPanel->setItems(std::move(scan.items), std::move(scan.order));
 
     library->setVisibility(none ? Visibility::GONE : Visibility::VISIBLE);
     empty->setVisibility(none ? Visibility::VISIBLE : Visibility::GONE);
     setActionAvailable(BUTTON_LT, !none);
     if (none) {
+        rebuilding = false;
         onCurrent(std::nullopt);
         if (focusHere)
             Application::giveFocus(empty);
@@ -680,6 +690,11 @@ void ConsoleShelfView::showGames(Scan& scan) {
             index = i;
     if (focusHere)
         listPanel->focusGame(index);
+    rebuilding = false;
+    if (current)
+        showDetails();
+    else
+        detailsPanel->setVisibility(Visibility::INVISIBLE);
     applyProgress();
 
     // A launch waiting for the network restarts them if it gives up.
@@ -764,18 +779,57 @@ void ConsoleShelfView::bindRow(GameRowCell& cell, size_t index) {
 void ConsoleShelfView::onCurrent(std::optional<size_t> index) {
     if (index && *index >= games.size())
         index.reset();
+    const Time now = getCPUTimeUsec();
+    const bool burst = now - currentAt < kDetailsBurstUs;
     current = index;
-    currentAt = getCPUTimeUsec();
-    if (!current) {
+    currentAt = now;
+    const unsigned ticket = ++detailsTicket;
+    if (rebuilding) {
+        // showGames shows the details once the list has settled.
+    } else if (!current) {
         // Nothing matches the search: no game to show.
+        shownIndex.reset();
         detailsPanel->setVisibility(Visibility::INVISIBLE);
+    } else if (!burst || !shownIndex) {
+        showDetails();
     } else {
-        detailsPanel->setVisibility(Visibility::VISIBLE);
-        detailsPanel->show(detailsFor(*current), true);
+        std::shared_ptr<bool> token = alive;
+        brls::delay(kDetailsSettleMs, [this, token, ticket] {
+            if (*token && ticket == detailsTicket)
+                showDetails();
+        });
     }
+    // The rows draw the current game themselves; only the details and the
+    // hints depend on it here.
     holdAmbient();
-    applyProgress();
     applyActions();
+    keepFocus();
+}
+
+void ConsoleShelfView::showDetails() {
+    // Back on the game already shown (A, B, A quickly): nothing changed.
+    if (!current || shownIndex == current)
+        return;
+    // setVisibility runs willAppear even when nothing changes.
+    if (detailsPanel->getVisibility() != Visibility::VISIBLE)
+        detailsPanel->setVisibility(Visibility::VISIBLE);
+    detailsPanel->show(detailsFor(*current), true);
+    shownIndex = current;
+    applyDetailsProgress();
+}
+
+void ConsoleShelfView::applyDetailsProgress() {
+    if (!current || shownIndex != current)
+        return;
+    const size_t i = *current;
+    const bool downloading = dataQueue && dataQueue->current() == i;
+    const std::optional<emu::DataStep> step =
+        downloading ? dataStep : std::optional<emu::DataStep>();
+    detailsPanel->setFailed(failure && failure->index == i
+                                ? std::optional<emu::DataStop>(failure->stop)
+                                : std::nullopt);
+    // Waiting, or picked by the queue but not at its first step yet.
+    detailsPanel->setProgress(step, dataQueue && dataQueue->queued(i) && !step);
 }
 
 void ConsoleShelfView::holdAmbient() {
@@ -848,15 +902,6 @@ void ConsoleShelfView::applyActions() {
 void ConsoleShelfView::applyProgress() {
     const std::optional<size_t> downloading =
         dataQueue ? dataQueue->current() : std::nullopt;
-    const auto stepOf = [&](size_t i) -> std::optional<emu::DataStep> {
-        if (downloading == i)
-            return dataStep;
-        return std::nullopt;
-    };
-    // Waiting, or picked by the queue but not at its first step yet.
-    const auto waiting = [&](size_t i) {
-        return dataQueue && dataQueue->queued(i) && !stepOf(i);
-    };
 
     listPanel->refreshRows();
     size_t missing = 0;
@@ -864,12 +909,7 @@ void ConsoleShelfView::applyProgress() {
         if (!game.hasData)
             missing++;
 
-    if (current) {
-        detailsPanel->setFailed(failure && failure->index == *current
-                                    ? std::optional<emu::DataStop>(failure->stop)
-                                    : std::nullopt);
-        detailsPanel->setProgress(stepOf(*current), waiting(*current));
-    }
+    applyDetailsProgress();
 
     const bool running = dataQueue && dataQueue->running();
     const size_t total = running ? dataQueue->total() : 0;
@@ -968,7 +1008,8 @@ void ConsoleShelfView::dataFinished(size_t index, const emu::DataOutcome& outcom
         readGameData(paths, game);
         indexDirty = true;
         listPanel->setItem(index, itemFor(game));
-        if (current == index) {
+        // A details change still waiting will read the new data itself.
+        if (current == index && shownIndex == index) {
             detailsPanel->show(detailsFor(index), false);
             applyAmbient();
             applyActions();
