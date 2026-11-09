@@ -10,6 +10,7 @@
 #endif
 
 #include "settings_tab.hpp"
+#include "download_service.hpp"
 #include "app_theme.hpp"
 #include "Updater.hpp"
 #include "Settings.hpp"
@@ -1011,6 +1012,7 @@ SettingsTab::SettingsTab(const std::string& group) {
             Application::getImeManager()->openForText(
                 [showUser](const std::string& text) {
                     Settings::instance().set_screenscraper_user(text);
+                    DownloadService::instance().credentialsChanged();
                     showUser();
                 },
                 "settings/screenscraper_user"_i18n, "", 64,
@@ -1023,6 +1025,7 @@ SettingsTab::SettingsTab(const std::string& group) {
             Application::getImeManager()->openForText(
                 [showPassword](const std::string& text) {
                     Settings::instance().set_screenscraper_password(text);
+                    DownloadService::instance().credentialsChanged();
                     showPassword();
                 },
                 "settings/screenscraper_password"_i18n, "", 64,

@@ -624,7 +624,7 @@ void ConsoleShelfView::rescan(bool clearMisses) {
 }
 
 void ConsoleShelfView::createDataQueue() {
-    dataQueue = std::make_unique<GameDataQueue>(consoleRef, paths, db.get());
+    dataQueue = std::make_unique<GameDataQueue>(consoleRef);
     dataQueue->onStep = [this](size_t index, emu::DataStep step) {
         if (dataQueue->current() == index)
             dataStep = step;
@@ -648,8 +648,8 @@ void ConsoleShelfView::showGames(Scan& scan) {
             "emu/scan_done", found == 1 ? "hosts/games_one"_i18n
                                         : brls::getStr("hosts/games_count", found)));
     }
-    // Nothing tied to the old numbering may outlive it.
-    cancelData();
+    // The downloads go on: the queue follows the games by file name.
+    dataStep.reset();
     failure.reset();
     stoppedIndex.reset();
     retry.reset();
@@ -660,6 +660,12 @@ void ConsoleShelfView::showGames(Scan& scan) {
 
     games = std::move(scan.games);
     const bool none = games.empty();
+    std::vector<std::string> fileNames;
+    fileNames.reserve(games.size());
+    for (const Game& game : games)
+        fileNames.push_back(game.rom.fileName);
+    dataQueue->setGames(std::move(fileNames));
+    batchActive = dataQueue->running();
 
     // The panel reports its first result as current while it fills.
     listPanel->setItems(std::move(scan.items), std::move(scan.order));
@@ -671,6 +677,7 @@ void ConsoleShelfView::showGames(Scan& scan) {
         onCurrent(std::nullopt);
         if (focusHere)
             Application::giveFocus(empty);
+        applyProgress();
         return;
     }
 
@@ -901,10 +908,10 @@ void ConsoleShelfView::downloadAll() {
     batchActive = true;
     // The picked game first, then the others.
     if (current && !games[*current].hasData)
-        dataQueue->enqueue(*current, games[*current].rom);
+        dataQueue->enqueue(*current, games[*current].rom, emu::DlPriority::Batch);
     for (size_t i = 0; i < games.size(); i++)
         if (!games[i].hasData)
-            dataQueue->enqueue(i, games[i].rom);
+            dataQueue->enqueue(i, games[i].rom, emu::DlPriority::Batch);
     if (!dataQueue->running())
         batchActive = false;
     applyProgress();
@@ -924,7 +931,7 @@ void ConsoleShelfView::retryStopped() {
         batchActive = true;
         for (size_t i = 0; i < games.size(); i++)
             if (!games[i].hasData)
-                dataQueue->enqueue(i, games[i].rom);
+                dataQueue->enqueue(i, games[i].rom, emu::DlPriority::Batch);
     }
     if (!dataQueue->running())
         batchActive = false;

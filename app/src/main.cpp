@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "add_host_tab.hpp"
+#include "download_service.hpp"
 #include "bold_label.hpp"
 #include "host_card.hpp"
 #include "link_cell.hpp"
@@ -340,11 +341,14 @@ int main(int argc, char* argv[]) {
 
     brls::Application::enableDebuggingView(Settings::instance().write_log());
 
+    DownloadService::instance().start();
+
     // Run the app.
     while (brls::Application::mainLoop()) {
     }
 
     // Exit
-    
+    DownloadService::instance().shutdown();
+
     return EXIT_SUCCESS;
 }
