@@ -953,43 +953,97 @@ void watchDiskStops() {
 
 DownloadIndicator::DownloadIndicator() : Box(Axis::ROW), refresher([this] { refresh(); }) {
     setAlignItems(AlignItems::CENTER);
-    setPadding(6, 14, 6, 12);
-    setCornerRadius(16);
-    addGestureRecognizer(new TapGestureRecognizer([this](TapGestureStatus status, Sound*) {
-        if (status.state == GestureState::END && onOpen && count->getVisibility() == Visibility::VISIBLE)
+    setCornerRadius(22);
+    setHighlightCornerRadius(24);
+    addGestureRecognizer(new TapGestureRecognizer(this));
+    registerClickAction([this](View*) {
+        if (active > 0 && onOpen)
             onOpen();
-    }));
+        return true;
+    });
+    updateActionHint(BUTTON_A, "downloads/open"_i18n);
 
-    auto* icon = new IconLabel();
-    icon->setFontSize(20);
-    icon->setText(""); // file_download
-    icon->setTextColor(themeColor("equinox/status_on"));
-    addView(icon);
+    ring = new Box();
+    ring->setWidth(30);
+    ring->setHeight(30);
+    addView(ring);
 
-    count = new Label();
-    count->setFontSize(15);
+    count = new BoldLabel();
+    count->setFontSize(17);
     count->setSingleLine(true);
-    count->setMarginLeft(6);
+    count->setMarginLeft(10);
     addView(count);
 
+    setActive(false);
     refresher.now();
 }
 
 void DownloadIndicator::draw(NVGcontext* vg, float x, float y, float width, float height,
                              Style style, FrameContext* ctx) {
-    // Drawn even while idle, with nothing in it, so events can show it again.
+    // Drawn even while idle, empty, so events can show it again.
     refresher.tick();
+    if (active == 0)
+        return;
     Box::draw(vg, x, y, width, height, style, ctx);
+
+    const float cx = ring->getX() + ring->getWidth() / 2;
+    const float cy = ring->getY() + ring->getHeight() / 2;
+    const float radius = 11.5f;
+    const float top = -NVG_PI / 2;
+    nvgLineCap(vg, NVG_ROUND);
+    nvgStrokeWidth(vg, 3.5f);
+    nvgBeginPath(vg);
+    nvgCircle(vg, cx, cy, radius);
+    nvgStrokeColor(vg, a(themeColor("equinox/card_inner")));
+    nvgStroke(vg);
+    if (fraction > 0) {
+        nvgBeginPath(vg);
+        nvgArc(vg, cx, cy, radius, top, top + 2 * NVG_PI * fraction, NVG_CW);
+        nvgStrokeColor(vg, a(themeColor("equinox/status_on")));
+        nvgStroke(vg);
+    }
+    // The download arrow.
+    nvgStrokeWidth(vg, 2);
+    nvgLineJoin(vg, NVG_ROUND);
+    nvgBeginPath(vg);
+    nvgMoveTo(vg, cx, cy - 5.5f);
+    nvgLineTo(vg, cx, cy + 3);
+    nvgMoveTo(vg, cx - 3.5f, cy - 0.5f);
+    nvgLineTo(vg, cx, cy + 3);
+    nvgLineTo(vg, cx + 3.5f, cy - 0.5f);
+    nvgStrokeColor(vg, a(themeColor("brls/text")));
+    nvgStroke(vg);
 }
 
 void DownloadIndicator::refresh() {
-    const size_t active = DownloadService::instance().overview().active();
-    const Visibility shown = active > 0 ? Visibility::VISIBLE : Visibility::GONE;
-    for (View* child : getChildren())
-        child->setVisibility(shown);
-    setBackgroundColor(active > 0 ? themeColor("equinox/card") : nvgRGBA(0, 0, 0, 0));
+    const emu::DlOverview overview = DownloadService::instance().overview();
+    const size_t was = active;
+    active = overview.active();
+    float running = 0;
+    for (const emu::DlGroup& group : overview.groups)
+        if (group.running > 0)
+            running = refresher.progressOf(group);
+    fraction = overview.progress(running);
+
     if (active > 0)
         setText(count, std::to_string(active));
+    if ((active > 0) != (was > 0))
+        setActive(active > 0);
+}
+
+// Idle: nothing to see, touch or focus, and nothing drawn.
+void DownloadIndicator::setActive(bool on) {
+    const bool focused = Application::getCurrentFocus() == this;
+    if (on)
+        setPadding(7, 16, 7, 7);
+    else
+        setPadding(0, 0, 0, 0);
+    setBackgroundColor(on ? themeColor("equinox/card") : nvgRGBA(0, 0, 0, 0));
+    setShown(ring, on);
+    setShown(count, on);
+    setFocusable(on);
+    if (!on && focused && onHidden)
+        onHidden();
 }
 
 #endif // PLATFORM_SWITCH

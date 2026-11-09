@@ -750,6 +750,11 @@ HomeView::HomeView() {
     badge->setPositionTop(33);
     badge->setPositionRight(44);
     badge->onOpen = [] { openDownloads(); };
+    // Back to the shelf it was reached from.
+    badge->onHidden = [this] {
+        if (View* card = getDefaultFocus())
+            Application::giveFocus(card);
+    };
     downloadBadge = badge;
     addView(badge);
 #endif
@@ -1352,6 +1357,15 @@ View* HomeView::getDefaultFocus() {
 }
 
 View* HomeView::getNextFocus(FocusDirection direction, View* currentView) {
+#if defined(PLATFORM_SWITCH)
+    if (!downloadBadge)
+        return nullptr;
+    if (direction == FocusDirection::UP && !entered && downloadBadge->shown() &&
+        (currentView == homeLayer || currentView == pcLayer))
+        return downloadBadge;
+    if (direction == FocusDirection::DOWN && currentView == downloadBadge)
+        return getDefaultFocus();
+#endif
     return nullptr;
 }
 

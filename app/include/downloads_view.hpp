@@ -119,8 +119,9 @@ class DownloadsView : public brls::Box {
 // card pauses the downloads, whatever screen is open.
 void watchDiskStops();
 
-// The badge: an arrow and how many downloads are under way. Shown only while
-// something downloads; a tap opens the screen.
+// A pill at the top right of the home screen: a ring with how far the active
+// downloads are, the download arrow inside, and how many there are. Shown
+// and focusable only while something downloads; A or a tap opens the screen.
 class DownloadIndicator : public brls::Box {
   public:
     DownloadIndicator();
@@ -129,10 +130,18 @@ class DownloadIndicator : public brls::Box {
               brls::FrameContext* ctx) override;
 
     std::function<void()> onOpen;
+    // It hid while it had the focus: the owner takes the focus back.
+    std::function<void()> onHidden;
+
+    bool shown() const { return active > 0; }
 
   private:
     DownloadsRefresh refresher;
+    brls::Box* ring = nullptr;  // the space the ring is drawn in
     brls::Label* count = nullptr;
+    size_t active = 0;
+    float fraction = 0;
 
     void refresh();
+    void setActive(bool on);
 };

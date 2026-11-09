@@ -22,6 +22,8 @@
 #include <string>
 #include <vector>
 
+class DownloadIndicator;
+
 // A box drawn scaled, shifted and faded as a whole (zoom between shelves,
 // the options panel sliding in). Touch areas do not follow the transform,
 // so it is only used for short transitions and fully shown/hidden states.
@@ -88,7 +90,8 @@ class HomeView : public brls::Box {
     void willAppear(bool resetState) override;
     void draw(NVGcontext* vg, float x, float y, float width, float height,
               brls::Style style, brls::FrameContext* ctx) override;
-    // Focus never leaves the screen's own shelves and panel by direction.
+    // Focus never leaves the screen's own shelves and panel by direction,
+    // but for up from a shelf to the downloads indicator while it shows.
     brls::View* getNextFocus(brls::FocusDirection direction,
                              brls::View* currentView) override;
     brls::View* getDefaultFocus() override;
@@ -128,7 +131,7 @@ class HomeView : public brls::Box {
 
     brls::Box* header = nullptr;
     // Says something downloads; empty while nothing does. Switch only.
-    brls::View* downloadBadge = nullptr;
+    DownloadIndicator* downloadBadge = nullptr;
     MotionBox* homeLayer = nullptr;
     MotionBox* pcLayer = nullptr;
     MotionBox* panel = nullptr;
