@@ -68,31 +68,42 @@ ConsoleCard::ConsoleCard(const emu::Console& console) : consoleRef(console) {
     // Gradient drawn in draw().
     this->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
     name->setText(console.name);
+    // The live model when it's there, else the pre-rendered views.
+    const std::string base = "img/3d/" + console.slug;
+    const std::string art3d = Turntable::exists(base + ".mesh") ? base + ".mesh" : base + ".png";
+    if (Turntable::exists(art3d))
+        turntable = std::make_unique<Turntable>(art3d);
 
-    // The tag row on top: the console's controller and its short name.
-    auto* header = new Box(Axis::ROW);
-    header->setAlignItems(AlignItems::CENTER);
-    header->setMarginBottom(4);
+    if (frameless()) {
+        // No card: the object floats over the name, both centred.
+        name->setHorizontalAlign(HorizontalAlign::CENTER);
+        status->setHorizontalAlign(HorizontalAlign::CENTER);
+    } else {
+        // The tag row on top: the console's controller and its short name.
+        auto* header = new Box(Axis::ROW);
+        header->setAlignItems(AlignItems::CENTER);
+        header->setMarginBottom(4);
 
-    icon = new Image();
-    icon->setScalingType(ImageScalingType::FIT);
-    icon->setImageFromRes("img/consoles/" + console.slug + ".png");
-    icon->setWidth(46);
-    icon->setHeight(20);
-    icon->setMarginRight(8);
-    header->addView(icon);
+        icon = new Image();
+        icon->setScalingType(ImageScalingType::FIT);
+        icon->setImageFromRes("img/consoles/" + console.slug + ".png");
+        icon->setWidth(46);
+        icon->setHeight(20);
+        icon->setMarginRight(8);
+        header->addView(icon);
 
-    tag = new Box(Axis::ROW);
-    tag->setPadding(3, 9, 3, 9);
-    tag->setCornerRadius(10);
-    tag->setBackgroundColor(hex(console.cardAccent));
-    auto* tagText = new BoldLabel();
-    tagText->setFontSize(13);
-    tagText->setTextColor(themeColor("equinox/pill_text"));
-    tagText->setText(console.shortName);
-    tag->addView(tagText);
-    header->addView(tag);
-    addView(header, 0);
+        tag = new Box(Axis::ROW);
+        tag->setPadding(3, 9, 3, 9);
+        tag->setCornerRadius(10);
+        tag->setBackgroundColor(hex(console.cardAccent));
+        auto* tagText = new BoldLabel();
+        tagText->setFontSize(13);
+        tagText->setTextColor(themeColor("equinox/pill_text"));
+        tagText->setText(console.shortName);
+        tag->addView(tagText);
+        header->addView(tag);
+        addView(header, 0);
+    }
 
     // Pushes the name and the count to the bottom of the card.
     auto* spacer = new Box();
@@ -149,7 +160,7 @@ void ConsoleCard::setLatest(const emu::Manifest& latest) {
 NVGcolor ConsoleCard::statusColor() const {
     switch (runnerAction) {
     case emu::RunnerAction::Update:
-        return themeColor("equinox/sun");
+        return themeColor("equinox/status_on");
     case emu::RunnerAction::NeedsNewerEquinox:
         return themeColor("equinox/muted");
     default:
@@ -212,6 +223,8 @@ void ConsoleCard::onFocusLost() {
 }
 
 void ConsoleCard::animateFocus(bool focused) {
+    if (turntable)
+        turntable->setActive(focused);
     const float to = focused ? 1.0f : 0.0f;
     focus.stop();
     focus.reset();
@@ -229,6 +242,13 @@ void ConsoleCard::animateFocus(bool focused) {
 
 void ConsoleCard::draw(NVGcontext* vg, float x, float y, float width,
                        float height, Style style, FrameContext* ctx) {
+    if (frameless()) {
+        // Floats over the name, its shadow just above it.
+        turntable->draw(vg, x + width / 2, y + 38, 215, y + 100, getAlpha());
+        PressableBox::draw(vg, x, y, width, height, style, ctx);
+        return;
+    }
+
     const float f = focus;
     const float radius = 16;
     const NVGcolor gold = themeColor("equinox/sun");
@@ -275,9 +295,11 @@ void ConsoleCard::draw(NVGcontext* vg, float x, float y, float width,
         nvgFill(vg);
     }
 
-    tag->setBackgroundColor(
-        nvgLerpRGBA(hex(consoleRef.cardAccent), gold, f));
+    if (tag)
+        tag->setBackgroundColor(
+            nvgLerpRGBA(hex(consoleRef.cardAccent), gold, f));
 
     PressableBox::draw(vg, x, y, width, height, style, ctx);
 }
+
 

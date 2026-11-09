@@ -261,7 +261,7 @@ ConsoleShelfView::ConsoleShelfView(const emu::Console& console,
     auto* emptyPath = new BoldLabel();
     emptyPath->setFontSize(22);
     emptyPath->setMarginTop(12);
-    emptyPath->setTextColor(themeColor("equinox/sun"));
+    emptyPath->setTextColor(themeColor("equinox/status_on"));
     emptyPath->setText(paths.roms + "/");
     empty->addView(emptyPath);
 

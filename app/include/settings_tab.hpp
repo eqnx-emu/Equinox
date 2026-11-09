@@ -76,6 +76,7 @@ class SettingsTab : public brls::Box {
     BRLS_BIND(brls::SelectorCell, metricsPosition, "metrics_position");
     BRLS_BIND(brls::SelectorCell, metricsColor, "metrics_color");
     BRLS_BIND(brls::SelectorCell, metricsBackground, "metrics_background");
+    BRLS_BIND(brls::SelectorCell, theme, "theme");
     BRLS_BIND(brls::BooleanCell, reduceMotion, "reduce_motion");
     BRLS_BIND(brls::Label, reduceMotionNote, "reduce_motion_note");
     BRLS_BIND(brls::Box, screenscraperSection, "screenscraper_section");

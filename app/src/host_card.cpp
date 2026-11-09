@@ -163,6 +163,36 @@ void MonitorView::draw(NVGcontext* vg, float x, float y, float width,
     nvgFill(vg);
 }
 
+// MARK: - Floating objects
+
+namespace {
+// Over the name and the status line at the bottom of the card, both centred.
+constexpr float kObjectWidth = 165;
+
+void floatOverName(Box* card, Label* name, Label* status, Label* detail,
+                   Label* info) {
+    card->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
+    name->setHorizontalAlign(HorizontalAlign::CENTER);
+    status->setHorizontalAlign(HorizontalAlign::CENTER);
+    if (auto* row = dynamic_cast<Box*>(card->getView("status_row"))) {
+        row->setJustifyContent(JustifyContent::CENTER);
+        status->setGrow(0.0f);
+    }
+    // The shelf info under the carousel shows these.
+    detail->setVisibility(Visibility::GONE);
+    info->setVisibility(Visibility::GONE);
+    // Pushes the name and the status to the bottom.
+    auto* spacer = new Box();
+    spacer->setGrow(1);
+    card->addView(spacer, 1);
+}
+
+void drawObject(Turntable& object, NVGcontext* vg, float x, float y,
+                float width, float alpha) {
+    object.draw(vg, x + width / 2, y + 22, kObjectWidth, y + 92, alpha);
+}
+} // namespace
+
 // MARK: - HostCard
 
 HostCard::HostCard(const Host& host) : host(host) {
@@ -170,6 +200,10 @@ HostCard::HostCard(const Host& host) : host(host) {
 
     name->setText(host.hostname);
     info->setText(" ");
+    if (Turntable::exists("img/3d/host-pc.mesh")) {
+        turntable = std::make_unique<Turntable>("img/3d/host-pc.mesh");
+        floatOverName(this, name, status, detail, info);
+    }
 
     this->addGestureRecognizer(new TapGestureRecognizer(this));
     this->registerClickAction([this](View* view) {
@@ -350,6 +384,27 @@ void HostCard::applyState(HostCardState newState) {
     monitor->setState(newState);
 
     const NVGcolor color = stateColor(newState);
+    if (turntable) {
+        // The tower's LED: green online, gold while a game runs, a dim
+        // moon blue asleep, off when out of reach.
+        switch (newState) {
+        case HostCardState::ONLINE:
+            turntable->setGlow(color, 3);
+            break;
+        case HostCardState::RUNNING:
+            turntable->setGlow(themeColor("equinox/sun"), 3);
+            break;
+        case HostCardState::ASLEEP:
+            turntable->setGlow(themeColor("equinox/moon"), 1.2f);
+            break;
+        case HostCardState::FETCHING:
+            turntable->setGlow(color, 0.6f);
+            break;
+        case HostCardState::UNREACHABLE:
+            turntable->setGlow(nvgRGB(58, 58, 68), 0);
+            break;
+        }
+    }
     statusDot->setBackgroundColor(color);
     status->setTextColor(color);
     detail->setText(GameStreamClient::instance().active_address(host));
@@ -544,6 +599,25 @@ void HostCard::remove() {
     confirm->open();
 }
 
+void HostCard::draw(NVGcontext* vg, float x, float y, float width,
+                    float height, Style style, FrameContext* ctx) {
+    if (turntable)
+        drawObject(*turntable, vg, x, y, width, getAlpha());
+    PressableBox::draw(vg, x, y, width, height, style, ctx);
+}
+
+void HostCard::onFocusGained() {
+    PressableBox::onFocusGained();
+    if (turntable)
+        turntable->setActive(true);
+}
+
+void HostCard::onFocusLost() {
+    PressableBox::onFocusLost();
+    if (turntable)
+        turntable->setActive(false);
+}
+
 // MARK: - AddHostCard
 
 AddHostCard::AddHostCard(bool primary) {
@@ -569,6 +643,12 @@ AddHostCard::AddHostCard(bool primary) {
 #endif
     detail->setVisibility(Visibility::GONE);
     info->setVisibility(Visibility::GONE);
+    if (Turntable::exists("img/3d/host-add.mesh")) {
+        turntable = std::make_unique<Turntable>("img/3d/host-add.mesh");
+        floatOverName(this, name, status, detail, info);
+        // The shelf info under the carousel says what it does.
+        status->setVisibility(Visibility::GONE);
+    }
 
     this->addGestureRecognizer(new TapGestureRecognizer(this));
     this->registerClickAction([this](View* view) {
@@ -582,8 +662,25 @@ AddHostCard::AddHostCard(bool primary) {
 #endif
 }
 
+void AddHostCard::onFocusGained() {
+    PressableBox::onFocusGained();
+    if (turntable)
+        turntable->setActive(true);
+}
+
+void AddHostCard::onFocusLost() {
+    PressableBox::onFocusLost();
+    if (turntable)
+        turntable->setActive(false);
+}
+
 void AddHostCard::draw(NVGcontext* vg, float x, float y, float width,
                        float height, Style style, FrameContext* ctx) {
+    if (turntable) {
+        drawObject(*turntable, vg, x, y, width, getAlpha());
+        PressableBox::draw(vg, x, y, width, height, style, ctx);
+        return;
+    }
     PressableBox::draw(vg, x, y, width, height, style, ctx);
 
     // Walk the rounded outline and stroke every other stretch of it.

@@ -163,6 +163,10 @@ class Settings : public Singleton<Settings> {
     [[nodiscard]] bool reduce_motion() const { return m_reduce_motion; }
     void set_reduce_motion(bool reduce) { m_reduce_motion = reduce; }
 
+    // Interface theme: 0 follows the system, 1 light, 2 dark.
+    [[nodiscard]] int theme() const { return m_theme; }
+    void set_theme(int theme) { m_theme = theme >= 0 && theme <= 2 ? theme : 0; }
+
     [[nodiscard]] const std::string& screenscraper_user() const { return m_screenscraper_user; }
     void set_screenscraper_user(const std::string& user) { m_screenscraper_user = user; }
     [[nodiscard]] const std::string& screenscraper_password() const { return m_screenscraper_password; }
@@ -420,6 +424,7 @@ class Settings : public Singleton<Settings> {
     int m_library_view = 0;
     int m_library_sort = 0;
     bool m_reduce_motion = false;
+    int m_theme = 0;
     std::string m_screenscraper_user;
     std::string m_screenscraper_password;
     int m_resolution = 720;

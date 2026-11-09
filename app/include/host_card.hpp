@@ -10,12 +10,15 @@
 #pragma once
 
 #include "GameStreamClient.hpp"
+#include "cover_carousel.hpp"
 #include "pressable_box.hpp"
+#include "turntable.hpp"
 #include <Settings.hpp>
 #include <borealis.hpp>
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -42,9 +45,17 @@ class MonitorView : public brls::View {
     bool primary = false;
 };
 
-class HostCard : public PressableBox {
+// With img/3d/host-pc.mesh in the resources the PC has no card: a 3D tower
+// floats over the name, its LED in the state's colour.
+class HostCard : public PressableBox, public ShelfItem {
   public:
     explicit HostCard(const Host& host);
+
+    bool frameless() const override { return turntable != nullptr; }
+    void draw(NVGcontext* vg, float x, float y, float width, float height,
+              brls::Style style, brls::FrameContext* ctx) override;
+    void onFocusGained() override;
+    void onFocusLost() override;
 
     // Re-queries the host and updates the card.
     void refresh();
@@ -81,6 +92,7 @@ class HostCard : public PressableBox {
 
   private:
     Host host;
+    std::unique_ptr<Turntable> turntable;
     // Last known library facts; kept while the PC is asleep or away.
     int gameCount = -1;
     int favoriteCount = 0;
@@ -117,14 +129,18 @@ class HostCard : public PressableBox {
     }
 };
 
-// Last card of the PC shelf: opens the screen that finds or adds a PC.
-class AddHostCard : public PressableBox {
+// Last card of the PC shelf: opens the screen that finds or adds a PC. With
+// img/3d/host-add.mesh it is an open box with a plus instead of a card.
+class AddHostCard : public PressableBox, public ShelfItem {
   public:
     // primary: no PC is paired yet, so this is the main action on screen.
     explicit AddHostCard(bool primary);
 
+    bool frameless() const override { return turntable != nullptr; }
     void draw(NVGcontext* vg, float x, float y, float width, float height,
               brls::Style style, brls::FrameContext* ctx) override;
+    void onFocusGained() override;
+    void onFocusLost() override;
 
     BRLS_BIND(MonitorView, monitor, "monitor");
     BRLS_BIND(brls::Label, name, "name");
@@ -132,4 +148,7 @@ class AddHostCard : public PressableBox {
     BRLS_BIND(brls::Label, status, "status");
     BRLS_BIND(brls::Label, detail, "detail");
     BRLS_BIND(brls::Label, info, "info");
+
+  private:
+    std::unique_ptr<Turntable> turntable;
 };

@@ -42,6 +42,8 @@ constexpr float kPanelWidth = 640;
 constexpr float kPanelTop = 72;
 constexpr float kOptionGap = 12;
 constexpr int kZoomMs = 620;
+// The PC cards' text after they land as skeletons.
+constexpr int kSkeletonFadeMs = 220;
 constexpr size_t kOptionRows = 10;
 
 NVGcolor themeColor(const std::string& name) {
@@ -418,10 +420,10 @@ class OptionButton : public PressableBox {
     }
 
     void set(const HomeOption& option, bool first) {
-        const NVGcolor danger = nvgRGB(0xFF, 0xA7, 0x9B);
+        const NVGcolor danger = themeColor("equinox/danger");
         icon->setText(option.icon);
         icon->setTextColor(option.danger ? danger
-                           : first       ? themeColor("equinox/sun")
+                           : first       ? themeColor("equinox/status_on")
                                          : themeColor("equinox/muted"));
         label->setText(option.label);
         label->setTextColor(option.danger ? danger : themeColor("brls/text"));
@@ -514,7 +516,29 @@ HomeCard::HomeCard(HomeCardKind kind) : PressableBox(Axis::COLUMN), kind(kind) {
     setFocusable(true);
     addGestureRecognizer(new TapGestureRecognizer(this));
 
-    addView(new HomeArt(kind));
+    // A floating 3D object instead of the card: the live model when it's
+    // there, else the pre-rendered views.
+    std::string art3d;
+    const char* object = kind == HomeCardKind::PCS         ? "img/3d/home-devices"
+                         : kind == HomeCardKind::FAVORITES ? "img/3d/home-favorites"
+                         : kind == HomeCardKind::SETTINGS  ? "img/3d/home-settings"
+                         : kind == HomeCardKind::ABOUT     ? "img/3d/home-about"
+                                                           : nullptr;
+    if (object)
+        art3d = Turntable::exists(std::string(object) + ".mesh")
+                    ? std::string(object) + ".mesh"
+                    : std::string(object) + ".png";
+    if (!art3d.empty() && Turntable::exists(art3d)) {
+        // No card: the object (drawn in draw()) floats over the name.
+        turntable = std::make_unique<Turntable>(art3d);
+        setBackgroundColor(nvgRGBA(0, 0, 0, 0));
+        auto* room = new Box();
+        room->setWidth(272);
+        room->setHeight(128);
+        addView(room);
+    } else {
+        addView(new HomeArt(kind));
+    }
 
     std::string title;
     NVGcolor color = themeColor("equinox/muted");
@@ -525,7 +549,7 @@ HomeCard::HomeCard(HomeCardKind kind) : PressableBox(Axis::COLUMN), kind(kind) {
         break;
     case HomeCardKind::FAVORITES:
         title = "home/favorites"_i18n;
-        color = themeColor("equinox/sun");
+        color = themeColor("equinox/status_on");
         break;
     case HomeCardKind::SETTINGS:
         title = "home/settings"_i18n;
@@ -562,6 +586,13 @@ HomeCard::HomeCard(HomeCardKind kind) : PressableBox(Axis::COLUMN), kind(kind) {
     status->setTextColor(color);
     row->addView(status);
     addView(row);
+    if (turntable) {
+        name->setMarginLeft(0);
+        name->setHorizontalAlign(HorizontalAlign::CENTER);
+        row->setMarginLeft(0);
+        row->setJustifyContent(JustifyContent::CENTER);
+        status->setGrow(0.0f);
+    }
 
     registerClickAction([this](View*) {
         press([this] {
@@ -575,6 +606,28 @@ HomeCard::HomeCard(HomeCardKind kind) : PressableBox(Axis::COLUMN), kind(kind) {
 }
 
 void HomeCard::setStatus(const std::string& text) { status->setText(text); }
+
+void HomeCard::onFocusGained() {
+    PressableBox::onFocusGained();
+    if (turntable)
+        turntable->setActive(true);
+}
+
+void HomeCard::onFocusLost() {
+    PressableBox::onFocusLost();
+    if (turntable)
+        turntable->setActive(false);
+}
+
+void HomeCard::draw(NVGcontext* vg, float x, float y, float width, float height,
+                    Style style, FrameContext* ctx) {
+    // In the 128 px art space above the name, its shadow at the bottom.
+    if (turntable)
+        // Upright objects (the star) are taller for their width: draw them narrower.
+        turntable->draw(vg, x + width / 2, y + 64, kind == HomeCardKind::PCS ? 228 : kind == HomeCardKind::ABOUT ? 196 : 170,
+                        y + 140, getAlpha());
+    PressableBox::draw(vg, x, y, width, height, style, ctx);
+}
 
 // MARK: - HomeView
 
@@ -703,7 +756,7 @@ MotionBox* HomeView::makeLayer(Shelf& shelf, bool forPcs) {
         auto* lit = new BoldLabel();
         lit->setFontSize(15);
         lit->setSingleLine(true);
-        lit->setTextColor(themeColor("equinox/sun"));
+        lit->setTextColor(themeColor("equinox/status_on"));
         std::string text = "home/pcs"_i18n;
         std::transform(text.begin(), text.end(), text.begin(),
                        [](unsigned char c) { return (char)std::toupper(c); });
@@ -977,9 +1030,19 @@ void HomeView::openPcs(bool checkUpdates) {
         return;
     level = Level::PCS;
 
+    // The cards zoom in as skeletons; their text fades in once they land.
+    for (View* card : pcs.carousel->getChildren())
+        if (auto* pressable = dynamic_cast<PressableBox*>(card))
+            pressable->setSkeleton(true);
     pcLayer->setVisibility(Visibility::VISIBLE);
     pcLayer->set(0.7f, 0, 0);
-    pcLayer->animate(1, 1, 0, kZoomMs);
+    pcLayer->animate(1, 1, 0, kZoomMs, [this] {
+        if (level != Level::PCS)
+            return;
+        for (View* card : pcs.carousel->getChildren())
+            if (auto* pressable = dynamic_cast<PressableBox*>(card))
+                pressable->setSkeleton(false, kSkeletonFadeMs);
+    });
     // Zoom through the home shelf into the PCs one.
     homeLayer->animate(1.7f, 0, 0, kZoomMs, [this] {
         if (level == Level::PCS)
@@ -1102,7 +1165,7 @@ void HomeView::fillPanel() {
                     ? "home/fav_empty"_i18n
                     : brls::getStr("home/fav_status", gamesText(fav.games),
                                    favoritePlaces(fav)));
-            color = themeColor("equinox/sun");
+            color = themeColor("equinox/status_on");
             panelDetail->setText(
                 fav.games == 0
                     ? "home/fav_empty_detail"_i18n
@@ -1223,11 +1286,7 @@ std::vector<HomeOption> HomeView::settingsOptions() {
         {"input", ""},     {"system", ""},
     };
 
-    auto open = [this](const std::string& group) {
-        auto* settings = new SettingsTab(group);
-        settings->getAppletFrameItem()->title = "home/settings"_i18n;
-        presentWithHeader(this, settings);
-    };
+    auto open = [](const std::string& group) { openSettings(group); };
 
     std::vector<HomeOption> options;
     for (const auto& [id, icon] : groups) {
@@ -1804,6 +1863,14 @@ void HomeView::presentWithHeader(View* from, View* view) {
         instance->presenting = true;
     applet->setHeaderVisibility(Visibility::VISIBLE);
     applet->pushContentView(view);
+}
+
+void HomeView::openSettings(const std::string& group) {
+    if (!instance)
+        return;
+    auto* settings = new SettingsTab(group);
+    settings->getAppletFrameItem()->title = "home/settings"_i18n;
+    presentWithHeader(instance, settings);
 }
 
 void HomeView::hostsChanged() {

@@ -59,6 +59,15 @@ struct ShelfStyle {
     }
 };
 
+// An item that draws its own look: when frameless() is true the shelf skips
+// the frame it puts around a cover (glow, dimming, edge and focus ring) and
+// only keeps the shadow on the ground.
+class ShelfItem {
+  public:
+    virtual ~ShelfItem() = default;
+    virtual bool frameless() const { return false; }
+};
+
 class CoverCarousel : public brls::Box {
   public:
     explicit CoverCarousel(ShelfStyle style = ShelfStyle::covers());

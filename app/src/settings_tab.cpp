@@ -10,6 +10,7 @@
 #endif
 
 #include "settings_tab.hpp"
+#include "app_theme.hpp"
 #include "Updater.hpp"
 #include "Settings.hpp"
 #include "metrics_hud.hpp"
@@ -975,6 +976,19 @@ SettingsTab::SettingsTab(const std::string& group) {
                             Settings::instance().metrics_background(), [](int selected) {
                                 Settings::instance().set_metrics_background(selected);
                             });
+
+    theme->init("settings/theme"_i18n,
+                {"settings/themes/system"_i18n, "settings/themes/light"_i18n,
+                 "settings/themes/dark"_i18n},
+                Settings::instance().theme(), [](int selected) {
+                    if (selected == Settings::instance().theme())
+                        return;
+                    Settings::instance().set_theme(selected);
+                    Settings::instance().save();
+                    app_theme::apply(selected);
+                    // Rebuilt in the new colours, back on this group.
+                    app_theme::reload("system");
+                });
 
     reduceMotion->init("settings/reduce_motion"_i18n,
                        Settings::instance().reduce_motion(), [](bool value) {

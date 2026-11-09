@@ -14,9 +14,11 @@
 #include "cover_carousel.hpp"
 #include "host_card.hpp"
 #include "pressable_box.hpp"
+#include "turntable.hpp"
 #include <borealis.hpp>
 
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -46,18 +48,27 @@ class MotionBox : public brls::Box {
 enum class HomeCardKind { PCS, FAVORITES, SETTINGS, ABOUT };
 
 // One card of the home shelf: an illustration, the name and a status line.
-class HomeCard : public PressableBox {
+// A card with a 3D object (img/3d/home-<kind>.png) has no card around it:
+// the object floats over the name and spins while it is selected.
+class HomeCard : public PressableBox, public ShelfItem {
   public:
     explicit HomeCard(HomeCardKind kind);
 
     HomeCardKind getKind() const { return kind; }
     void setStatus(const std::string& text);
+    bool frameless() const override { return turntable != nullptr; }
+
+    void draw(NVGcontext* vg, float x, float y, float width, float height,
+              brls::Style style, brls::FrameContext* ctx) override;
+    void onFocusGained() override;
+    void onFocusLost() override;
 
     std::function<void()> onEnter;
 
   private:
     HomeCardKind kind;
     brls::Label* status = nullptr;
+    std::unique_ptr<Turntable> turntable;
 };
 
 // One entry of the options panel.
@@ -93,6 +104,9 @@ class HomeView : public brls::Box {
     // A on the "Add" card of the devices shelf: a PC, or a console on the
     // Switch.
     static void showAddChoices();
+
+    // Opens a settings group ("video", "system", ...) over the home screen.
+    static void openSettings(const std::string& group);
 
     // PCs were renamed or removed: rebuild the PC shelf.
     static void hostsChanged();

@@ -303,6 +303,9 @@
                 <brls:Header
                     title="@i18n/settings/interface"/>
 
+                <brls:SelectorCell
+                    id="theme"/>
+
                 <brls:BooleanCell
                     id="reduce_motion"/>
 

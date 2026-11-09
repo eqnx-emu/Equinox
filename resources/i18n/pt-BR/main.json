@@ -200,6 +200,12 @@
         "debug": "Debug",
         "ingame": "Durante o jogo",
         "interface": "Interface",
+        "theme": "Tema",
+        "themes": {
+            "system": "Padrão do sistema",
+            "light": "Claro",
+            "dark": "Escuro"
+        },
         "reduce_motion": "Reduzir animações",
         "reduce_motion_note": "Desliga a fita flutuante e as transições da biblioteca.",
         "screenscraper": "ScreenScraper",

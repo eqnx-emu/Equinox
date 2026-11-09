@@ -200,6 +200,12 @@
         "debug": "Debug",
         "ingame": "In game",
         "interface": "Interface",
+        "theme": "Theme",
+        "themes": {
+            "system": "System default",
+            "light": "Light",
+            "dark": "Dark"
+        },
         "reduce_motion": "Reduce motion",
         "reduce_motion_note": "Turns off the floating cartridge and the library transitions.",
         "screenscraper": "ScreenScraper",

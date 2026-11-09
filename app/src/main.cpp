@@ -26,6 +26,7 @@
 #include "backdrop_frame.hpp"
 #include "home_view.hpp"
 #include "settings_tab.hpp"
+#include "app_theme.hpp"
 #include "splash_view.hpp"
 #include "metrics_hud.hpp"
 #include "views/boolean_slider_cell.hpp"
@@ -169,6 +170,7 @@ int main(int argc, char* argv[]) {
     }
 
     registerDeepLinkHandler();
+    app_theme::rememberSystem();
 
 
     MoonlightSession::set_provider(
@@ -180,6 +182,7 @@ int main(int argc, char* argv[]) {
     auto home = Application::getPlatform()->getHomeDirectory("Moonlight-Switch");
     Settings::instance().set_working_dir(home);
     Settings::instance().set_launch_path(argc > 0 ? argv[0] : "");
+    app_theme::apply(Settings::instance().theme());
     brls::Logger::info("Working dir, {}", home);
 
     // Have the application register an action on every activity that will quit
@@ -226,6 +229,8 @@ int main(int argc, char* argv[]) {
     brls::Theme::getDarkTheme().addColor("equinox/card_inner", nvgRGB(34, 39, 78));
     brls::Theme::getDarkTheme().addColor("equinox/muted", nvgRGB(174, 179, 214));
     brls::Theme::getDarkTheme().addColor("equinox/status_on", nvgRGB(244, 184, 96));
+    brls::Theme::getLightTheme().addColor("equinox/danger", nvgRGB(184, 52, 40));
+    brls::Theme::getDarkTheme().addColor("equinox/danger", nvgRGB(255, 167, 155));
     brls::Theme::getDarkTheme().addColor("equinox/online", nvgRGB(124, 214, 138));
     brls::Theme::getDarkTheme().addColor("equinox/status_moon", nvgRGB(157, 184, 255));
 
@@ -261,6 +266,43 @@ int main(int argc, char* argv[]) {
         dark.addColor("brls/slider/pointer_border_color", nvgRGB(90, 97, 152));
         dark.addColor("brls/slider/line_filled", amber);
         dark.addColor("brls/slider/line_empty", nvgRGB(60, 66, 110));
+    }
+
+    // The light theme is the same identity by day: a warm paper white
+    // ground, night navy for the text, and the sun amber deepened so it
+    // still reads on white (text and lines), bright only in the focus glow.
+    {
+        auto& light = brls::Theme::getLightTheme();
+        const NVGcolor ink = nvgRGB(26, 30, 61);
+        const NVGcolor amber = nvgRGB(168, 100, 0);       // text and lines on white
+        const NVGcolor glow = nvgRGB(214, 136, 20);       // focus ring
+        const NVGcolor line = nvgRGB(221, 218, 208);
+        light.addColor("brls/background", nvgRGB(246, 244, 238));
+        light.addColor("brls/text", ink);
+        light.addColor("brls/text_disabled", nvgRGB(100, 104, 138));
+        light.addColor("brls/accent", amber);
+        light.addColor("brls/click_pulse", nvgRGBA(214, 136, 20, 38));
+        light.addColor("brls/highlight/background", nvgRGB(255, 255, 255));
+        light.addColor("brls/highlight/color1", glow);
+        light.addColor("brls/highlight/color2", nvgRGB(244, 184, 96));
+        light.addColor("brls/applet_frame/separator", line);
+        light.addColor("brls/sidebar/background", nvgRGB(239, 236, 228));
+        light.addColor("brls/sidebar/active_item", amber);
+        light.addColor("brls/sidebar/separator", line);
+        light.addColor("brls/header/border", line);
+        light.addColor("brls/header/rectangle", nvgRGB(82, 108, 196));
+        light.addColor("brls/header/subtitle", nvgRGB(96, 100, 120));
+        light.addColor("brls/button/primary_enabled_background", nvgRGB(244, 184, 96));
+        light.addColor("brls/button/primary_enabled_text", ink);
+        light.addColor("brls/button/default_enabled_background", nvgRGB(232, 229, 220));
+        light.addColor("brls/button/default_disabled_background", nvgRGB(232, 229, 220));
+        light.addColor("brls/button/highlight_enabled_text", amber);
+        light.addColor("brls/button/highlight_disabled_text", amber);
+        light.addColor("brls/list/listItem_value_color", nvgRGB(52, 88, 186));
+        light.addColor("brls/slider/pointer_color", nvgRGB(255, 255, 255));
+        light.addColor("brls/slider/pointer_border_color", nvgRGB(180, 176, 165));
+        light.addColor("brls/slider/line_filled", glow);
+        light.addColor("brls/slider/line_empty", line);
     }
 
     // Add custom values to the style

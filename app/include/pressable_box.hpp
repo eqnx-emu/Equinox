@@ -10,7 +10,10 @@
 #pragma once
 
 #include <borealis.hpp>
+#include <algorithm>
 #include <functional>
+#include <string>
+#include <vector>
 
 class PressableBox : public brls::Box {
   public:
@@ -32,10 +35,32 @@ class PressableBox : public brls::Box {
         scale.start();
     }
 
+    // Skeleton: each line of text drawn as a soft bar instead. Shown while the
+    // shelf zooms in, then the text fades in over `fadeMs`.
+    void setSkeleton(bool on, int fadeMs = 0) {
+        if (on && skeletonLabels.empty())
+            collectLabels(this);
+        skeleton.stop();
+        const float target = on ? 1.0f : 0.0f;
+        if (fadeMs <= 0) {
+            skeleton.reset(target);
+            return;
+        }
+        skeleton.reset(skeleton.getValue());
+        skeleton.addStep(target, fadeMs, brls::EasingFunction::quadraticOut);
+        skeleton.start();
+    }
+
     void frame(brls::FrameContext* ctx) override {
+        const float sk = skeleton;
+        if (!skeletonLabels.empty())
+            fadeLabels(sk);
+
         const float s = scale;
         if (s == 1.0f) {
             brls::Box::frame(ctx);
+            if (sk > 0.0f)
+                drawSkeleton(ctx->vg, sk);
             return;
         }
 
@@ -47,10 +72,54 @@ class PressableBox : public brls::Box {
         nvgScale(ctx->vg, s, s);
         nvgTranslate(ctx->vg, -cx, -cy);
         brls::Box::frame(ctx);
+        if (sk > 0.0f)
+            drawSkeleton(ctx->vg, sk);
         nvgRestore(ctx->vg);
     }
 
   private:
     brls::Animatable scale = 1.0f;
     bool pressing = false;
+
+    brls::Animatable skeleton = 0.0f;
+    // Labels under the skeleton. Card labels keep alpha 1 otherwise.
+    std::vector<brls::Label*> skeletonLabels;
+
+    void collectLabels(brls::View* view) {
+        if (auto* label = dynamic_cast<brls::Label*>(view)) {
+            skeletonLabels.push_back(label);
+            return;
+        }
+        if (auto* box = dynamic_cast<brls::Box*>(view))
+            for (brls::View* child : box->getChildren())
+                collectLabels(child);
+    }
+
+    // The text fades out as the skeleton comes in, back in as it goes.
+    void fadeLabels(float sk) {
+        for (brls::Label* label : skeletonLabels)
+            label->setAlpha(1.0f - sk);
+        if (sk <= 0.0f)
+            skeletonLabels.clear();
+    }
+
+    void drawSkeleton(NVGcontext* vg, float sk) {
+        nvgFillColor(vg, nvgRGBAf(1, 1, 1, 0.12f * sk * getAlpha()));
+        for (brls::Label* label : skeletonLabels) {
+            const std::string text = label->getFullText();
+            if (text.empty() || label->getVisibility() != brls::Visibility::VISIBLE ||
+                label->getWidth() <= 0)
+                continue;
+            const float size = label->getFontSize();
+            nvgFontFaceId(vg, label->getFont());
+            nvgFontSize(vg, size);
+            const float textW = nvgTextBounds(vg, 0, 0, text.c_str(), nullptr, nullptr);
+            const float w = std::min(textW, label->getWidth());
+            const float line = std::min(label->getHeight(), size * label->getLineHeight());
+            const float h = size * 0.7f;
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, label->getX(), label->getY() + (line - h) / 2, w, h, h / 2);
+            nvgFill(vg);
+        }
+    }
 };

@@ -454,6 +454,11 @@ void Settings::load() {
                 m_reduce_motion = json_typeof(reduce_motion) == JSON_TRUE;
             }
 
+            if (json_t* theme = json_object_get(settings, "theme")) {
+                if (json_typeof(theme) == JSON_INTEGER)
+                    set_theme((int)json_integer_value(theme));
+            }
+
             if (json_t* ss_user = json_object_get(settings, "screenscraper_user")) {
                 if (json_typeof(ss_user) == JSON_STRING)
                     m_screenscraper_user = json_string_value(ss_user);
@@ -745,6 +750,7 @@ void Settings::save() {
             json_object_set_new(settings, "library_view", json_integer(m_library_view));
             json_object_set_new(settings, "library_sort", json_integer(m_library_sort));
             json_object_set_new(settings, "reduce_motion", m_reduce_motion ? json_true() : json_false());
+            json_object_set_new(settings, "theme", json_integer(m_theme));
             json_object_set_new(settings, "screenscraper_user", json_string(m_screenscraper_user.c_str()));
             json_object_set_new(settings, "screenscraper_password", json_string(m_screenscraper_password.c_str()));
             json_object_set_new(settings, "show_metrics", m_show_metrics ? json_true() : json_false());
