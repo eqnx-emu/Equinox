@@ -279,6 +279,55 @@ void DownloadService::cancelGroup(const std::string& group, emu::DlKind kind) {
     wake_.notify_all();
 }
 
+void DownloadService::pauseGroup(const std::string& group, emu::DlKind kind) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const std::vector<std::string> changed = queue_.pauseGroup(group, kind);
+    if (changed.empty()) return;
+    if (runningId_ && std::find(changed.begin(), changed.end(), *runningId_) != changed.end())
+        requestStop(StopReason::Paused);
+    postChanged(changed, emu::DlState::Paused);
+    wake_.notify_all();
+}
+
+void DownloadService::resumeGroup(const std::string& group, emu::DlKind kind) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const std::vector<std::string> changed = queue_.resumeGroup(group, kind);
+    if (changed.empty()) return;
+    postChanged(changed, emu::DlState::Queued);
+    wake_.notify_all();
+}
+
+void DownloadService::retryGroup(const std::string& group, emu::DlKind kind) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const std::vector<std::string> changed = queue_.retryGroup(group, kind);
+    if (changed.empty()) return;
+    postChanged(changed, emu::DlState::Queued);
+    wake_.notify_all();
+}
+
+void DownloadService::resumePaused() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const std::vector<std::string> changed = queue_.resumePaused();
+    if (changed.empty()) return;
+    postChanged(changed, emu::DlState::Queued);
+    wake_.notify_all();
+}
+
+void DownloadService::postChanged(const std::vector<std::string>& ids, emu::DlState state) {
+    std::vector<DlEvent> events;
+    bool covers = false;
+    for (const std::string& id : ids) {
+        if (isCover(id)) {
+            covers = true;
+            continue;
+        }
+        events.push_back({id, state, 0.0f, emu::DlResult::Done, std::nullopt});
+    }
+    if (!events.empty()) dirty_ = true;
+    if (covers) events.push_back({std::string(), state, 0.0f, emu::DlResult::Done, std::nullopt});
+    post(std::move(events));
+}
+
 void DownloadService::retryFailed() {
     std::lock_guard<std::mutex> lock(mutex_);
     queue_.retryFailed();
@@ -324,6 +373,11 @@ bool DownloadService::suspended() const {
 std::vector<emu::DlTask> DownloadService::snapshot() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return queue_.tasks();
+}
+
+emu::DlOverview DownloadService::overview() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return queue_.overview(wallClock());
 }
 
 bool DownloadService::active(const std::string& id) const {

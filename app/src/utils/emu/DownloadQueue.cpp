@@ -132,8 +132,13 @@ void DownloadQueue::finish(const std::string& id, DlResult result, const std::st
             task->state = DlState::Done;
             task->failures = 0;
             backoff_.erase(host);
+            finished_[{task->group, task->kind}]++;
             break;
         case DlResult::Gone:
+            // Nothing to fetch: handled all the same.
+            finished_[{task->group, task->kind}]++;
+            cancel(id);
+            break;
         case DlResult::Cancelled:
             cancel(id);
             break;
@@ -185,15 +190,69 @@ void DownloadQueue::resume(const std::string& id) {
 }
 
 void DownloadQueue::cancel(const std::string& id) {
+    const DlTask* task = find(id);
+    if (!task) return;
+    const GroupKey key{task->group, task->kind};
     tasks_.erase(std::remove_if(tasks_.begin(), tasks_.end(),
                                 [&](const DlTask& t) { return t.id == id; }),
                  tasks_.end());
+    dropEmptyGroup(key);
 }
 
 void DownloadQueue::cancelGroup(const std::string& group, DlKind kind) {
     tasks_.erase(std::remove_if(tasks_.begin(), tasks_.end(),
                                 [&](const DlTask& t) { return t.group == group && t.kind == kind; }),
                  tasks_.end());
+    finished_.erase({group, kind});
+}
+
+void DownloadQueue::dropEmptyGroup(const GroupKey& key) {
+    const bool left = std::any_of(tasks_.begin(), tasks_.end(), [&](const DlTask& t) {
+        return t.group == key.first && t.kind == key.second;
+    });
+    if (!left) finished_.erase(key);
+}
+
+std::vector<std::string> DownloadQueue::pauseGroup(const std::string& group, DlKind kind) {
+    std::vector<std::string> changed;
+    for (DlTask& task : tasks_) {
+        if (task.group != group || task.kind != kind) continue;
+        if (task.state != DlState::Queued && task.state != DlState::Running) continue;
+        task.state = DlState::Paused;
+        changed.push_back(task.id);
+    }
+    return changed;
+}
+
+std::vector<std::string> DownloadQueue::resumeGroup(const std::string& group, DlKind kind) {
+    std::vector<std::string> changed;
+    for (DlTask& task : tasks_) {
+        if (task.group != group || task.kind != kind || task.state != DlState::Paused) continue;
+        task.state = DlState::Queued;
+        changed.push_back(task.id);
+    }
+    return changed;
+}
+
+std::vector<std::string> DownloadQueue::retryGroup(const std::string& group, DlKind kind) {
+    std::vector<std::string> changed;
+    for (DlTask& task : tasks_) {
+        if (task.group != group || task.kind != kind || task.state != DlState::Failed) continue;
+        task.state = DlState::Queued;
+        task.failures = 0;
+        changed.push_back(task.id);
+    }
+    return changed;
+}
+
+std::vector<std::string> DownloadQueue::resumePaused() {
+    std::vector<std::string> changed;
+    for (DlTask& task : tasks_) {
+        if (task.state != DlState::Paused) continue;
+        task.state = DlState::Queued;
+        changed.push_back(task.id);
+    }
+    return changed;
 }
 
 void DownloadQueue::retryFailed() {
@@ -221,6 +280,64 @@ void DownloadQueue::setBlocks(const std::string& host, DlHostBlocks blocks) {
 
 std::vector<std::pair<std::string, DlHostBlocks>> DownloadQueue::allBlocks() const {
     return {blocks_.begin(), blocks_.end()};
+}
+
+bool DownloadQueue::held(const DlTask& task, int64_t now) const {
+    for (const std::string& host : task.hosts) {
+        auto block = blocks_.find(host);
+        if (block != blocks_.end() && (block->second.badLogin || block->second.quotaUntil > now))
+            return true;
+    }
+    return false;
+}
+
+DlOverview DownloadQueue::overview(int64_t now) const {
+    DlOverview out;
+    const DlHostBlocks ss = blocks(kHostScreenScraper);
+    std::map<GroupKey, size_t> index;
+    for (const DlTask& task : tasks_) {
+        if (task.state == DlState::Done) continue;
+        const GroupKey key{task.group, task.kind};
+        auto found = index.find(key);
+        if (found == index.end()) {
+            found = index.emplace(key, out.groups.size()).first;
+            DlGroup fresh;
+            fresh.group = task.group;
+            fresh.kind = task.kind;
+            auto done = finished_.find(key);
+            if (done != finished_.end()) fresh.finished = done->second;
+            out.groups.push_back(std::move(fresh));
+        }
+        DlGroup& group = out.groups[found->second];
+        switch (task.state) {
+            case DlState::Running:
+                group.running++;
+                group.runningId = task.id;
+                break;
+            case DlState::Queued:
+                if (!held(task, now)) {
+                    group.queued++;
+                    break;
+                }
+                group.held++;
+                if (std::find(task.hosts.begin(), task.hosts.end(), kHostScreenScraper) !=
+                    task.hosts.end()) {
+                    if (ss.badLogin) out.badLogin = true;
+                    if (ss.quotaUntil > now) out.quotaUntil = ss.quotaUntil;
+                }
+                break;
+            case DlState::Paused: group.paused++; break;
+            case DlState::Failed: group.failed++; break;
+            case DlState::Done: break;
+        }
+    }
+    return out;
+}
+
+size_t DlOverview::active() const {
+    size_t count = 0;
+    for (const DlGroup& group : groups) count += group.running + group.queued;
+    return count;
 }
 
 }  // namespace emu

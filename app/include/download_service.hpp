@@ -67,6 +67,14 @@ class DownloadService {
     void resume(const std::string& id);
     void cancel(const std::string& id);
     void cancelGroup(const std::string& group, emu::DlKind kind);
+    // A whole group at once, under one lock. Game data and the other kinds
+    // get one event per task; covers, however many changed, one event with an
+    // empty id.
+    void pauseGroup(const std::string& group, emu::DlKind kind);
+    void resumeGroup(const std::string& group, emu::DlKind kind);
+    void retryGroup(const std::string& group, emu::DlKind kind);
+    // Every Paused task, of any group: how the user goes on after a full card.
+    void resumePaused();
     void retryFailed();
     void credentialsChanged();
 
@@ -78,6 +86,8 @@ class DownloadService {
     bool suspended() const;
 
     std::vector<emu::DlTask> snapshot() const;
+    // The tasks counted per group and kind, without copying them.
+    emu::DlOverview overview() const;
     // The task is in the queue (in any state), or the worker still runs it
     // after a cancel.
     bool active(const std::string& id) const;
@@ -101,6 +111,8 @@ class DownloadService {
     bool saveQueue(std::unique_lock<std::mutex>& lock, bool force);
     void post(std::vector<DlEvent> events);
     void post(DlEvent event);
+    // After a group operation changed `ids` to `state`. Lock held.
+    void postChanged(const std::vector<std::string>& ids, emu::DlState state);
     std::optional<emu::DlState> stateOf(const std::string& id) const;
     emu::SsConfig ssConfig() const;
     emu::DlResult runGameData(const emu::DlTask& task, DlContext& context);

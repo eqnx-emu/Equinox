@@ -339,6 +339,195 @@ TEST_CASE("cancel and cancelGroup remove tasks") {
 
 namespace {
 
+DlTask inGroup(const std::string& id, const std::string& group, DlKind kind) {
+    DlTask t = task(id);
+    t.group = group;
+    t.kind = kind;
+    return t;
+}
+
+}  // namespace
+
+TEST_CASE("pauseGroup pauses only that group's Queued and Running tasks") {
+    DownloadQueue q;
+    q.submit(inGroup("run", "snes", DlKind::Cover));
+    q.submit(inGroup("wait", "snes", DlKind::Cover));
+    q.submit(inGroup("data", "snes", DlKind::GameData));
+    q.submit(inGroup("nes", "nes", DlKind::Cover));
+    DlTask failed = inGroup("failed", "snes", DlKind::Cover);
+    failed.state = DlState::Failed;
+    q.submit(failed);
+    REQUIRE(q.next(kNow)->id == "run");
+
+    const auto changed = q.pauseGroup("snes", DlKind::Cover);
+    CHECK(changed == std::vector<std::string>{"run", "wait"});
+    CHECK(get(q, "run")->state == DlState::Paused);
+    CHECK(get(q, "wait")->state == DlState::Paused);
+    CHECK(get(q, "failed")->state == DlState::Failed);
+    CHECK(get(q, "data")->state == DlState::Queued);
+    CHECK(get(q, "nes")->state == DlState::Queued);
+}
+
+TEST_CASE("resumeGroup brings back only that group's Paused tasks") {
+    DownloadQueue q;
+    q.submit(inGroup("a", "snes", DlKind::Cover));
+    q.submit(inGroup("b", "snes", DlKind::Cover));
+    q.submit(inGroup("data", "snes", DlKind::GameData));
+    q.pauseAll();
+
+    CHECK(q.resumeGroup("snes", DlKind::Cover) == std::vector<std::string>{"a", "b"});
+    CHECK(get(q, "a")->state == DlState::Queued);
+    CHECK(get(q, "data")->state == DlState::Paused);
+    CHECK(q.resumeGroup("snes", DlKind::Cover).empty());
+}
+
+TEST_CASE("resumePaused undoes a full card for every group") {
+    DownloadQueue q;
+    q.submit(inGroup("cover", "snes", DlKind::Cover));
+    q.submit(inGroup("data", "nes", DlKind::GameData));
+    q.submit(inGroup("runner", "gba", DlKind::Runner));
+    DlTask failed = inGroup("failed", "snes", DlKind::Cover);
+    failed.state = DlState::Failed;
+    q.submit(failed);
+    REQUIRE(q.next(kNow)->id == "cover");
+    q.finish("cover", DlResult::Disk, kHostLibretro, kNow);
+    REQUIRE(get(q, "runner")->state == DlState::Paused);
+
+    CHECK(q.resumePaused().size() == 3);
+    CHECK(get(q, "cover")->state == DlState::Queued);
+    CHECK(get(q, "data")->state == DlState::Queued);
+    CHECK(get(q, "runner")->state == DlState::Queued);
+    CHECK(get(q, "failed")->state == DlState::Failed);
+}
+
+TEST_CASE("retryGroup requeues only that group's Failed tasks") {
+    DownloadQueue q;
+    DlTask a = inGroup("a", "snes", DlKind::Cover);
+    a.state = DlState::Failed;
+    a.failures = 4;
+    DlTask other = inGroup("other", "nes", DlKind::Cover);
+    other.state = DlState::Failed;
+    q.submit(a);
+    q.submit(other);
+    q.submit(inGroup("queued", "snes", DlKind::Cover));
+
+    CHECK(q.retryGroup("snes", DlKind::Cover) == std::vector<std::string>{"a"});
+    CHECK(get(q, "a")->state == DlState::Queued);
+    CHECK(get(q, "a")->failures == 0);
+    CHECK(get(q, "other")->state == DlState::Failed);
+}
+
+TEST_CASE("overview counts each group and kind once, in arrival order") {
+    DownloadQueue q;
+    q.submit(inGroup("c1", "snes", DlKind::Cover));
+    q.submit(inGroup("d1", "snes", DlKind::GameData));
+    q.submit(inGroup("c2", "snes", DlKind::Cover));
+    q.submit(inGroup("n1", "nes", DlKind::Cover));
+    q.submit(inGroup("c3", "snes", DlKind::Cover));
+    DlTask failed = inGroup("c4", "snes", DlKind::Cover);
+    failed.state = DlState::Failed;
+    q.submit(failed);
+    REQUIRE(q.next(kNow)->id == "c1");
+    q.pause("c3");
+
+    const DlOverview view = q.overview(kNow);
+    REQUIRE(view.groups.size() == 3);
+    const DlGroup& covers = view.groups[0];
+    CHECK(covers.group == "snes");
+    CHECK(covers.kind == DlKind::Cover);
+    CHECK(covers.running == 1);
+    CHECK(covers.runningId == "c1");
+    CHECK(covers.queued == 1);
+    CHECK(covers.paused == 1);
+    CHECK(covers.failed == 1);
+    CHECK(covers.remaining() == 4);
+    CHECK(view.groups[1].kind == DlKind::GameData);
+    CHECK(view.groups[2].group == "nes");
+    CHECK(view.active() == 4);
+    CHECK_FALSE(view.badLogin);
+    CHECK(view.quotaUntil == 0);
+}
+
+TEST_CASE("overview counts what finished until the group empties") {
+    DownloadQueue q;
+    q.submit(inGroup("a", "snes", DlKind::Cover));
+    q.submit(inGroup("b", "snes", DlKind::Cover));
+    q.submit(inGroup("c", "snes", DlKind::Cover));
+    REQUIRE(q.next(kNow)->id == "a");
+    q.finish("a", DlResult::Done, kHostLibretro, kNow);
+    q.cancel("a");  // the service drops a Done task
+    REQUIRE(q.next(kNow)->id == "b");
+    q.finish("b", DlResult::Gone, kHostLibretro, kNow);
+
+    DlOverview view = q.overview(kNow);
+    REQUIRE(view.groups.size() == 1);
+    CHECK(view.groups[0].finished == 2);
+    CHECK(view.groups[0].total() == 3);
+
+    REQUIRE(q.next(kNow)->id == "c");
+    q.finish("c", DlResult::Done, kHostLibretro, kNow);
+    q.cancel("c");
+    CHECK(q.overview(kNow).groups.empty());
+
+    // A new batch counts from zero.
+    q.submit(inGroup("d", "snes", DlKind::Cover));
+    view = q.overview(kNow);
+    REQUIRE(view.groups.size() == 1);
+    CHECK(view.groups[0].finished == 0);
+    CHECK(view.groups[0].total() == 1);
+}
+
+TEST_CASE("overview holds tasks a ScreenScraper block stops and is not busy for them") {
+    DownloadQueue q;
+    DlTask data = inGroup("data", "snes", DlKind::GameData);
+    data.hosts = {kHostLibretro, kHostScreenScraper};
+    q.submit(data);
+    q.setBlocks(kHostScreenScraper, {true, 0});
+
+    DlOverview view = q.overview(kNow);
+    REQUIRE(view.groups.size() == 1);
+    CHECK(view.groups[0].held == 1);
+    CHECK(view.groups[0].queued == 0);
+    CHECK(view.badLogin);
+    CHECK(view.active() == 0);
+
+    q.setBlocks(kHostScreenScraper, {false, kNow + 600});
+    view = q.overview(kNow);
+    CHECK_FALSE(view.badLogin);
+    CHECK(view.quotaUntil == kNow + 600);
+    CHECK(view.groups[0].held == 1);
+
+    // Expired: runnable again, and no notice.
+    view = q.overview(kNow + 601);
+    CHECK(view.quotaUntil == 0);
+    CHECK(view.groups[0].queued == 1);
+    CHECK(view.active() == 1);
+}
+
+TEST_CASE("overview shows no notice for a block no task waits on") {
+    DownloadQueue q;
+    q.submit(inGroup("cover", "snes", DlKind::Cover));  // libretro only
+    q.setBlocks(kHostScreenScraper, {true, kNow + 600});
+    const DlOverview view = q.overview(kNow);
+    CHECK_FALSE(view.badLogin);
+    CHECK(view.quotaUntil == 0);
+    CHECK(view.active() == 1);
+}
+
+TEST_CASE("cancelGroup forgets the group's finished count") {
+    DownloadQueue q;
+    q.submit(inGroup("a", "snes", DlKind::Cover));
+    q.submit(inGroup("b", "snes", DlKind::Cover));
+    REQUIRE(q.next(kNow)->id == "a");
+    q.finish("a", DlResult::Done, kHostLibretro, kNow);
+    q.cancel("a");
+    q.cancelGroup("snes", DlKind::Cover);
+    q.submit(inGroup("c", "snes", DlKind::Cover));
+    CHECK(q.overview(kNow).groups[0].finished == 0);
+}
+
+namespace {
+
 namespace fs = std::filesystem;
 
 std::string tmpPath(const std::string& name) {

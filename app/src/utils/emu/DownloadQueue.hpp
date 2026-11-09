@@ -41,6 +41,33 @@ struct DlHostBlocks {
     int64_t quotaUntil = 0;
 };
 
+// The tasks of one group and kind, counted by state, as the downloads screen
+// shows them: one row per console and kind, not one per cover.
+struct DlGroup {
+    std::string group;
+    DlKind kind = DlKind::Cover;
+    size_t running = 0;
+    size_t queued = 0;  // will run without the user
+    size_t held = 0;    // Queued, but a host refused the login or is out of quota
+    size_t paused = 0;
+    size_t failed = 0;
+    size_t finished = 0;  // done since the group last emptied
+    std::string runningId;
+
+    size_t remaining() const { return running + queued + held + paused + failed; }
+    size_t total() const { return remaining() + finished; }
+};
+
+struct DlOverview {
+    std::vector<DlGroup> groups;  // in the order their first task arrived
+    // ScreenScraper blocks that hold a task back.
+    bool badLogin = false;
+    int64_t quotaUntil = 0;
+
+    // Running and runnable Queued tasks: what runs without the user.
+    size_t active() const;
+};
+
 // Scheduling state only: no threads, no I/O. The caller passes the clock in.
 class DownloadQueue {
   public:
@@ -62,14 +89,22 @@ class DownloadQueue {
     void resume(const std::string& id);
     void cancel(const std::string& id);
     void cancelGroup(const std::string& group, DlKind kind);
+    // One pass each, for a whole group at once. Return the ids they changed.
+    std::vector<std::string> pauseGroup(const std::string& group, DlKind kind);
+    std::vector<std::string> resumeGroup(const std::string& group, DlKind kind);
+    std::vector<std::string> retryGroup(const std::string& group, DlKind kind);  // Failed only
+    std::vector<std::string> resumePaused();  // every Paused task, as after a full card
     void retryFailed();  // requeues Failed tasks, clears blocks and backoff
     void clearLoginBlock();
     const std::vector<DlTask>& tasks() const { return tasks_; }
     DlHostBlocks blocks(const std::string& host) const;
     void setBlocks(const std::string& host, DlHostBlocks blocks);
     std::vector<std::pair<std::string, DlHostBlocks>> allBlocks() const;
+    DlOverview overview(int64_t now) const;
 
   private:
+    using GroupKey = std::pair<std::string, DlKind>;
+
     struct Backoff {
         int failures = 0;
         int64_t until = 0;
@@ -78,10 +113,14 @@ class DownloadQueue {
     DlTask* find(const std::string& id);
     bool runnable(const DlTask& task, int64_t now, bool& usesSkipWait) const;
     bool hasRunning() const;
+    bool held(const DlTask& task, int64_t now) const;
+    // Forgets the group's finished count once it has no task left.
+    void dropEmptyGroup(const GroupKey& key);
 
     std::vector<DlTask> tasks_;  // arrival order
     std::map<std::string, Backoff> backoff_;
     std::map<std::string, DlHostBlocks> blocks_;
+    std::map<GroupKey, size_t> finished_;
 };
 
 }  // namespace emu

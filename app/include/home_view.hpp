@@ -107,6 +107,8 @@ class HomeView : public brls::Box {
 
     // Opens a settings group ("video", "system", ...) over the home screen.
     static void openSettings(const std::string& group);
+    // The downloads screen, over the home screen. Switch only.
+    static void openDownloads();
 
     // PCs were renamed or removed: rebuild the PC shelf.
     static void hostsChanged();
@@ -125,6 +127,8 @@ class HomeView : public brls::Box {
     bool entered = false;
 
     brls::Box* header = nullptr;
+    // Says something downloads; empty while nothing does. Switch only.
+    brls::View* downloadBadge = nullptr;
     MotionBox* homeLayer = nullptr;
     MotionBox* pcLayer = nullptr;
     MotionBox* panel = nullptr;

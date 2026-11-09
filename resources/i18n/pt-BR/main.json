@@ -616,5 +616,42 @@
             "Spain": "Espanha",
             "Italy": "Itália"
         }
+    },
+    "downloads": {
+        "title": "Downloads",
+        "actions": "Opções",
+        "row": "{} · {}",
+        "kind": {
+            "cover": "Capas",
+            "game_data": "Dados dos jogos",
+            "runner": "Emulador",
+            "app_update": "Atualização do Equinox",
+            "media": "Mídia"
+        },
+        "state": {
+            "running": "Baixando",
+            "queued": "Aguardando a vez",
+            "held": "Em espera",
+            "paused": "Pausado",
+            "failed": "Falhou"
+        },
+        "extra_held": "{} em espera",
+        "extra_paused": "{} em pausa",
+        "extra_failed": "{} falharam",
+        "count": "{} de {}",
+        "percent": "{}%",
+        "action": {
+            "pause": "Pausar",
+            "resume": "Retomar",
+            "retry": "Tentar de novo",
+            "cancel": "Cancelar"
+        },
+        "resume_all": "Retomar tudo",
+        "empty_title": "Nada baixando",
+        "empty_body": "Capas, dados dos jogos, emuladores e atualizações do app aparecem aqui enquanto baixam.",
+        "login_notice": "O ScreenScraper recusou seu login, então os dados dos jogos estão em espera. Confira sua conta nas Configurações.",
+        "quota_notice": "O limite diário do ScreenScraper acabou, então os dados dos jogos estão em espera até {}.",
+        "quota_today": "hoje às {}",
+        "quota_tomorrow": "amanhã às {}"
     }
 }

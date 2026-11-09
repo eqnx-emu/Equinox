@@ -616,5 +616,42 @@
             "Spain": "Spain",
             "Italy": "Italy"
         }
+    },
+    "downloads": {
+        "title": "Downloads",
+        "actions": "Options",
+        "row": "{} · {}",
+        "kind": {
+            "cover": "Covers",
+            "game_data": "Game data",
+            "runner": "Emulator",
+            "app_update": "Equinox update",
+            "media": "Media"
+        },
+        "state": {
+            "running": "Downloading",
+            "queued": "Waiting its turn",
+            "held": "On hold",
+            "paused": "Paused",
+            "failed": "Failed"
+        },
+        "extra_held": "{} on hold",
+        "extra_paused": "{} paused",
+        "extra_failed": "{} failed",
+        "count": "{} of {}",
+        "percent": "{}%",
+        "action": {
+            "pause": "Pause",
+            "resume": "Resume",
+            "retry": "Try again",
+            "cancel": "Cancel"
+        },
+        "resume_all": "Resume all",
+        "empty_title": "Nothing downloading",
+        "empty_body": "Covers, game data, emulators and app updates show up here while they download.",
+        "login_notice": "ScreenScraper refused your login, so game data is on hold. Check your account in Settings.",
+        "quota_notice": "ScreenScraper's daily limit was reached, so game data is on hold until {}.",
+        "quota_today": "today at {}",
+        "quota_tomorrow": "tomorrow at {}"
     }
 }

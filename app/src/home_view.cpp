@@ -15,6 +15,7 @@
 #if defined(PLATFORM_SWITCH)
 #include "console_shelf_view.hpp"
 #include "download_service.hpp"
+#include "downloads_view.hpp"
 #include "emu_video_view.hpp"
 #include "emu/CoverStore.hpp"
 #include "emu/EmuLauncher.hpp"
@@ -743,6 +744,16 @@ HomeView::HomeView() {
     header->addView(title);
     addView(header);
 
+#if defined(PLATFORM_SWITCH)
+    auto* badge = new DownloadIndicator();
+    badge->setPositionType(PositionType::ABSOLUTE);
+    badge->setPositionTop(33);
+    badge->setPositionRight(44);
+    badge->onOpen = [] { openDownloads(); };
+    downloadBadge = badge;
+    addView(badge);
+#endif
+
     homeLayer = makeLayer(home, false);
     pcLayer = makeLayer(pcs, true);
     addView(homeLayer);
@@ -1390,6 +1401,10 @@ std::vector<HomeOption> HomeView::settingsOptions() {
             {icon, brls::getStr(std::string("settings/groups/") + id + "/title"),
              "", [open, group] { open(group); }});
     }
+#if defined(PLATFORM_SWITCH)
+    // file_download
+    options.push_back({"", "downloads/title"_i18n, "", [] { openDownloads(); }});
+#endif
     return options;
 }
 
@@ -1987,6 +2002,8 @@ void HomeView::draw(NVGcontext* vg, float x, float y, float width,
                     float height, Style style, FrameContext* ctx) {
     const float chrome = chromeFade.getValue();
     header->setAlpha(chrome);
+    if (downloadBadge)
+        downloadBadge->setAlpha(chrome);
     for (Shelf* shelf : {&home, &pcs}) {
         shelf->crumb->getParent()->setAlpha(chrome);
         shelf->info->setAlpha(chrome);
@@ -2020,6 +2037,13 @@ void HomeView::openSettings(const std::string& group) {
     auto* settings = new SettingsTab(group);
     settings->getAppletFrameItem()->title = "home/settings"_i18n;
     presentWithHeader(instance, settings);
+}
+
+void HomeView::openDownloads() {
+#if defined(PLATFORM_SWITCH)
+    if (instance)
+        presentWithHeader(instance, new DownloadsView());
+#endif
 }
 
 void HomeView::hostsChanged() {
