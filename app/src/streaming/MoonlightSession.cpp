@@ -6,6 +6,7 @@
 #include "Settings.hpp"
 #include "StreamCapacity.hpp"
 #include "borealis.hpp"
+#include "download_service.hpp"
 #include <string.h>
 
 
@@ -24,6 +25,26 @@ int MoonlightSession::video_format() const { return m_video_format; }
 int MoonlightSession::stream_width() const { return m_stream_width; }
 int MoonlightSession::stream_height() const { return m_stream_height; }
 int MoonlightSession::stream_fps() const { return m_stream_fps; }
+
+// One DownloadService::suspend, and the one resumeAll that undoes it. Shared
+// with the suspend callback, which can outlive the session: it runs later on
+// the UI thread, after the user may have stopped the stream or deleted the
+// session. UI thread only.
+struct DownloadHold {
+    bool held = false;   // a suspend is in force and not yet resumed
+    bool ended = false;  // the session is done with it: do not connect
+
+    void release() {
+        ended = true;
+        if (!held) return;
+        held = false;
+        DownloadService::instance().resumeAll();
+    }
+};
+
+void MoonlightSession::release_downloads() {
+    if (m_download_hold) m_download_hold->release();
+}
 
 MoonlightSession* MoonlightSession::activeSession() {
     return m_active_session;
@@ -46,6 +67,8 @@ MoonlightSession::MoonlightSession(const std::string& address, int app_id) {
 }
 
 MoonlightSession::~MoonlightSession() {
+    release_downloads();
+
     if (m_video_decoder) {
         delete m_video_decoder;
     }
@@ -127,6 +150,7 @@ void MoonlightSession::handle_connection_terminated(int error_code) {
         brls::Logger::info("MoonlightSession: Termination acknowledged after stop request");
         m_is_active = false;
         m_is_terminated = true;
+        release_downloads();
         return;
     }
 
@@ -153,6 +177,7 @@ void MoonlightSession::handle_connection_terminated(int error_code) {
 
     m_is_active = false;
     m_is_terminated = true;
+    release_downloads();
 }
 
 void MoonlightSession::connection_log_message(const char* format, ...) {
@@ -382,62 +407,92 @@ void MoonlightSession::start(ServerCallback<bool> callback, bool is_sunshine) {
         m_audio_callbacks.capabilities = m_audio_renderer->capabilities();
     }
 
-    GameStreamClient::instance().start(
-        m_address, m_config, m_app_id, [this, callback](auto result) {
-            if (result.isSuccess()) {
-                m_config = result.value();
-                brls::async([this, callback]() mutable {
-                    auto m_data =
-                        GameStreamClient::instance().server_data(m_address);
+    // Downloads stay off the network while streaming. Connecting starts only
+    // once the service has stopped; a reconnect finds the hold already in
+    // force and goes straight on.
+    if (!m_download_hold || m_download_hold->ended)
+        m_download_hold = std::make_shared<DownloadHold>();
+    std::shared_ptr<DownloadHold> hold = m_download_hold;
 
-                    s_failed_stage = -1;
-                    s_failed_error = 0;
-                    int result = LiStartConnection(
-                        &m_data.serverInfo, &m_config, &m_connection_callbacks,
-                        &m_video_callbacks, &m_audio_callbacks, NULL, 0, NULL, 0);
+    auto connect = [this, hold, callback]() {
+        GameStreamClient::instance().start(
+            m_address, m_config, m_app_id, [this, hold, callback](auto result) {
+                if (result.isSuccess()) {
+                    m_config = result.value();
+                    brls::async([this, hold, callback]() mutable {
+                        auto m_data =
+                            GameStreamClient::instance().server_data(m_address);
 
-                    // Say which step failed and which ports it needs, so a
-                    // firewall can be told apart from a decoder problem.
-                    std::string error;
-                    if (result != 0) {
-                        brls::Logger::error(
-                            "MoonlightSession: LiStartConnection failed: {}",
-                            result);
-                        LiStopConnection();
+                        s_failed_stage = -1;
+                        s_failed_error = 0;
+                        int result = LiStartConnection(
+                            &m_data.serverInfo, &m_config, &m_connection_callbacks,
+                            &m_video_callbacks, &m_audio_callbacks, NULL, 0, NULL, 0);
 
-                        if (s_failed_stage >= 0) {
-                            char ports[128] = {};
-                            LiStringifyPortFlags(
-                                LiGetPortFlagsFromStage(s_failed_stage.load()), ", ",
-                                ports, sizeof(ports));
-                            error = brls::getStr("error/stream_start_stage",
-                                                 LiGetStageName(s_failed_stage.load()),
-                                                 s_failed_error.load());
-                            if (ports[0])
-                                error += "\n" + brls::getStr(
-                                                     "error/stream_start_ports",
-                                                     std::string(ports));
-                        } else {
-                            error = "error/stream_start"_i18n;
+                        // Say which step failed and which ports it needs, so a
+                        // firewall can be told apart from a decoder problem.
+                        std::string error;
+                        if (result != 0) {
+                            brls::Logger::error(
+                                "MoonlightSession: LiStartConnection failed: {}",
+                                result);
+                            LiStopConnection();
+
+                            if (s_failed_stage >= 0) {
+                                char ports[128] = {};
+                                LiStringifyPortFlags(
+                                    LiGetPortFlagsFromStage(s_failed_stage.load()), ", ",
+                                    ports, sizeof(ports));
+                                error = brls::getStr("error/stream_start_stage",
+                                                     LiGetStageName(s_failed_stage.load()),
+                                                     s_failed_error.load());
+                                if (ports[0])
+                                    error += "\n" + brls::getStr(
+                                                         "error/stream_start_ports",
+                                                         std::string(ports));
+                            } else {
+                                error = "error/stream_start"_i18n;
+                            }
                         }
-                    }
 
-                    // Callers touch the UI, so answer on the main thread
-                    // like the rest of the start path does.
-                    brls::sync([callback, result, error]() {
-                        if (result != 0)
-                            callback(GSResult<bool>::failure(error));
-                        else
-                            callback(GSResult<bool>::success(true));
+                        // Callers touch the UI, so answer on the main thread
+                        // like the rest of the start path does.
+                        brls::sync([hold, callback, result, error]() {
+                            // A failed start ends the stream, so downloads go on.
+                            if (result != 0) {
+                                hold->release();
+                                callback(GSResult<bool>::failure(error));
+                            } else
+                                callback(GSResult<bool>::success(true));
+                        });
                     });
-                });
-            } else {
-                brls::Logger::error(
-                    "MoonlightSession: Failed to start stream: {}",
-                    result.error().c_str());
-                callback(GSResult<bool>::failure(result.error()));
+                } else {
+                    brls::Logger::error(
+                        "MoonlightSession: Failed to start stream: {}",
+                        result.error().c_str());
+                    hold->release();
+                    callback(GSResult<bool>::failure(result.error()));
+                }
+            });
+    };
+
+    if (hold->held) {
+        connect();
+        return;
+    }
+
+    hold->held = true;
+    DownloadService::instance().suspend([hold, connect] {
+        // On the UI thread, maybe after stop() or the destructor ended the
+        // hold (they released it already, and `this` may be gone).
+        brls::sync([hold, connect] {
+            if (hold->ended) {
+                hold->release();
+                return;
             }
+            connect();
         });
+    });
 }
 
 void MoonlightSession::stop(int terminate_app) {
@@ -445,6 +500,7 @@ void MoonlightSession::stop(int terminate_app) {
         return;
 
     m_stop_requested = true;
+    release_downloads();
 
     if (terminate_app) {
         GameStreamClient::instance().quit(m_address, [](auto _) {});
@@ -463,6 +519,7 @@ void MoonlightSession::restart() {
         // Capacity-test stage: count it as a lost connection instead.
         m_is_active = false;
         m_is_terminated = true;
+        release_downloads();
         return;
     }
 
@@ -476,6 +533,7 @@ void MoonlightSession::restart() {
             if (m_active_session) {
                 m_active_session->m_is_active = false;
                 m_active_session->m_is_terminated = true;
+                m_active_session->release_downloads();
             }
         }
     }, m_active_session->m_is_sunshine);

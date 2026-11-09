@@ -4,12 +4,15 @@
 #include "MoonlightSessionDecoderAndRenderProvider.hpp"
 #include "StreamCapacity.hpp"
 #include <nanovg.h>
+#include <memory>
 #include <optional>
 
 struct SessionStats {
     VideoDecodeStats video_decode_stats;
     VideoRenderStats video_render_stats;
 };
+
+struct DownloadHold;
 
 class MoonlightSession {
   public:
@@ -74,6 +77,8 @@ class MoonlightSession {
     }
 
   private:
+    void release_downloads();
+
     static void connection_stage_starting(int);
     static void connection_stage_complete(int);
     static void connection_stage_failed(int, int);
@@ -117,6 +122,7 @@ class MoonlightSession {
     bool m_is_active = false;
     bool m_is_terminated = false;
     bool m_stop_requested = false;
+    std::shared_ptr<DownloadHold> m_download_hold;
     uint64_t m_generation = 0;
     bool m_connection_status_is_poor = false;
     bool m_suspended = false;
