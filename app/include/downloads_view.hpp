@@ -94,13 +94,14 @@ class DownloadsView : public brls::Box {
     PressableBox* pauseButton = nullptr;
     brls::Label* pauseIcon = nullptr;
     brls::Label* pauseLabel = nullptr;
+    PressableBox* resumeButton = nullptr;
     PressableBox* retryButton = nullptr;
     brls::Label* retryLabel = nullptr;
     PressableBox* cancelButton = nullptr;
 
     emu::DlOverview shown;    // the last overview read
     std::string selectedKey;  // the group the pane shows
-    std::string yHint;        // what Y says now, to set it only on a change
+    std::string yHint;        // what Y says now, empty when Y does nothing
 
     void refresh();
     void select(const std::string& key);

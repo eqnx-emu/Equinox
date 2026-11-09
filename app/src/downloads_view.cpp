@@ -103,12 +103,17 @@ std::string groupTitle(const emu::DlGroup& group) {
     return brls::getStr("downloads/row", sectionName(group), kindName(group));
 }
 
-// "12 covers", or "1 cover".
-std::string amount(size_t count, emu::DlKind kind) {
+// "covers", or "cover" for one.
+std::string unit(size_t count, emu::DlKind kind) {
     std::string key = std::string("downloads/unit/") + kindKey(kind);
     if (count == 1)
         key += "_one";
-    return brls::getStr("downloads/amount", count, brls::getStr(key));
+    return brls::getStr(key);
+}
+
+// "12 covers", or "1 cover".
+std::string amount(size_t count, emu::DlKind kind) {
+    return brls::getStr("downloads/amount", count, unit(count, kind));
 }
 
 enum class Phase { Running, Queued, Held, Paused, Failed };
@@ -628,6 +633,23 @@ DownloadsView::DownloadsView() : refresher([this] { refresh(); }) {
         return true;
     });
     actions->addView(pauseButton);
+    // Beside Pausar when part of a running group is paused.
+    Label* resumeLabel = nullptr;
+    resumeButton = makeButton(nullptr, &resumeLabel, themeColor("equinox/card"),
+                              themeColor("brls/text"));
+    resumeLabel->setText("downloads/action/resume"_i18n);
+    resumeButton->registerClickAction([this](View*) {
+        const emu::DlGroup* group = selectedGroup();
+        if (!group)
+            return true;
+        const emu::DlGroup target = *group;
+        resumeButton->press([this, target] {
+            DownloadService::instance().resumeGroup(target.group, target.kind);
+            refresher.now();
+        });
+        return true;
+    });
+    actions->addView(resumeButton);
     retryButton = makeButton(nullptr, &retryLabel, themeColor("equinox/card"),
                              themeColor("brls/text"));
     retryButton->registerClickAction([this](View*) {
@@ -700,8 +722,8 @@ DownloadsView::DownloadsView() : refresher([this] { refresh(); }) {
 
     yHint = "downloads/pause_all"_i18n;
     registerAction(yHint, BUTTON_Y, [this](View*) {
-        if (shown.groups.empty())
-            return true;
+        if (yHint.empty())
+            return true; // nothing to pause or resume
         DownloadService& service = DownloadService::instance();
         if (resumesAll()) {
             service.resumePaused();
@@ -840,8 +862,11 @@ void DownloadsView::refresh() {
             Application::giveFocus(target->item);
     }
 
-    const std::string hint =
-        groups.empty() ? "" : (resumesAll() ? "downloads/resume_all"_i18n : "downloads/pause_all"_i18n);
+    // Hidden when Y would do nothing.
+    const bool anyPausable = std::any_of(groups.begin(), groups.end(), pausable);
+    const std::string hint = resumesAll()  ? "downloads/resume_all"_i18n
+                             : anyPausable ? "downloads/pause_all"_i18n
+                                           : "";
     if (hint != yHint) {
         if (!hint.empty())
             updateActionHint(BUTTON_Y, hint);
@@ -880,13 +905,14 @@ void DownloadsView::fillPane() {
     if (singleTask(group.kind)) {
         // One file: its percent while it runs, and its state.
         setShown(panePercent, group.running > 0);
+        setShown(paneBar, group.running > 0);
         setText(paneCount, stateText(group));
         setShown(tiles, false);
     } else {
         setShown(panePercent, true);
+        setShown(paneBar, true);
         setText(paneCount, brls::getStr("downloads/progress", group.finished, group.total(),
-                                        brls::getStr(std::string("downloads/unit/") +
-                                                     kindKey(group.kind))));
+                                        unit(group.total(), group.kind)));
         setShown(tiles, true);
         setShown(nowTile, !group.runningName.empty());
         setText(nowValue, group.runningName);
@@ -899,6 +925,7 @@ void DownloadsView::fillPane() {
 
     const bool pause = pausable(group);
     setShown(pauseButton, pause || group.paused > 0);
+    setShown(resumeButton, pause && group.paused > 0);
     setText(pauseIcon, pause ? "" : ""); // pause, play_arrow
     setText(pauseLabel, pause ? "downloads/action/pause"_i18n : "downloads/action/resume"_i18n);
     setShown(retryButton, group.failed > 0);

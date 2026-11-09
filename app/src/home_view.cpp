@@ -752,7 +752,11 @@ HomeView::HomeView() {
     badge->onOpen = [] { openDownloads(); };
     // Back to the shelf it was reached from.
     badge->onHidden = [this] {
-        if (View* card = getDefaultFocus())
+        View* card = getDefaultFocus();
+        // An empty shelf: the home cards are always there.
+        if (!card && !homeCards.empty())
+            card = homeCards.front();
+        if (card)
             Application::giveFocus(card);
     };
     downloadBadge = badge;
