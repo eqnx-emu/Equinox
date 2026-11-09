@@ -181,3 +181,10 @@ target_include_directories(test_emu_video PRIVATE
 target_link_libraries(test_emu_video PRIVATE ${JANSSON_LIB})
 target_compile_definitions(test_emu_video PRIVATE
     EQX_I18N_DIR="${MOONLIGHT_ROOT}/resources/i18n")
+
+add_executable(test_emu_downloads
+    test_emu_downloads.cpp
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/DownloadQueue.cpp")
+target_include_directories(test_emu_downloads PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
