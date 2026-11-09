@@ -486,6 +486,7 @@
         "error_installed": "Could not save the emulator version. Check the SD card.",
         "play": "Play",
         "scanning": "Looking for games…",
+        "searching_new": "Looking for new games",
         "scan_done": "Search finished: {}",
         "scan_none": "No games found",
         "rescan_short": "Look again",

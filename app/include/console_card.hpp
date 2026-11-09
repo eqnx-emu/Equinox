@@ -73,6 +73,10 @@ class ConsoleCard : public PressableBox, public ShelfItem {
     std::optional<emu::Manifest> latestManifest;
     emu::RunnerAction runnerAction = emu::RunnerAction::UpToDate;
     int games = -1;
+    bool scanning = false;
+    // 1 to 3, the dots after the text while the folder is searched.
+    int scanDots = 1;
+    brls::RepeatingTimer scanTimer;
     std::string statusLine, detailLine, infoLine;
 
     brls::Image* icon = nullptr;

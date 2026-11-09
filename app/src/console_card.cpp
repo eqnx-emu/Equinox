@@ -10,9 +10,11 @@
 #include "emu/CoverStore.hpp"
 #include "emu/RomScan.hpp"
 
+#include <chrono>
 #include <cmath>
 #include <fmt/core.h>
 #include <map>
+#include <thread>
 
 using namespace brls;
 using namespace brls::literals;
@@ -176,17 +178,35 @@ void ConsoleCard::refresh() {
 }
 
 void ConsoleCard::rescan() {
+    if (scanning)
+        return;
+    scanning = true;
+    scanDots = 1;
+    scanTimer.setCallback([this] {
+        scanDots = scanDots % 3 + 1;
+        update();
+    });
+    scanTimer.start(400);
+    update();
+
     const emu::Console* console = &consoleRef;
     ASYNC_RETAIN
     brls::async([ASYNC_TOKEN, console] {
+        // A small folder is read at once: the search still shows one full
+        // round of the dots.
+        const auto shownUntil =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(1200);
         const emu::ConsolePaths paths = emu::pathsFor(*console);
         emu::ensureFolders(paths);
         // Covers libretro lacked are tried again too.
         emu::clearCoverMisses(paths);
         const int count = static_cast<int>(emu::scanRoms(paths.roms, *console).size());
         emu::writeRomCount(paths, count);
+        std::this_thread::sleep_until(shownUntil);
         brls::sync([ASYNC_TOKEN, count] {
             ASYNC_RELEASE
+            scanTimer.stop();
+            scanning = false;
             games = count;
             lastCounts()[consoleRef.slug] = count;
             update();
@@ -229,6 +249,9 @@ void ConsoleCard::update() {
         break;
     }
 
+    if (scanning)
+        statusLine = "emu/searching_new"_i18n + std::string(scanDots, '.');
+
     detailLine = runnerName(runnerIdFor(consoleRef));
     if (installed)
         detailLine += "  ·  v" + installed->version;
@@ -241,7 +264,10 @@ void ConsoleCard::update() {
     // The card says only what changes: the count, or the update.
     const NVGcolor color = statusColor();
     statusDot->setBackgroundColor(color);
-    if (runnerAction == emu::RunnerAction::UpToDate) {
+    if (scanning) {
+        status->setTextColor(themeColor("equinox/muted"));
+        status->setText(statusLine);
+    } else if (runnerAction == emu::RunnerAction::UpToDate) {
         status->setTextColor(themeColor("equinox/muted"));
         status->setText(games < 0 ? std::string() : gamesText(games));
     } else {
