@@ -144,8 +144,14 @@ void CoverAmbient::paintOne(NVGcontext* vg, const Colors& colors, float alpha,
     if (!colors.valid || alpha <= 0.01f)
         return;
     auto glow = [&](float cx, float cy, float r, NVGcolor c, float a) {
+        // Past r the gradient is clear: fill only the circle's square, not
+        // the whole screen (three of these, six while fading).
+        const float left = std::max(x, cx - r), top = std::max(y, cy - r);
+        const float right = std::min(x + width, cx + r), bottom = std::min(y + height, cy + r);
+        if (right <= left || bottom <= top)
+            return;
         nvgBeginPath(vg);
-        nvgRect(vg, x, y, width, height);
+        nvgRect(vg, left, top, right - left, bottom - top);
         nvgFillPaint(vg, nvgRadialGradient(vg, cx, cy, 0, r,
                                            nvgRGBAf(c.r, c.g, c.b, a * alpha),
                                            nvgRGBAf(c.r, c.g, c.b, 0)));

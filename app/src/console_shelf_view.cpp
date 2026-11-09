@@ -636,7 +636,7 @@ void ConsoleShelfView::createDataQueue() {
     dataQueue->onStep = [this](size_t index, emu::DataStep step) {
         if (dataQueue->current() == index)
             dataStep = step;
-        applyProgress();
+        applyStep(index);
     };
     dataQueue->onFinished = [this](size_t index, const emu::DataOutcome& outcome) {
         dataFinished(index, outcome);
@@ -900,18 +900,31 @@ void ConsoleShelfView::applyActions() {
 }
 
 void ConsoleShelfView::applyProgress() {
+    listPanel->refreshRows();
+    applyDetailsProgress();
+    applyBatchProgress();
+    keepFocus();
+}
+
+// A step of the game downloading: only its row, the details and the batch
+// line change.
+void ConsoleShelfView::applyStep(size_t index) {
+    listPanel->refreshRow(index);
+    applyDetailsProgress();
+    applyBatchProgress();
+    keepFocus();
+}
+
+void ConsoleShelfView::applyBatchProgress() {
     const std::optional<size_t> downloading =
         dataQueue ? dataQueue->current() : std::nullopt;
-
-    listPanel->refreshRows();
     size_t missing = 0;
     for (const Game& game : games)
         if (!game.hasData)
             missing++;
 
-    applyDetailsProgress();
-
     const bool running = dataQueue && dataQueue->running();
+    listPanel->holdOrder(running);
     const size_t total = running ? dataQueue->total() : 0;
     const size_t done = running ? dataQueue->done() : 0;
     int percent = 0;
@@ -923,7 +936,6 @@ void ConsoleShelfView::applyProgress() {
     if (downloading && *downloading < games.size())
         name = itemFor(games[*downloading]).name;
     listPanel->setBatch(running, done, total, percent, name, missing);
-    keepFocus();
 }
 
 void ConsoleShelfView::keepFocus() {
@@ -1003,22 +1015,43 @@ void ConsoleShelfView::dataFinished(size_t index, const emu::DataOutcome& outcom
     // The queue is already empty here when this was the last game or it stopped.
     if (!dataQueue->running())
         batchActive = false;
+    // What the download wrote is read off the UI thread: a few files and a
+    // stat each, for every game of a batch.
     if (index < games.size()) {
-        Game& game = games[index];
-        readGameData(paths, game);
-        indexDirty = true;
-        listPanel->setItem(index, itemFor(game));
-        // A details change still waiting will read the new data itself.
-        if (current == index && shownIndex == index) {
-            detailsPanel->show(detailsFor(index), false);
-            applyAmbient();
-            applyActions();
-        }
-        retryCover(index);
+        auto game = std::make_shared<Game>(games[index]);
+        const emu::ConsolePaths where = paths;
+        const uint64_t forGeneration = generation;
+        std::shared_ptr<bool> token = alive;
+        brls::async([this, token, game, where, index, forGeneration] {
+            readGameData(where, *game);
+            brls::sync([this, token, game, index, forGeneration] {
+                if (*token && forGeneration == generation && index < games.size())
+                    dataRead(index, *game);
+            });
+        });
     }
-    if (!dataQueue->running())
-        saveIndex();
     applyProgress();
+}
+
+void ConsoleShelfView::dataRead(size_t index, const Game& read) {
+    // Only what readGameData sets: the covers may have changed meanwhile.
+    Game& game = games[index];
+    game.snapPath = read.snapPath;
+    game.titlePath = read.titlePath;
+    game.hasData = read.hasData;
+    game.meta = read.meta;
+    indexDirty = true;
+    listPanel->setItem(index, itemFor(game));
+    // A details change still waiting will read the new data itself.
+    if (current == index && shownIndex == index) {
+        detailsPanel->show(detailsFor(index), false);
+        applyAmbient();
+        applyActions();
+    }
+    retryCover(index);
+    if (!dataQueue || !dataQueue->running())
+        saveIndex();
+    applyBatchProgress(); // the count of games without data
 }
 
 void ConsoleShelfView::dataStopped(emu::DataStop stop) {

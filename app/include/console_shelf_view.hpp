@@ -162,6 +162,10 @@ class ConsoleShelfView : public brls::Box {
     void applyActions();
     // Rows, the details' action and the download-all area, from the queue.
     void applyProgress();
+    // Lighter, for each step of one game: its row only.
+    void applyStep(size_t index);
+    // The download-all area; holds the list's order while the queue runs.
+    void applyBatchProgress();
     // The details' button that had the focus may have just gone.
     void keepFocus();
 
@@ -173,6 +177,8 @@ class ConsoleShelfView : public brls::Box {
     void retryStopped();
     void cancelData();
     void dataFinished(size_t index, const emu::DataOutcome& outcome);
+    // The finished game's data, read in the background, taken into games.
+    void dataRead(size_t index, const Game& read);
     void dataStopped(emu::DataStop stop);
     std::optional<size_t> stoppedIndex;
     // Set by downloadAll, cleared when the queue empties or stops.
