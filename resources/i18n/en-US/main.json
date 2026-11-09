@@ -463,6 +463,7 @@
         "update": "Update emulator",
         "check_update": "Check for updates",
         "rescan": "Look for games again",
+        "more_options": "More options",
         "remove": "Remove console",
         "remove_message": "Remove {}? Your games, saves and covers stay on the SD card.",
         "add_pc": "PC for streaming",
