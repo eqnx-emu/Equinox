@@ -155,10 +155,6 @@ class GameListPanel : public brls::Box {
 
     brls::Rectangle* separator = nullptr;
     brls::Box* footer = nullptr;
-    brls::Box* idleRow = nullptr;
-    brls::Label* idleIcon = nullptr;
-    brls::Label* idleMissing = nullptr;
-    brls::Label* doneLabel = nullptr;
     brls::Box* stoppedRow = nullptr;
     brls::Label* stoppedLabel = nullptr;
     brls::Button* retryButton = nullptr;

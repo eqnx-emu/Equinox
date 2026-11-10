@@ -557,8 +557,6 @@
             "hint_sort": "Sort",
             "hint_search": "Search",
             "download_all": "Download all",
-            "missing": "{} without data",
-            "done": "All games have data.",
             "running": "Downloading {} of {} · {}%",
             "stopped": "Stopped: {} What was already downloaded is saved."
         },

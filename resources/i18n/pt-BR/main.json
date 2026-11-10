@@ -557,8 +557,6 @@
             "hint_sort": "Ordenar",
             "hint_search": "Buscar",
             "download_all": "Baixar todos",
-            "missing": "{} sem dados",
-            "done": "Todos os jogos têm dados.",
             "running": "Baixando {} de {} · {}%",
             "stopped": "Parou: {} O que já foi baixado ficou salvo."
         },

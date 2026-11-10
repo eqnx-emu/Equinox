@@ -97,7 +97,6 @@ const char* const kCartGlyph = "\xEE\x8C\xA2";
 const char* const kListGlyph = "\xEE\xA3\xAF";
 const char* const kSearchGlyph = "\xEE\xA2\xB6";
 const char* const kArrowGlyph = "\xEE\x97\x8F";
-const char* const kDownloadGlyph = "\xEE\x8B\x84";
 
 NVGcolor themeColor(const char* name) {
     return Application::getTheme().getColor(name);
@@ -310,7 +309,8 @@ GameListPanel::GameListPanel(const emu::Console& console)
     scroll->setContentView(list);
     addView(scroll);
 
-    // The download-all area: one of four states.
+    // While the games' data downloads, or after it stopped: its progress, or
+    // why it stopped. Starting it is in More options (and ZR).
     separator = new Rectangle();
     separator->setHeight(1);
     separator->setMarginTop(8);
@@ -321,33 +321,6 @@ GameListPanel::GameListPanel(const emu::Console& console)
     footer->setPadding(12, 0, 0, 0);
     footer->setShrink(0);
     addView(footer);
-
-    idleRow = touchBox(Axis::ROW, [this] { downloadAllOrCancel(); });
-    idleRow->setHeight(kRowHeight);
-    idleRow->setPadding(0, 14, 0, 14);
-    idleRow->setCornerRadius(kRadius);
-    idleRow->setHighlightCornerRadius(kRadius + 3);
-    idleRow->setBackgroundColor(themeColor("equinox/card_inner"));
-    idleIcon = iconLabel(kDownloadGlyph, 18);
-    idleRow->addView(idleIcon);
-    auto* idleTitle = new BoldLabel();
-    idleTitle->setFontSize(15);
-    idleTitle->setSingleLine(true);
-    idleTitle->setAutoAnimate(false);
-    idleTitle->setText("library/list/download_all"_i18n);
-    idleTitle->setMarginLeft(10);
-    idleTitle->setGrow(1);
-    idleRow->addView(idleTitle);
-    idleMissing = textLabel(14);
-    idleRow->addView(idleMissing);
-    footer->addView(idleRow);
-
-    doneLabel = new Label();
-    doneLabel->setFontSize(15);
-    doneLabel->setHeight(kRowHeight);
-    doneLabel->setVerticalAlign(VerticalAlign::CENTER);
-    doneLabel->setText("library/list/done"_i18n);
-    footer->addView(doneLabel);
 
     stoppedRow = new Box(Axis::ROW);
     stoppedRow->setAlignItems(AlignItems::CENTER);
@@ -415,12 +388,9 @@ void GameListPanel::applyColors() {
     countLabel->setTextColor(muted);
     searchIcon->setTextColor(muted);
     sortArrow->setTextColor(muted);
-    idleMissing->setTextColor(muted);
-    doneLabel->setTextColor(muted);
     runningName->setTextColor(muted);
     noneLabel->setTextColor(muted);
     separator->setColor(themeColor("equinox/card"));
-    idleIcon->setTextColor(themeColor("brls/text"));
     sortLabel->setTextColor(themeColor("brls/text"));
     retryButton->setBackgroundColor(themeColor("equinox/card_inner"));
     cancelButton->setBackgroundColor(themeColor("equinox/card_inner"));
@@ -1060,19 +1030,18 @@ bool GameListPanel::batchActionAvailable() const {
 void GameListPanel::applyBatch() {
     const Batch state = batchState();
     const bool footerFocused = isInside(Application::getCurrentFocus(), footer);
-    const Visibility area = items.empty() ? Visibility::GONE : Visibility::VISIBLE;
+    const Visibility area = items.empty() || state == Batch::Idle || state == Batch::Done
+                                ? Visibility::GONE
+                                : Visibility::VISIBLE;
     footer->setVisibility(area);
     separator->setVisibility(area);
 
     const auto shownWhen = [&](Batch b) {
         return state == b ? Visibility::VISIBLE : Visibility::GONE;
     };
-    idleRow->setVisibility(shownWhen(Batch::Idle));
-    doneLabel->setVisibility(shownWhen(Batch::Done));
     stoppedRow->setVisibility(shownWhen(Batch::Stopped));
     runningRow->setVisibility(shownWhen(Batch::Running));
 
-    idleMissing->setText(brls::getStr("library/list/missing", missing));
     if (stopped)
         stoppedLabel->setText(brls::getStr("library/list/stopped", libraryStopText(*stopped)));
     if (state == Batch::Running) {
@@ -1091,13 +1060,11 @@ void GameListPanel::applyBatch() {
     if (footerFocused) {
         View* now = Application::getCurrentFocus();
         const bool gone = !now || !now->isFocusable() ||
-                          (isInside(now, idleRow) && state != Batch::Idle) ||
                           (isInside(now, stoppedRow) && state != Batch::Stopped) ||
                           (isInside(now, runningRow) && state != Batch::Running);
         if (gone) {
             View* target = state == Batch::Running   ? static_cast<View*>(runningRow)
                            : state == Batch::Stopped ? static_cast<View*>(stoppedRow)
-                           : state == Batch::Idle    ? static_cast<View*>(idleRow)
                                                      : static_cast<View*>(scroll);
             Application::giveFocus(target);
         }
