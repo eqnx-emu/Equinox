@@ -140,6 +140,8 @@ class GameListPanel : public brls::Box {
 
     std::string consoleName;
     brls::Label* countLabel = nullptr;
+    brls::Label* pageLabel = nullptr; // "Page X of Y", hidden with a single page
+    size_t shownPageSize = 0;
     brls::Box* cartButton = nullptr;
     brls::Box* listButton = nullptr;
     brls::Label* cartIcon = nullptr;
@@ -161,6 +163,13 @@ class GameListPanel : public brls::Box {
 
     void applyColors();
     void applyCount();
+    // Games per page in the current view, the focused game's place, and the
+    // page line that follows them.
+    size_t pageSize() const;
+    size_t currentPlace() const;
+    void applyPage();
+    // Moves the focus to the first game of the next (1) or previous (-1) page.
+    void turnPage(int direction);
     void applyToggle();
     void applyBatch();
     void registerShortcuts(bool hidden);

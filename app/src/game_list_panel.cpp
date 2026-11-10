@@ -81,6 +81,10 @@ constexpr float kRowStep = GameRowCell::RowHeight + kRowGap;
 constexpr float kCartShare = 0.52f;
 constexpr float kMinTapeRow = 56;
 constexpr float kListTop = 4;
+// Games per page: the cartridge view shows about three, the list a column's worth
+// (kListPage until the column has a height).
+constexpr size_t kCartPage = 3;
+constexpr size_t kListPage = 10;
 constexpr float kListSide = 6;
 constexpr float kRowWidth = kPanelWidth - 16 - 24 - 2 * kListSide;
 constexpr size_t kNoPlace = GameRowCell::NoGame;
@@ -214,6 +218,10 @@ GameListPanel::GameListPanel(const emu::Console& console)
     countLabel = textLabel(14);
     countLabel->setMarginTop(2);
     titles->addView(countLabel);
+    pageLabel = textLabel(13);
+    pageLabel->setMarginTop(1);
+    pageLabel->setVisibility(Visibility::GONE);
+    titles->addView(pageLabel);
     header->addView(titles);
 
     auto* toggle = new Box(Axis::ROW);
@@ -340,6 +348,7 @@ void GameListPanel::willAppear(bool resetState) {
 void GameListPanel::applyColors() {
     const NVGcolor muted = themeColor("equinox/muted");
     countLabel->setTextColor(muted);
+    pageLabel->setTextColor(muted);
     runningName->setTextColor(muted);
     noneLabel->setTextColor(muted);
     separator->setColor(themeColor("equinox/card"));
@@ -355,13 +364,54 @@ void GameListPanel::applyCount() {
         text = "emu/scanning"_i18n;
     else if (shown.size() != total)
         text = brls::getStr("library/list/count_filtered", shown.size(), total);
-    if (!scanning && !query.empty())
-        text += "  ·  “" + query + "”";
     else if (total == 1)
         text = "library/list/count_one"_i18n;
     else
         text = brls::getStr("library/list/count_many", total);
+    if (!scanning && !query.empty())
+        text += "  ·  “" + query + "”";
     countLabel->setText(text);
+    applyPage();
+}
+
+size_t GameListPanel::pageSize() const {
+    if (mode == 0)
+        return kCartPage;
+    const float column = scroll->getHeight();
+    if (column <= 0)
+        return kListPage;
+    return std::max<size_t>(1, static_cast<size_t>(column / kRowStep));
+}
+
+size_t GameListPanel::currentPlace() const {
+    if (current && *current < shownAt.size() && shownAt[*current] != kNoPlace)
+        return shownAt[*current];
+    return 0;
+}
+
+void GameListPanel::applyPage() {
+    const size_t size = pageSize();
+    shownPageSize = size;
+    const size_t pages = (shown.size() + size - 1) / size;
+    if (scanning || pages <= 1) {
+        pageLabel->setVisibility(Visibility::GONE);
+        return;
+    }
+    pageLabel->setText(brls::getStr("library/list/page", currentPlace() / size + 1, pages));
+    pageLabel->setVisibility(Visibility::VISIBLE);
+}
+
+void GameListPanel::turnPage(int direction) {
+    if (shown.empty())
+        return;
+    const size_t size = pageSize();
+    const size_t page = currentPlace() / size;
+    size_t place = 0;
+    if (direction > 0)
+        place = std::min((page + 1) * size, shown.size() - 1);
+    else if (page > 0)
+        place = (page - 1) * size;
+    focusGame(shown[place]);
 }
 
 void GameListPanel::setScanning(bool on) {
@@ -383,6 +433,7 @@ void GameListPanel::applyToggle() {
 void GameListPanel::setLook(int view) {
     mode = view == 1 ? 1 : 0;
     applyToggle();
+    applyPage();
     applyLooks(true);
     if (focusInList())
         scheduleRecenter();
@@ -775,6 +826,8 @@ void GameListPanel::draw(NVGcontext* vg, float x, float y, float width, float he
         applySizes();
     fillWindow(anchorPlace());
     placeRows();
+    if (pageSize() != shownPageSize) // the column got its height, or a new one
+        applyPage();
     const int64_t placed = liblog::nowUs();
     Box::draw(vg, x, y, width, height, style, ctx);
     measureFrame(start, placed - start, liblog::nowUs() - placed);
@@ -786,6 +839,7 @@ void GameListPanel::setCurrent(std::optional<size_t> next, bool animate) {
         return;
     current = next;
     applyLooks(animate);
+    applyPage();
     scheduleRecenter();
     if (onFocusGame)
         onFocusGame(current);
@@ -933,14 +987,15 @@ GameListPanel::Batch GameListPanel::batchState() const {
 }
 
 void GameListPanel::registerShortcuts(bool hidden) {
-    registerAction("library/list/hint_mode"_i18n, BUTTON_RB, [this](View*) {
-        toggleMode();
+    // Sort and view live in More options; the shoulders turn whole pages.
+    registerAction("library/list/page_prev"_i18n, BUTTON_LB, [this](View*) {
+        turnPage(-1);
         return true;
-    }, hidden);
-    registerAction("library/list/hint_sort"_i18n, BUTTON_LB, [this](View*) {
-        openSort();
+    });
+    registerAction("library/list/page_next"_i18n, BUTTON_RB, [this](View*) {
+        turnPage(1);
         return true;
-    }, hidden);
+    });
     // Search is the one shortcut always shown in the footer: the list has no
     // search field of its own.
     registerAction("library/list/hint_search"_i18n, BUTTON_BACK, [this](View*) {
