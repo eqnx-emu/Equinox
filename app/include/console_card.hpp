@@ -10,9 +10,9 @@
 //
 //  A console with a 3D turntable (img/3d/<slug>.png) has no card:
 //  its object floats over the name and spins while it is selected. Opened,
-//  it turns into its scene (img/3d/<slug>-scene, the console plugged into a
-//  TV) when there is one, larger and without the name, which the panel on
-//  the right already shows.
+//  it turns into its scene when there is one (img/3d/<slug>-scene.png, a
+//  still, since it doesn't turn: the console plugged into a TV, say),
+//  larger and without the name, which the panel on the right already shows.
 //
 
 #pragma once
@@ -32,6 +32,7 @@
 class ConsoleCard : public PressableBox, public ShelfItem {
   public:
     explicit ConsoleCard(const emu::Console& console);
+    ~ConsoleCard() override;
 
     bool frameless() const override { return turntable != nullptr; }
     void setEntered(float amount) override { enteredAmount = amount; }
@@ -92,8 +93,10 @@ class ConsoleCard : public PressableBox, public ShelfItem {
 
     // The 3D object instead of the card, when the console has one.
     std::unique_ptr<Turntable> turntable;
-    // What it turns into when opened; null without one.
-    std::unique_ptr<Turntable> scene;
+    // The still it turns into when opened; empty without one. Loaded on
+    // the first draw that shows it (-1 when it can't be read).
+    std::string scenePath;
+    int sceneImage = 0;
     float enteredAmount = 0;
 
     void update();

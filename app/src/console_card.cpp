@@ -21,12 +21,13 @@ using namespace brls;
 using namespace brls::literals;
 
 namespace {
-// The opened console's scene: its width, how far its centre moves (up is
-// negative) and how far its shadow drops, from the card's resting object.
-// It fills the column left of the panel, where the name was.
-constexpr float kSceneWidth = 440;
-constexpr float kSceneRise = -5;
-constexpr float kSceneGround = 88;
+// The opened console's scene fits this box, centred kSceneCentre below the
+// card's top: the column left of the panel, down to where the name was.
+constexpr float kSceneBoxW = 440;
+constexpr float kSceneBoxH = 330;
+constexpr float kSceneCentre = 30;
+// The resting object grows toward this width as it fades into the scene.
+constexpr float kRestingGrowW = 330;
 
 NVGcolor themeColor(const std::string& name) {
     return Application::getTheme().getColor(name);
@@ -112,8 +113,8 @@ ConsoleCard::ConsoleCard(const emu::Console& console) : consoleRef(console) {
     const std::string base = "img/3d/" + console.slug;
     if (Turntable::exists(art3d(base))) {
         turntable = std::make_unique<Turntable>(art3d(base));
-        if (Turntable::exists(art3d(base + "-scene")))
-            scene = std::make_unique<Turntable>(art3d(base + "-scene"));
+        if (Turntable::exists(base + "-scene.png"))
+            scenePath = std::string(BRLS_RESOURCES) + base + "-scene.png";
     }
 
     if (frameless()) {
@@ -321,8 +322,6 @@ void ConsoleCard::onFocusLost() {
 void ConsoleCard::animateFocus(bool focused) {
     if (turntable)
         turntable->setActive(focused);
-    if (scene)
-        scene->setActive(focused);
     const float to = focused ? 1.0f : 0.0f;
     focus.stop();
     focus.reset();
@@ -338,20 +337,43 @@ void ConsoleCard::animateFocus(bool focused) {
     hop.start();
 }
 
+ConsoleCard::~ConsoleCard() {
+    if (sceneImage > 0)
+        nvgDeleteImage(Application::getNVGContext(), sceneImage);
+}
+
 void ConsoleCard::draw(NVGcontext* vg, float x, float y, float width,
                        float height, Style style, FrameContext* ctx) {
     if (frameless()) {
         // Floats over the name, its shadow just above it. Opened, it grows
         // into the scene over the free space and the name fades out.
-        const float e = scene ? std::clamp(enteredAmount, 0.0f, 1.0f) : 0.0f;
+        float e = scenePath.empty() ? 0.0f : std::clamp(enteredAmount, 0.0f, 1.0f);
+        if (e > 0.01f && sceneImage == 0) {
+            sceneImage = nvgCreateImage(vg, scenePath.c_str(), 0);
+            if (sceneImage <= 0)
+                sceneImage = -1;
+        }
+        if (sceneImage < 0)
+            e = 0;
         const float alpha = getAlpha();
-        const float objectW = 215 + (kSceneWidth - 215) * e;
-        const float cy = y + 38 + kSceneRise * e;
-        const float groundY = y + 100 + kSceneGround * e;
+        const float cx = x + width / 2;
         if (e < 0.99f)
-            turntable->draw(vg, x + width / 2, cy, objectW, groundY, alpha * (1 - e));
-        if (e > 0.01f)
-            scene->draw(vg, x + width / 2, cy, objectW, groundY, alpha * e);
+            turntable->draw(vg, cx, y + 38, 215 + (kRestingGrowW - 215) * e,
+                            y + 100, alpha * (1 - e));
+        if (e > 0.01f) {
+            // The still, fitted to the box, growing in as it fades in.
+            int iw = 0, ih = 0;
+            nvgImageSize(vg, sceneImage, &iw, &ih);
+            if (iw > 0 && ih > 0) {
+                const float fit = std::min(kSceneBoxW / iw, kSceneBoxH / ih) * (0.7f + 0.3f * e);
+                const float w = iw * fit, h = ih * fit;
+                const float left = cx - w / 2, top = y + kSceneCentre - h / 2;
+                nvgBeginPath(vg);
+                nvgRect(vg, left, top, w, h);
+                nvgFillPaint(vg, nvgImagePattern(vg, left, top, w, h, 0, sceneImage, alpha * e));
+                nvgFill(vg);
+            }
+        }
         for (View* child : getChildren())
             child->setAlpha(1 - e);
         PressableBox::draw(vg, x, y, width, height, style, ctx);
