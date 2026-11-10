@@ -49,7 +49,8 @@ class GameListPanel : public brls::Box {
     void refreshRow(size_t index);
     void refreshRows();
     std::function<void(GameRowCell&, size_t)> bindRow;
-    // 0 cartridge for the picked game and names for the rest, 1 list with thumbnails.
+    // 0 cartridges, three at a time: the picked game big, the one above and
+    // the one below smaller beside their names. 1 list of names.
     void setLook(int view);
     // The count line says the folder is being read.
     void setScanning(bool on);
@@ -118,6 +119,13 @@ class GameListPanel : public brls::Box {
     std::string query;
     int sort = 0;
     int mode = 0;
+    // Mode 0: the picked game's row and its neighbours' rows, so that the
+    // three fill the column.
+    float cartRow = GameRowCell::CartridgeHeight;
+    float tapeRow = GameRowCell::TapeHeight;
+    float step() const;  // from one row's top to the next one's, without the cartridge
+    float extra() const; // what the cartridge's row adds
+    void applySizes();
     unsigned recenterToken = 0;
     bool restoringFocus = false;
     bool scanning = false;

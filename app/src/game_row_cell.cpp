@@ -23,18 +23,19 @@ using namespace brls::literals;
 
 namespace {
 constexpr float kRowHeight = GameRowCell::RowHeight;
-constexpr float kCartridgeHeight = GameRowCell::CartridgeHeight;
 constexpr int kHeightMs = 200;
 constexpr int kEntryMs = 250;
 constexpr int kFocusMs = 120;
 
-constexpr float kCartW = 240;
-constexpr float kCartH = 140;
-// Room above the cartridge for its ring (6) and the float (7).
-constexpr float kCartTop = 22;
-constexpr float kNameTop = 178;
+// Room above the cartridge for its ring (6) and the float (4).
+constexpr float kCartTop = 12;
+constexpr float kCartMaxW = 250;
+// Under the cartridge: a gap, the name (20), 2, the line under it (17), 4.
+constexpr float kNameGap = 10;
+constexpr float kNameBlock = kNameGap + 20 + 2 + 17 + 4;
 constexpr float kNameWidth = 320;
-constexpr float kFloatAmplitude = 7;
+constexpr float kFloatAmplitude = 4;
+constexpr float kTapeLeft = 10;
 constexpr float kFloatSeconds = 3.8f;
 constexpr float kTiltDegrees = 0.5f;
 
@@ -166,6 +167,34 @@ void GameRowCell::setDataState(bool data, std::optional<int> pct, bool queue) {
     applyStatus();
 }
 
+float GameRowCell::heightOf(RowLook which) const {
+    switch (which) {
+    case RowLook::Cartridge:
+        return cartridgeHeight;
+    case RowLook::Tape:
+        return tapeHeight;
+    default:
+        return kRowHeight;
+    }
+}
+
+float GameRowCell::bigCartridgeH() const {
+    return std::max(40.0f, std::min(cartridgeHeight - kCartTop - kNameBlock,
+                                    kCartMaxW / kCartridgeAspect));
+}
+
+void GameRowCell::setSizes(float cartridge, float tape) {
+    if (cartridge == cartridgeHeight && tape == tapeHeight)
+        return;
+    cartridgeHeight = cartridge;
+    tapeHeight = tape;
+    applyLayout();
+    targetHeight = heightOf(look);
+    heightAnim.reset(targetHeight);
+    setHeight(targetHeight);
+    setClipsToBounds(false);
+}
+
 void GameRowCell::setLook(RowLook next, bool animate) {
     if (next == look)
         return;
@@ -173,7 +202,7 @@ void GameRowCell::setLook(RowLook next, bool animate) {
     applyLayout();
     applyStatus();
 
-    targetHeight = look == RowLook::Cartridge ? kCartridgeHeight : kRowHeight;
+    targetHeight = heightOf(look);
     const float from = heightAnim.getValue();
     if (animate && !reduceMotion() && from != targetHeight) {
         heightAnim.reset(from);
@@ -205,6 +234,7 @@ void GameRowCell::setLook(RowLook next, bool animate) {
 void GameRowCell::applyLayout() {
     const bool cartridge = look == RowLook::Cartridge;
     const bool thumb = look == RowLook::Thumb;
+    const bool tape = look == RowLook::Tape;
 
     // The cartridge draws its own ring; rows use the borealis highlight.
     setHideHighlight(cartridge);
@@ -215,7 +245,7 @@ void GameRowCell::applyLayout() {
         setAxis(Axis::COLUMN);
         setAlignItems(AlignItems::CENTER);
         setJustifyContent(JustifyContent::FLEX_START);
-        setPadding(kNameTop, 0, 0, 0);
+        setPadding(kCartTop + bigCartridgeH() + kNameGap, 0, 0, 0);
         nameLabel->setFontSize(16);
         nameLabel->setGrow(0);
         nameLabel->setShrink(0);
@@ -230,6 +260,8 @@ void GameRowCell::applyLayout() {
     setJustifyContent(JustifyContent::FLEX_START);
     if (thumb)
         setPadding(4, 12, 4, kThumbLeft);
+    else if (tape)
+        setPadding(0, 12, 0, kTapeLeft + tapeCartridgeH() * kCartridgeAspect + 14);
     else
         setPadding(0, 14, 0, 14);
     nameLabel->setFontSize(15);
@@ -387,6 +419,8 @@ void GameRowCell::draw(NVGcontext* vg, float x, float y, float width,
         drawCartridgeLook(vg, x, y, width);
     else if (look == RowLook::Thumb)
         drawThumb(vg, x, y, height);
+    else if (look == RowLook::Tape)
+        drawTape(vg, x, y, height);
     Box::draw(vg, x, y, width, height, style, ctx);
 }
 
@@ -401,10 +435,12 @@ void GameRowCell::drawCartridgeLook(NVGcontext* vg, float x, float y,
     // 0 on the ground, 1 at the top of the float.
     const float lift = (1 + phase) / 2;
 
+    const float cartH = bigCartridgeH();
+    const float cartW = cartH * kCartridgeAspect;
     const float cx = x + width / 2;
     const float top = y + kCartTop;
-    const float groundY = top + kCartH + 8;
-    const float groundW = kCartW * 0.72f;
+    const float groundY = top + cartH + 6;
+    const float groundW = cartW * 0.72f;
     const float groundScale = still ? 1.0f : 1 - 0.18f * lift;
     const float groundAlpha = still ? 0.55f : 0.55f - 0.25f * lift;
 
@@ -425,16 +461,26 @@ void GameRowCell::drawCartridgeLook(NVGcontext* vg, float x, float y,
     const float rise = (1 - appear) * 8;
     const float bob = still ? 0.0f : -kFloatAmplitude * phase;
     const float tilt = still ? 0.0f : kTiltDegrees * kPi / 180 * phase;
-    nvgTranslate(vg, cx, top + kCartH / 2 + rise + bob);
+    nvgTranslate(vg, cx, top + cartH / 2 + rise + bob);
     nvgRotate(vg, tilt);
 
     int texW = 0, texH = 0;
     const int tex = coverTex;
     if (tex > 0)
         nvgImageSize(vg, tex, &texW, &texH);
-    drawCartridge(vg, -kCartW / 2, -kCartH / 2, kCartW, kCartH, tex, texW,
+    drawCartridge(vg, -cartW / 2, -cartH / 2, cartW, cartH, tex, texW,
                   texH, kCartridgeBody, ringColor, groundColor, focusAlpha.getValue());
     nvgRestore(vg);
+}
+
+void GameRowCell::drawTape(NVGcontext* vg, float x, float y, float height) {
+    const float h = tapeCartridgeH();
+    const float w = h * kCartridgeAspect;
+    int texW = 0, texH = 0;
+    if (coverTex > 0)
+        nvgImageSize(vg, coverTex, &texW, &texH);
+    drawCartridge(vg, x + kTapeLeft, y + (height - h) / 2, w, h, coverTex, texW, texH,
+                  kCartridgeBody, ringColor, groundColor, 0.0f, 0.5f);
 }
 
 void GameRowCell::drawThumb(NVGcontext* vg, float x, float y, float height) {

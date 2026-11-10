@@ -75,8 +75,11 @@ namespace {
 constexpr float kPanelWidth = 384;
 // Enough to fill the column twice over, so the next row is always ready.
 constexpr size_t kPoolSize = 24;
-constexpr float kRowStep = GameRowCell::RowHeight + 2;
-constexpr float kCartridgeExtra = GameRowCell::CartridgeHeight - GameRowCell::RowHeight;
+constexpr float kRowGap = 2;
+constexpr float kRowStep = GameRowCell::RowHeight + kRowGap;
+// Of the column, in mode 0; the neighbours share the rest.
+constexpr float kCartShare = 0.52f;
+constexpr float kMinTapeRow = 56;
 constexpr float kListTop = 4;
 constexpr float kListSide = 6;
 constexpr float kRowWidth = kPanelWidth - 16 - 24 - 2 * kListSide;
@@ -606,7 +609,32 @@ void GameListPanel::applyOrder(bool resetScroll, std::vector<size_t>* ready) {
 RowLook GameListPanel::lookOf(size_t index) const {
     if (mode != 0)
         return RowLook::Name;
-    return current && *current == index ? RowLook::Cartridge : RowLook::Thumb;
+    return current && *current == index ? RowLook::Cartridge : RowLook::Tape;
+}
+
+float GameListPanel::step() const {
+    return mode == 0 ? tapeRow : kRowStep;
+}
+
+float GameListPanel::extra() const {
+    return mode == 0 ? cartRow - tapeRow : 0;
+}
+
+// The column's height decides the rows' in mode 0: three games fill it.
+void GameListPanel::applySizes() {
+    const float column = scroll->getHeight();
+    if (column <= 0 || std::isnan(column))
+        return;
+    const float cart = std::round(column * kCartShare);
+    const float tape = std::max(kMinTapeRow, std::floor((column - cart) / 2));
+    if (cart == cartRow && tape == tapeRow)
+        return;
+    cartRow = cart;
+    tapeRow = tape;
+    for (GameRowCell* cell : pool)
+        cell->setSizes(cartRow, tapeRow);
+    if (focusInList())
+        scroll->recenterNextFrame();
 }
 
 void GameListPanel::applyLooks(bool animate) {
@@ -622,11 +650,11 @@ size_t GameListPanel::anchorPlace() {
     // Dragged by touch, nothing is focused: follow the middle of the column.
     float middle = scroll->getContentOffsetY() + scroll->getHeight() / 2 - kListTop;
     if (mode == 0 && current && shownAt[*current] != kNoPlace &&
-        middle > shownAt[*current] * kRowStep + kCartridgeExtra)
-        middle -= kCartridgeExtra;
+        middle > shownAt[*current] * step() + extra())
+        middle -= extra();
     if (middle <= 0)
         return 0;
-    return std::min(static_cast<size_t>(middle / kRowStep), shown.size() - 1);
+    return std::min(static_cast<size_t>(middle / step()), shown.size() - 1);
 }
 
 // Rows that still belong in the window stay as they are, the focused one
@@ -711,7 +739,7 @@ void GameListPanel::checkFocusAndView() const {
     if (live.empty())
         return;
     const long middle = static_cast<long>(
-        (scroll->getContentOffsetY() + scroll->getHeight() / 2 - kListTop) / kRowStep);
+        (scroll->getContentOffsetY() + scroll->getHeight() / 2 - kListTop) / step());
     const long first = static_cast<long>(windowStart);
     const long last = first + static_cast<long>(live.size());
     if (middle + kOffWindowMargin < first || middle > last + kOffWindowMargin)
@@ -780,17 +808,18 @@ void GameListPanel::placeRows() {
         mode == 0 && current && shownAt[*current] != kNoPlace
             ? std::optional<size_t>(shownAt[*current])
             : std::nullopt;
-    float y = kListTop + windowStart * kRowStep;
+    const float gap = mode == 0 ? 0 : kRowGap;
+    float y = kListTop + windowStart * step();
     if (cartridge && *cartridge < windowStart)
-        y += kCartridgeExtra;
+        y += extra();
     for (GameRowCell* cell : live) {
         cell->setDetachedPosition(kListSide, y);
-        y += cell->currentHeight() + (kRowStep - GameRowCell::RowHeight);
+        y += cell->currentHeight() + gap;
     }
     const size_t after = windowStart + live.size();
-    y += (shown.size() - after) * kRowStep + kListTop;
+    y += (shown.size() - after) * step() + kListTop;
     if (cartridge && *cartridge >= after)
-        y += kCartridgeExtra;
+        y += extra();
     if (std::abs(list->getHeight() - y) > 0.5f)
         list->setHeight(y);
 }
@@ -830,6 +859,8 @@ View* GameListPanel::defaultRow() const {
 void GameListPanel::draw(NVGcontext* vg, float x, float y, float width, float height,
                          Style style, FrameContext* ctx) {
     const int64_t start = liblog::nowUs();
+    if (mode == 0)
+        applySizes();
     fillWindow(anchorPlace());
     placeRows();
     const int64_t placed = liblog::nowUs();
@@ -856,8 +887,8 @@ void GameListPanel::focusedGame(size_t index) {
     // Aim at where the row ends up once the heights settle, in one movement:
     // the focused row is the only cartridge, so every row above it is plain.
     recenterToken++;
-    const float height = mode == 0 ? GameRowCell::CartridgeHeight : GameRowCell::RowHeight;
-    scroll->centerOn(kListTop + shownAt[index] * kRowStep + height / 2);
+    const float height = mode == 0 ? cartRow : GameRowCell::RowHeight;
+    scroll->centerOn(kListTop + shownAt[index] * step() + height / 2);
 }
 
 void GameListPanel::focusGame(size_t index) {

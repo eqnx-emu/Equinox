@@ -3,7 +3,8 @@
 //  Equinox
 //
 //  One game in the library list: a floating cartridge for the picked game,
-//  or a row with a thumbnail, or a row with just the name.
+//  a smaller cartridge beside the name for its neighbours, a row with a
+//  thumbnail, or a row with just the name.
 //
 
 #pragma once
@@ -17,13 +18,14 @@
 #include <optional>
 #include <string>
 
-enum class RowLook { Cartridge, Thumb, Name };
+enum class RowLook { Cartridge, Tape, Thumb, Name };
 
 class GameRowCell : public brls::Box {
   public:
     static constexpr size_t NoGame = static_cast<size_t>(-1);
     static constexpr float RowHeight = 48;
     static constexpr float CartridgeHeight = 216;
+    static constexpr float TapeHeight = 86;
 
     GameRowCell();
     ~GameRowCell() override;
@@ -43,9 +45,11 @@ class GameRowCell : public brls::Box {
     // Decoded off the UI thread; a row that moves on abandons the decoding.
     void setCover(const std::string& path);
     void clearCover();
-    // The height eases between 48 and 216 px, unless animate is false or
-    // "Reduce motion" is on. Only the cartridge animates.
+    // The height eases between the looks' heights, unless animate is false
+    // or "Reduce motion" is on. Only the cartridge animates.
     void setLook(RowLook look, bool animate);
+    // The heights of the Cartridge and Tape looks; a change applies at once.
+    void setSizes(float cartridge, float tape);
     // Rows show a download icon without data, "37%" while downloading and
     // "queued" while waiting; percent wins over queued.
     void setDataState(bool hasData, std::optional<int> percent, bool queued);
@@ -62,6 +66,12 @@ class GameRowCell : public brls::Box {
   private:
     size_t rowIndex = NoGame;
     RowLook look = RowLook::Name;
+    float cartridgeHeight = CartridgeHeight;
+    float tapeHeight = TapeHeight;
+    float heightOf(RowLook look) const;
+    // The cartridge's height in the Cartridge look.
+    float bigCartridgeH() const;
+    float tapeCartridgeH() const { return tapeHeight - 14; }
     bool reduceMotion() const;
 
     int coverTex = 0; // a reference held in the TextureCache
@@ -101,4 +111,5 @@ class GameRowCell : public brls::Box {
     void settle();
     void drawCartridgeLook(NVGcontext* vg, float x, float y, float width);
     void drawThumb(NVGcontext* vg, float x, float y, float height);
+    void drawTape(NVGcontext* vg, float x, float y, float height);
 };
