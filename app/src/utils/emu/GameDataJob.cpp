@@ -107,7 +107,8 @@ DataOutcome fetchGameData(const GameDataRequest& req, DataTransport& transport,
     if (!enter(DataStep::Identify)) return out;
     romStat(req.rom.path, meta.size, meta.mtime);
     std::string error;
-    if (romCrc32(req.rom.path, *req.console, meta.crc, error) && req.db) {
+    if (hashesRoms(*req.console) && romCrc32(req.rom.path, *req.console, meta.crc, error) &&
+        req.db) {
         if (const GameInfo* info = req.db->find(meta.crc)) {
             meta.identified = true;
             meta.canonical = info->name;

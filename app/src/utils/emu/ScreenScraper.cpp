@@ -19,16 +19,19 @@ int ssSystemId(const Console& console) {
     if (console.slug == "snes") return 4;
     if (console.slug == "gba") return 12;
     if (console.slug == "gbc") return 10;
+    if (console.slug == "ps1") return 57;
     return 0;
 }
 
 std::string ssUrl(const SsConfig& cfg, const SsQuery& q) {
-    char crc[16];
-    std::snprintf(crc, sizeof crc, "%08X", static_cast<unsigned>(q.crc));
+    // 0 is a game that was not hashed (see hashesRoms): matched by name and size only.
+    char crc[16] = "";
+    if (q.crc != 0) std::snprintf(crc, sizeof crc, "%08X", static_cast<unsigned>(q.crc));
     return "https://api.screenscraper.fr/api2/jeuInfos.php?devid=" + urlEncode(cfg.devId) +
            "&devpassword=" + urlEncode(cfg.devPassword) + "&softname=" + urlEncode(cfg.softName) +
            "&ssid=" + urlEncode(cfg.user) + "&sspassword=" + urlEncode(cfg.password) +
-           "&output=json&romtype=rom&systemeid=" + std::to_string(q.systemId) + "&crc=" + crc +
+           "&output=json&romtype=rom&systemeid=" + std::to_string(q.systemId) +
+           (crc[0] ? std::string("&crc=") + crc : std::string()) +
            "&romnom=" + urlEncode(q.romName) + "&romtaille=" + std::to_string(q.romSize);
 }
 

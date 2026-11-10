@@ -30,8 +30,8 @@ Equinox is a game streaming client for the Nintendo Switch. It is built to pair 
 - **In-app updates.** Checks for new releases and installs them when Equinox runs as an NRO
   from the SD card.
 - **New look.** Dusk blue theme, sun amber accents and the Onest typeface.
-- **Retro games.** Play your own Super Nintendo, Game Boy Advance and Game Boy Color ROMs
-  from the SD card, on the same home screen as your PCs. See [Retro games](#retro-games).
+- **Retro games.** Play your own Super Nintendo, Game Boy Advance, Game Boy Color and
+  PlayStation games from the SD card, on the same home screen as your PCs. See [Retro games](#retro-games).
 
 # Installing
 
@@ -82,6 +82,7 @@ Equinox can also run games on the console itself:
 | Super Nintendo | `snes` | `.sfc`, `.smc`, `.zip`, `.7z` | [snes9x](https://github.com/eqnx-emu/equinox-snes9x) |
 | Game Boy Advance | `gba` | `.gba`, `.zip`, `.7z` | [mGBA](https://github.com/eqnx-emu/equinox-mgba) |
 | Game Boy Color | `gbc` | `.gbc`, `.zip`, `.7z` | [Gambatte](https://github.com/eqnx-emu/equinox-gambatte) |
+| PlayStation | `ps1` | `.cue`, `.chd`, `.pbp`, `.m3u`, `.iso` | [PCSX ReARMed](https://github.com/eqnx-emu/equinox-pcsx-rearmed) |
 
 1. On the home screen, open the **Add** card and pick the console. Equinox downloads the
    emulator to `sdmc:/equinox/emulators/<folder>/`.
@@ -91,6 +92,13 @@ Equinox can also run games on the console itself:
 Saves and save states live in `sdmc:/equinox/saves/<folder>/` and
 `sdmc:/equinox/states/<folder>/`. Games can be added to Favorites like PC games. Removing the console keeps your games, saves
 and covers on the SD card. Equinox does not provide games or BIOS files.
+
+PlayStation games are disc images: keep a `.cue` next to its `.bin` tracks, and list the
+discs of a multi-disc game in an `.m3u` to swap them from the pause menu. `.zip` and `.7z`
+are not read; `.chd` saves space instead. Put the BIOS (`scph5501.bin` and the like) in
+`sdmc:/equinox/bios/`; without one the emulator uses its built-in BIOS, which runs most
+games but not all. Discs are too big to identify by checksum on the console, so their
+covers and details are found by file name.
 
 ## Forwarders
 

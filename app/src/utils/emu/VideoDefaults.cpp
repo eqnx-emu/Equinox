@@ -45,6 +45,12 @@ bool readFile(const std::string& path, std::string& out) {
 
 }  // namespace
 
+VideoDefaults videoDefaultsFor(const Console& console) {
+    VideoDefaults out;
+    if (console.slug == "ps1") out.size = "4:3";
+    return out;
+}
+
 std::string videoDefaultsPath(const ConsolePaths& paths) { return paths.emulator + "/video.json"; }
 
 void recoverVideoDefaults(const std::string& path) {
@@ -60,9 +66,9 @@ void recoverVideoDefaults(const std::string& path) {
     }
 }
 
-VideoDefaults readVideoDefaults(const std::string& path) {
+VideoDefaults readVideoDefaults(const std::string& path, const VideoDefaults& base) {
     recoverVideoDefaults(path);
-    VideoDefaults out;
+    VideoDefaults out = base;
     std::string text;
     if (!readFile(path, text)) return out;
     // Jansson rejects a leading BOM, which some editors add.
