@@ -313,6 +313,9 @@ class HomeArt : public View {
         case HomeCardKind::FAVORITES:
             drawFavorites(vg);
             break;
+        case HomeCardKind::DOWNLOADS:
+            drawDownloads(vg);
+            break;
         case HomeCardKind::SETTINGS:
             drawSettings(vg);
             break;
@@ -413,6 +416,33 @@ class HomeArt : public View {
         nvgFillColor(vg, a(hex(0xF4B860)));
         nvgFill(vg);
         ground(vg);
+    }
+
+    // A download arrow over a tray, the ring around it partly full.
+    void drawDownloads(NVGcontext* vg) {
+        fillRect(vg, 0, 0, 272, 128, 11, 0x1F2347);
+        nvgLineCap(vg, NVG_ROUND);
+        nvgLineJoin(vg, NVG_ROUND);
+        nvgBeginPath(vg);
+        nvgCircle(vg, 136, 60, 38);
+        nvgStrokeColor(vg, a(hex(0x3A4074)));
+        nvgStrokeWidth(vg, 8);
+        nvgStroke(vg);
+        nvgBeginPath(vg);
+        nvgArc(vg, 136, 60, 38, -NVG_PI / 2, NVG_PI * 0.7f, NVG_CW);
+        nvgStrokeColor(vg, a(hex(0xF4B860)));
+        nvgStroke(vg);
+        line(vg, 136, 40, 136, 72, 0xF1F2FA, 6);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, 124, 62);
+        nvgLineTo(vg, 136, 74);
+        nvgLineTo(vg, 148, 62);
+        nvgStrokeColor(vg, a(hex(0xF1F2FA)));
+        nvgStrokeWidth(vg, 6);
+        nvgStroke(vg);
+        line(vg, 122, 84, 150, 84, 0x9DB8FF, 6);
+        nvgLineCap(vg, NVG_BUTT);
+        nvgLineJoin(vg, NVG_MITER);
     }
 
     // Three sliders.
@@ -647,6 +677,9 @@ HomeCard::HomeCard(HomeCardKind kind) : PressableBox(Axis::COLUMN), kind(kind) {
         title = "home/favorites"_i18n;
         color = themeColor("equinox/status_on");
         break;
+    case HomeCardKind::DOWNLOADS:
+        title = "downloads/title"_i18n;
+        break;
     case HomeCardKind::SETTINGS:
         title = "home/settings"_i18n;
         break;
@@ -750,6 +783,13 @@ HomeView::HomeView() {
     badge->setPositionTop(33);
     badge->setPositionRight(44);
     badge->onOpen = [] { openDownloads(); };
+    badge->onSummary = [this](const std::string& summary) {
+        if (summary == downloadsStatus)
+            return;
+        downloadsStatus = summary;
+        updateHomeCards();
+        updateShelfInfo();
+    };
     // Back to the shelf it was reached from.
     badge->onHidden = [this] {
         View* card = getDefaultFocus();
@@ -908,6 +948,9 @@ MotionBox* HomeView::makeLayer(Shelf& shelf, bool forPcs) {
 
 void HomeView::buildHomeCards() {
     const HomeCardKind kinds[] = {HomeCardKind::PCS, HomeCardKind::FAVORITES,
+#if defined(PLATFORM_SWITCH)
+                                  HomeCardKind::DOWNLOADS,
+#endif
                                   HomeCardKind::SETTINGS, HomeCardKind::ABOUT};
     for (HomeCardKind kind : kinds) {
         auto* card = new HomeCard(kind);
@@ -919,6 +962,8 @@ void HomeView::buildHomeCards() {
             }
             if (card->getKind() == HomeCardKind::PCS)
                 openPcs();
+            else if (card->getKind() == HomeCardKind::DOWNLOADS)
+                openDownloads();
             else
                 enter();
         };
@@ -1042,23 +1087,41 @@ void HomeView::updateHomeCards() {
         pcsStatus = "home/pcs_none"_i18n;
     if (running > 0)
         pcsStatus += "  ·  " + brls::getStr("home/pcs_running", running);
-    homeCards[0]->setStatus(pcsStatus);
-
     const FavoriteSummary fav = favoriteSummary();
-    homeCards[1]->setStatus(
-        fav.games == 0 ? "home/fav_empty"_i18n
-                       : brls::getStr("home/fav_status", gamesText(fav.games),
-                                      favoritePlaces(fav)));
-    homeCards[2]->setStatus(streamQuality());
-    homeCards[3]->setStatus(brls::getStr("home/about_status", APP_VERSION));
+    for (HomeCard* card : homeCards) {
+        switch (card->getKind()) {
+        case HomeCardKind::PCS:
+            card->setStatus(pcsStatus);
+            break;
+        case HomeCardKind::FAVORITES:
+            card->setStatus(
+                fav.games == 0 ? "home/fav_empty"_i18n
+                               : brls::getStr("home/fav_status", gamesText(fav.games),
+                                              favoritePlaces(fav)));
+            break;
+        case HomeCardKind::DOWNLOADS:
+            card->setStatus(downloadsStatus.empty() ? "downloads/empty_title"_i18n
+                                                    : downloadsStatus);
+            break;
+        case HomeCardKind::SETTINGS:
+            card->setStatus(streamQuality());
+            break;
+        case HomeCardKind::ABOUT:
+            card->setStatus(brls::getStr("home/about_status", APP_VERSION));
+            break;
+        }
+    }
 }
 
 void HomeView::updateShelfInfo() {
     // Home shelf.
     const int sel = home.carousel->selectedIndex();
     std::string info, detail;
-    switch (sel) {
-    case 0: {
+    const HomeCardKind selKind = sel >= 0 && sel < (int)homeCards.size()
+                                     ? homeCards[sel]->getKind()
+                                     : HomeCardKind::ABOUT;
+    switch (selKind) {
+    case HomeCardKind::PCS: {
         const int count = (int)hostCards.size();
         const int consoles = (int)consoleCards.size();
         info = count == 0   ? ""
@@ -1081,7 +1144,7 @@ void HomeView::updateShelfInfo() {
         }
         break;
     }
-    case 1: {
+    case HomeCardKind::FAVORITES: {
         const FavoriteSummary fav = favoriteSummary();
         info = fav.games == 0   ? "home/fav_empty"_i18n
                : fav.games == 1 ? "home/fav_info_one"_i18n
@@ -1091,11 +1154,15 @@ void HomeView::updateShelfInfo() {
                      : brls::getStr("home/fav_from", joinNames(fav.names));
         break;
     }
-    case 2:
+    case HomeCardKind::DOWNLOADS:
+        info = downloadsStatus.empty() ? "downloads/empty_title"_i18n : downloadsStatus;
+        detail = "home/downloads_detail"_i18n;
+        break;
+    case HomeCardKind::SETTINGS:
         info = "home/settings"_i18n;
         detail = "home/settings_detail"_i18n;
         break;
-    default:
+    case HomeCardKind::ABOUT:
         info = brls::getStr("about/version", APP_VERSION);
         detail = "home/about_detail"_i18n;
         break;
@@ -1302,6 +1369,7 @@ void HomeView::fillPanel() {
             options = aboutOptions();
             break;
         case HomeCardKind::PCS:
+        case HomeCardKind::DOWNLOADS:
             return;
         }
     }
@@ -1419,10 +1487,6 @@ std::vector<HomeOption> HomeView::settingsOptions() {
             {icon, brls::getStr(std::string("settings/groups/") + id + "/title"),
              "", [open, group] { open(group); }});
     }
-#if defined(PLATFORM_SWITCH)
-    // file_download
-    options.push_back({"", "downloads/title"_i18n, "", [] { openDownloads(); }});
-#endif
     return options;
 }
 

@@ -435,6 +435,7 @@
         "fav_empty": "No favorites yet",
         "fav_empty_detail": "Star games in a library with Y",
         "fav_all": "All favorites",
+        "downloads_detail": "Covers, game data, emulators and updates",
         "settings_detail": "Stream quality, controls and system",
         "about_status": "Version {}",
         "about_detail": "Streaming client for the Solstice host",

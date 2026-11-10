@@ -344,6 +344,28 @@ void sortBySection(std::vector<emu::DlGroup>& groups) {
 
 } // namespace
 
+// "2 downloading  ·  1 paused", without the parts at zero.
+std::string downloadsSummary(const emu::DlOverview& overview) {
+    size_t downloading = 0, paused = 0;
+    for (const emu::DlGroup& group : overview.groups) {
+        if (group.running + group.queued > 0)
+            downloading++;
+        else if (phaseOf(group) == Phase::Paused)
+            paused++;
+    }
+    std::string line;
+    if (downloading > 0)
+        line = brls::getStr("downloads/summary_running", downloading);
+    if (paused > 0) {
+        if (!line.empty())
+            line += "  ·  ";
+        line += brls::getStr(paused == 1 ? "downloads/summary_paused_one"
+                                         : "downloads/summary_paused",
+                             paused);
+    }
+    return line;
+}
+
 // MARK: - DownloadsRefresh
 
 DownloadsRefresh::DownloadsRefresh(std::function<void()> refresh)
@@ -806,25 +828,7 @@ void DownloadsView::refresh() {
     setShown(quotaNotice, shown.quotaUntil > 0);
     setShown(diskNotice, shown.diskFull);
 
-    // "2 downloading  ·  1 paused", without the parts at zero.
-    size_t downloading = 0, paused = 0;
-    for (const emu::DlGroup& group : groups) {
-        if (group.running + group.queued > 0)
-            downloading++;
-        else if (phaseOf(group) == Phase::Paused)
-            paused++;
-    }
-    std::string line;
-    if (downloading > 0)
-        line = brls::getStr("downloads/summary_running", downloading);
-    if (paused > 0) {
-        if (!line.empty())
-            line += "  ·  ";
-        line += brls::getStr(paused == 1 ? "downloads/summary_paused_one"
-                                         : "downloads/summary_paused",
-                             paused);
-    }
-    setText(summary, line);
+    setText(summary, downloadsSummary(shown));
 
     while (rows.size() < groups.size()) {
         auto* row = new Row(this);
@@ -1054,6 +1058,8 @@ void DownloadIndicator::refresh() {
             running = refresher.progressOf(group);
     fraction = overview.progress(running);
 
+    if (onSummary)
+        onSummary(downloadsSummary(overview));
     if (active > 0)
         setText(count, std::to_string(active));
     if ((active > 0) != (was > 0))

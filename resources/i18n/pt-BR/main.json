@@ -435,6 +435,7 @@
         "fav_empty": "Nenhum favorito ainda",
         "fav_empty_detail": "Marque jogos com Y na biblioteca",
         "fav_all": "Todos os favoritos",
+        "downloads_detail": "Capas, dados dos jogos, emuladores e atualizações",
         "settings_detail": "Qualidade do stream, controles e sistema",
         "about_status": "Versão {}",
         "about_detail": "Cliente de streaming para o host Solstice",

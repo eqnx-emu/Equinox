@@ -47,7 +47,7 @@ class MotionBox : public brls::Box {
     brls::Animatable shiftX = 0.0f;
 };
 
-enum class HomeCardKind { PCS, FAVORITES, SETTINGS, ABOUT };
+enum class HomeCardKind { PCS, FAVORITES, DOWNLOADS, SETTINGS, ABOUT };
 
 // One card of the home shelf: an illustration, the name and a status line.
 // A card with a 3D object (img/3d/home-<kind>.png) has no card around it:
@@ -132,6 +132,7 @@ class HomeView : public brls::Box {
     brls::Box* header = nullptr;
     // Says something downloads; empty while nothing does. Switch only.
     DownloadIndicator* downloadBadge = nullptr;
+    std::string downloadsStatus; // the downloads card's line, empty when idle
     MotionBox* homeLayer = nullptr;
     MotionBox* pcLayer = nullptr;
     MotionBox* panel = nullptr;

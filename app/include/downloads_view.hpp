@@ -116,6 +116,9 @@ class DownloadsView : public brls::Box {
     void keepFocus();
 };
 
+// "2 downloading  ·  1 paused", empty when nothing is active or paused.
+std::string downloadsSummary(const emu::DlOverview& overview);
+
 // From start, for as long as the app runs: one notification each time a full
 // card pauses the downloads, whatever screen is open.
 void watchDiskStops();
@@ -131,6 +134,8 @@ class DownloadIndicator : public brls::Box {
               brls::FrameContext* ctx) override;
 
     std::function<void()> onOpen;
+    // The downloads changed: their one-line summary, empty when idle.
+    std::function<void(const std::string&)> onSummary;
     // It hid while it had the focus: the owner takes the focus back.
     std::function<void()> onHidden;
 
