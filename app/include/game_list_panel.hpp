@@ -3,7 +3,8 @@
 //  Equinox
 //
 //  The left column of the game library: console name and count, the cartridge
-//  or list toggle, search, sort, the games, and the "download all" area.
+//  or list toggle, the games, and the download progress area. Search (in
+//  the footer), sort and download all are shortcuts and in More options.
 //
 
 #pragma once
@@ -77,7 +78,7 @@ class GameListPanel : public brls::Box {
         return std::vector<size_t>(shown.begin() + from, shown.begin() + to);
     }
     // Focuses that game's row; when the filter hides it, the first result;
-    // with no result, the search field.
+    // with no result, the mode toggle.
     void focusGame(size_t index);
 
     // Keeps the shortcuts but takes them off the footer, for a screen that
@@ -115,7 +116,7 @@ class GameListPanel : public brls::Box {
     bool windowDirty = true;
     bool orderHeld = false;
     bool orderStale = false; // setItem changed the order while it was held
-    std::optional<size_t> current; // the cartridge, even while the search has focus
+    std::optional<size_t> current; // the cartridge, even while the mode toggle has focus
     std::string query;
     int sort = 0;
     int mode = 0;
@@ -143,12 +144,6 @@ class GameListPanel : public brls::Box {
     brls::Box* listButton = nullptr;
     brls::Label* cartIcon = nullptr;
     brls::Label* listIcon = nullptr;
-    brls::Box* searchBox = nullptr;
-    brls::Label* searchIcon = nullptr;
-    brls::Label* searchLabel = nullptr;
-    brls::Box* sortBox = nullptr;
-    brls::Label* sortLabel = nullptr;
-    brls::Label* sortArrow = nullptr;
     LibraryScroll* scroll = nullptr;
     brls::Box* list = nullptr;
     brls::Label* noneLabel = nullptr;
@@ -166,8 +161,6 @@ class GameListPanel : public brls::Box {
 
     void applyColors();
     void applyCount();
-    void applyQuery();
-    void applySort();
     void applyToggle();
     void applyBatch();
     void registerShortcuts(bool hidden);

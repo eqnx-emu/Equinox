@@ -87,16 +87,13 @@ constexpr size_t kNoPlace = GameRowCell::NoGame;
 constexpr float kControl = 44;
 constexpr float kRowHeight = 48;
 constexpr float kRadius = 10;
-constexpr float kSortWidth = 140;
 constexpr int kRecenterMs = 240;
 constexpr int kRecenterStillMs = 50;
 constexpr int kSortCount = 5;
 
-// material "memory", "view_list", "search", "expand_more", "file_download"
+// material "memory", "view_list"
 const char* const kCartGlyph = "\xEE\x8C\xA2";
 const char* const kListGlyph = "\xEE\xA3\xAF";
-const char* const kSearchGlyph = "\xEE\xA2\xB6";
-const char* const kArrowGlyph = "\xEE\x97\x8F";
 
 NVGcolor themeColor(const char* name) {
     return Application::getTheme().getColor(name);
@@ -244,47 +241,6 @@ GameListPanel::GameListPanel(const emu::Console& console)
     listButton->setMarginLeft(2);
     header->addView(toggle);
 
-    // Search and sort.
-    auto* controls = new Box(Axis::ROW);
-    controls->setAlignItems(AlignItems::CENTER);
-    controls->setPadding(0, 0, 6, 0);
-    controls->setShrink(0);
-    addView(controls);
-
-    searchBox = touchBox(Axis::ROW, [this] { openSearch(); });
-    searchBox->setHeight(kControl);
-    searchBox->setGrow(1);
-    searchBox->setShrink(1);
-    searchBox->setPadding(0, 12, 0, 12);
-    searchBox->setCornerRadius(kRadius);
-    searchBox->setHighlightCornerRadius(kRadius + 3);
-    searchBox->setBackgroundColor(themeColor("equinox/card_inner"));
-    searchIcon = iconLabel(kSearchGlyph, 18);
-    searchBox->addView(searchIcon);
-    searchLabel = textLabel(15);
-    searchLabel->setMarginLeft(8);
-    searchLabel->setGrow(1);
-    searchLabel->setShrink(1);
-    searchBox->addView(searchLabel);
-    controls->addView(searchBox);
-
-    sortBox = touchBox(Axis::ROW, [this] { openSort(); });
-    sortBox->setWidth(kSortWidth);
-    sortBox->setHeight(kControl);
-    sortBox->setShrink(0);
-    sortBox->setMarginLeft(8);
-    sortBox->setPadding(0, 8, 0, 12);
-    sortBox->setCornerRadius(kRadius);
-    sortBox->setHighlightCornerRadius(kRadius + 3);
-    sortBox->setBackgroundColor(themeColor("equinox/card_inner"));
-    sortLabel = textLabel(15);
-    sortLabel->setGrow(1);
-    sortLabel->setShrink(1);
-    sortBox->addView(sortLabel);
-    sortArrow = iconLabel(kArrowGlyph, 18);
-    sortBox->addView(sortArrow);
-    controls->addView(sortBox);
-
     // The games.
     noneLabel = new Label();
     noneLabel->setFontSize(15);
@@ -367,8 +323,6 @@ GameListPanel::GameListPanel(const emu::Console& console)
     registerShortcuts(false);
 
     applyColors();
-    applyQuery();
-    applySort();
     applyToggle();
     applyCount();
     applyBatch();
@@ -386,15 +340,11 @@ void GameListPanel::willAppear(bool resetState) {
 void GameListPanel::applyColors() {
     const NVGcolor muted = themeColor("equinox/muted");
     countLabel->setTextColor(muted);
-    searchIcon->setTextColor(muted);
-    sortArrow->setTextColor(muted);
     runningName->setTextColor(muted);
     noneLabel->setTextColor(muted);
     separator->setColor(themeColor("equinox/card"));
-    sortLabel->setTextColor(themeColor("brls/text"));
     retryButton->setBackgroundColor(themeColor("equinox/card_inner"));
     cancelButton->setBackgroundColor(themeColor("equinox/card_inner"));
-    applyQuery();
     applyToggle();
 }
 
@@ -405,6 +355,8 @@ void GameListPanel::applyCount() {
         text = "emu/scanning"_i18n;
     else if (shown.size() != total)
         text = brls::getStr("library/list/count_filtered", shown.size(), total);
+    if (!scanning && !query.empty())
+        text += "  ·  “" + query + "”";
     else if (total == 1)
         text = "library/list/count_one"_i18n;
     else
@@ -415,16 +367,6 @@ void GameListPanel::applyCount() {
 void GameListPanel::setScanning(bool on) {
     scanning = on;
     applyCount();
-}
-
-void GameListPanel::applyQuery() {
-    searchLabel->setText(query.empty() ? "library/list/search"_i18n : query);
-    searchLabel->setTextColor(query.empty() ? themeColor("equinox/muted")
-                                            : themeColor("brls/text"));
-}
-
-void GameListPanel::applySort() {
-    sortLabel->setText(sortName(sort));
 }
 
 void GameListPanel::applyToggle() {
@@ -462,9 +404,9 @@ emu::PreparedOrder GameListPanel::orderRequest() const {
 void GameListPanel::setItems(std::vector<emu::LibraryItem> nextItems,
                              emu::PreparedOrder prepared) {
     const int64_t started = liblog::nowUs();
-    // The old rows are about to go; the focus waits on the search field.
+    // The old rows are about to go; the focus waits on the mode toggle.
     if (focusInList())
-        Application::giveFocus(searchBox);
+        Application::giveFocus(cartButton);
     for (GameRowCell* cell : pool)
         cell->release();
     live.clear();
@@ -557,9 +499,9 @@ void GameListPanel::applyOrder(bool resetScroll, std::vector<size_t>* ready) {
         if (GameRowCell* first = rowAt(0))
             Application::giveFocus(first);
         else
-            Application::giveFocus(searchBox);
+            Application::giveFocus(cartButton);
     }
-    // Focus on the search field: the current game still follows the filter.
+    // Focus on the mode toggle: the current game still follows the filter.
     std::optional<size_t> next = current;
     if (next && !visible(*next))
         next.reset();
@@ -863,7 +805,7 @@ void GameListPanel::focusedGame(size_t index) {
 
 void GameListPanel::focusGame(size_t index) {
     if (shown.empty()) {
-        Application::giveFocus(searchBox);
+        Application::giveFocus(cartButton);
         setCurrent(std::nullopt, true);
         return;
     }
@@ -916,7 +858,6 @@ void GameListPanel::setQuery(const std::string& text) {
     if (text == query)
         return;
     query = text;
-    applyQuery();
     applyOrder(true);
 }
 
@@ -941,7 +882,6 @@ void GameListPanel::chooseSort(int value) {
     sort = value;
     Settings::instance().set_library_sort(sort);
     Settings::instance().save();
-    applySort();
     applyOrder(true);
 }
 
@@ -1001,10 +941,12 @@ void GameListPanel::registerShortcuts(bool hidden) {
         openSort();
         return true;
     }, hidden);
+    // Search is the one shortcut always shown in the footer: the list has no
+    // search field of its own.
     registerAction("library/list/hint_search"_i18n, BUTTON_BACK, [this](View*) {
         openSearch();
         return true;
-    }, hidden);
+    });
     registerAction("library/list/download_all"_i18n, BUTTON_RT, [this](View*) {
         downloadAllOrCancel();
         return true;
