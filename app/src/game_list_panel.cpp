@@ -440,12 +440,12 @@ void GameListPanel::turnPage(int direction) {
     else if (page > 0)
         place = (page - 1) * size;
     focusGame(shown[place]);
-    // The list shows the whole page, its first game at the top. Giving the
-    // focus centred the row by its old position, so this comes after it.
-    if (mode == 1) {
-        recenterToken++;
-        scroll->showFrom(place * kRowStep);
-    }
+    // The whole page shows, its first game at the top. Giving the focus centred
+    // the row by its old position, so this comes after it, and the bumped token
+    // cancels the recentre the cartridge view schedules. With the cartridge on
+    // top and the two tapes under it, the page fills the column exactly.
+    recenterToken++;
+    scroll->showFrom(mode == 0 ? kListTop + place * step() : place * kRowStep);
 }
 
 void GameListPanel::setScanning(bool on) {
