@@ -2,8 +2,8 @@
 //  game_details_panel.hpp
 //  Equinox
 //
-//  The right-hand column of the game library: a retro TV showing the game
-//  (name, gameplay image, facts, synopsis) and the download action under it.
+//  The right-hand column of the game library: name, the download action,
+//  the gameplay and title screen images, the fact sheet and the synopsis.
 //
 
 #pragma once
@@ -58,8 +58,6 @@ class GameDetailsPanel : public brls::Box {
     bool queued = false;
     std::optional<emu::DataStop> failed;
 
-    brls::View* tv = nullptr; // the game on a retro TV
-    std::vector<std::pair<std::string, std::string>> shownFacts; // label, value
     brls::Box* content = nullptr;
     brls::Label* title = nullptr;
     brls::Label* fileLine = nullptr;
@@ -105,5 +103,4 @@ class GameDetailsPanel : public brls::Box {
     void applyFacts();
     void addFactRow();
     void startFade(bool animate);
-    void applyTv(bool tune);
 };
