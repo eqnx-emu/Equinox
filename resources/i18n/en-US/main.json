@@ -213,6 +213,7 @@
         "screenscraper_user": "User",
         "screenscraper_password": "Password",
         "screenscraper_note": "Downloads the synopsis, the details and the images libretro lacks. Create the account at screenscraper.fr.",
+        "screenscraper_no_dev": "This build has no ScreenScraper developer key: the account is saved but not used yet. Create the account at screenscraper.fr.",
         "steamgriddb": "SteamGridDB",
         "steamgriddb_key": "API key",
         "steamgriddb_refused": "Key refused",

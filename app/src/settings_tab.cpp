@@ -998,7 +998,7 @@ SettingsTab::SettingsTab(const std::string& group) {
     reduceMotionNote->setText("settings/reduce_motion_note"_i18n);
     reduceMotionNote->setTextColor(Application::getTheme().getColor("equinox/muted"));
 
-    if (emu::ssDevConfigured()) {
+    {
         const auto showUser = [this] {
             screenscraperUser->setDetailText(Settings::instance().screenscraper_user());
         };
@@ -1032,10 +1032,11 @@ SettingsTab::SettingsTab(const std::string& group) {
                 Settings::instance().screenscraper_password(), 0);
             return true;
         });
-        screenscraperNote->setText("settings/screenscraper_note"_i18n);
+        // The account is kept either way; a build without the developer key
+        // never sends it.
+        screenscraperNote->setText(emu::ssDevConfigured() ? "settings/screenscraper_note"_i18n
+                                                          : "settings/screenscraper_no_dev"_i18n);
         screenscraperNote->setTextColor(Application::getTheme().getColor("equinox/muted"));
-    } else {
-        screenscraperSection->setVisibility(Visibility::GONE);
     }
 
     const auto showSgdbKey = [this] {

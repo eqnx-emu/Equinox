@@ -213,6 +213,7 @@
         "screenscraper_user": "Usuário",
         "screenscraper_password": "Senha",
         "screenscraper_note": "Baixa a sinopse, a ficha e as imagens que faltam no libretro. Crie a conta em screenscraper.fr.",
+        "screenscraper_no_dev": "Esta versão foi compilada sem a chave de desenvolvedor do ScreenScraper: a conta fica salva, mas ainda não é usada. Crie a conta em screenscraper.fr.",
         "steamgriddb": "SteamGridDB",
         "steamgriddb_key": "Chave da API",
         "steamgriddb_refused": "Chave recusada",
