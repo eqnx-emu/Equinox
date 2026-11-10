@@ -43,6 +43,9 @@ TEST_CASE("ssSystemId maps the known consoles") {
     Console gbc;
     gbc.slug = "gbc";
     CHECK(ssSystemId(gbc) == 10);
+    Console ps1;
+    ps1.slug = "ps1";
+    CHECK(ssSystemId(ps1) == 57);
     Console other;
     other.slug = "nes";
     CHECK(ssSystemId(other) == 0);
@@ -72,6 +75,14 @@ TEST_CASE("ssUrl pads the crc and escapes credentials") {
     const std::string u = ssUrl(c, q);
     CHECK(u.find("crc=000000AB") != std::string::npos);
     CHECK(u.find("sspassword=a%26b%20c") != std::string::npos);
+}
+
+TEST_CASE("ssUrl leaves out the crc of a game that was not hashed") {
+    SsQuery q{57, 0, "Chrono Cross (USA).m3u", 120};
+    const std::string u = ssUrl(cfg(), q);
+    CHECK(u.find("crc=") == std::string::npos);
+    CHECK(u.find("romnom=Chrono%20Cross%20%28USA%29.m3u") != std::string::npos);
+    CHECK(u.find("romtaille=120") != std::string::npos);
 }
 
 TEST_CASE("ssParse picks the requested language") {

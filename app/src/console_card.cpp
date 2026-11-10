@@ -67,6 +67,8 @@ std::string runnerName(const std::string& id) {
         return "mGBA";
     if (id == "gambatte")
         return "Gambatte";
+    if (id == "pcsx-rearmed")
+        return "PCSX ReARMed";
     return id;
 }
 
@@ -77,6 +79,8 @@ std::string runnerIdFor(const emu::Console& console) {
         return "mgba";
     if (console.slug == "gbc")
         return "gambatte";
+    if (console.slug == "ps1")
+        return "pcsx-rearmed";
     return console.slug;
 }
 } // namespace

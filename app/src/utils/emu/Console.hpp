@@ -26,6 +26,9 @@ struct ConsolePaths {
 
 const std::vector<Console>& consoles();
 const Console* findConsole(const std::string& slug);
+// False when the console's games are disc images of hundreds of MB: hashing one
+// on the Switch takes too long, so its game data is looked up by file name only.
+bool hashesRoms(const Console& console);
 ConsolePaths pathsFor(const Console& console, const std::string& root = kDataRoot);
 // Creates every folder; true when all of them exist afterwards.
 bool ensureFolders(const ConsolePaths& paths);

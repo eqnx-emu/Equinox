@@ -46,7 +46,15 @@ TEST_CASE("console lookup") {
     CHECK(gbc->extensions == std::vector<std::string>{".gbc", ".zip", ".7z"});
     CHECK(gbc->libretroSystem == "Nintendo - Game Boy Color");
     CHECK(gbc->repo == "eqnx-emu/equinox-gambatte");
-    CHECK(emu::consoles().size() == 3);
+    const emu::Console* ps1 = emu::findConsole("ps1");
+    REQUIRE(ps1 != nullptr);
+    CHECK(ps1->name == "PlayStation");
+    CHECK(ps1->extensions == std::vector<std::string>{".cue", ".chd", ".pbp", ".m3u", ".iso"});
+    CHECK(ps1->libretroSystem == "Sony - PlayStation");
+    CHECK(ps1->repo == "eqnx-emu/equinox-pcsx-rearmed");
+    CHECK(ps1->protocol == 1);
+    CHECK(ps1->shortName == "PS1");
+    CHECK(emu::consoles().size() == 4);
 }
 
 TEST_CASE("ensureFolders creates everything and is idempotent") {

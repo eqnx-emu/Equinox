@@ -60,9 +60,22 @@ const std::vector<Console>& consoles() {
          0x0f2a2b,
          "GBC",
          0x7fd6c4},
+        // .bin and .img are the tracks a .cue lists, so they are not shown on their own.
+        {"ps1",
+         "PlayStation",
+         {".cue", ".chd", ".pbp", ".m3u", ".iso"},
+         "Sony - PlayStation",
+         "eqnx-emu/equinox-pcsx-rearmed",
+         1,
+         0x3b3e4c,
+         0x1a1b23,
+         "PS1",
+         0xc4c8d8},
     };
     return all;
 }
+
+bool hashesRoms(const Console& console) { return console.slug != "ps1"; }
 
 const Console* findConsole(const std::string& slug) {
     for (const Console& c : consoles())

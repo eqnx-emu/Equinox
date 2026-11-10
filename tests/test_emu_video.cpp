@@ -114,6 +114,24 @@ TEST_CASE("unknown values fall back per field") {
     CHECK(v.border == "black");
 }
 
+TEST_CASE("PlayStation starts at 4:3, the others at original") {
+    CHECK(videoDefaultsFor(*findConsole("ps1")).size == "4:3");
+    CHECK(videoDefaultsFor(*findConsole("snes")).size == "original");
+    CHECK(videoDefaultsFor(*findConsole("gba")).size == "original");
+}
+
+TEST_CASE("a missing key or file takes the console's default") {
+    const VideoDefaults ps1 = videoDefaultsFor(*findConsole("ps1"));
+    CHECK(readVideoDefaults(tempFile("ps1-missing.json"), ps1).size == "4:3");
+    const std::string path = tempFile("ps1-partial.json");
+    put(path, "{\"filter\":\"scanlines\",\"size\":\"huge\"}");
+    VideoDefaults v = readVideoDefaults(path, ps1);
+    CHECK(v.size == "4:3");
+    CHECK(v.filter == "scanlines");
+    put(path, "{\"size\":\"original\"}");
+    CHECK(readVideoDefaults(path, ps1).size == "original");
+}
+
 TEST_CASE("menu id lists") {
     CHECK(kSizeIds == std::vector<std::string>{"original", "8:7", "4:3", "full"});
     CHECK(kSmoothIds == std::vector<std::string>{"pixel", "sharp", "soft"});
