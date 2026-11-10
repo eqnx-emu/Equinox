@@ -647,6 +647,7 @@ HomeCard::HomeCard(HomeCardKind kind) : PressableBox(Axis::COLUMN), kind(kind) {
     std::string art3d;
     const char* object = kind == HomeCardKind::PCS         ? "img/3d/home-devices"
                          : kind == HomeCardKind::FAVORITES ? "img/3d/home-favorites"
+                         : kind == HomeCardKind::DOWNLOADS ? "img/3d/home-downloads"
                          : kind == HomeCardKind::SETTINGS  ? "img/3d/home-settings"
                          : kind == HomeCardKind::ABOUT     ? "img/3d/home-about"
                                                            : nullptr;
