@@ -10,6 +10,7 @@
 #include "emu/CoverStore.hpp"
 #include "emu/RomScan.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <fmt/core.h>
@@ -20,6 +21,16 @@ using namespace brls;
 using namespace brls::literals;
 
 namespace {
+// The opened console's scene fills the free space beside the panel, less this
+// margin, centred in it both ways. Without that space, it fits the box below,
+// centred kSceneCentre below the card's top.
+constexpr float kSceneMargin = 40;
+constexpr float kSceneBoxW = 440;
+constexpr float kSceneBoxH = 330;
+constexpr float kSceneCentre = 30;
+// The resting object grows toward this width as it fades into the scene.
+constexpr float kRestingGrowW = 330;
+
 NVGcolor themeColor(const std::string& name) {
     return Application::getTheme().getColor(name);
 }
@@ -56,6 +67,8 @@ std::string runnerName(const std::string& id) {
         return "mGBA";
     if (id == "gambatte")
         return "Gambatte";
+    if (id == "pcsx-rearmed")
+        return "PCSX ReARMed";
     return id;
 }
 
@@ -66,6 +79,8 @@ std::string runnerIdFor(const emu::Console& console) {
         return "mgba";
     if (console.slug == "gbc")
         return "gambatte";
+    if (console.slug == "ps1")
+        return "pcsx-rearmed";
     return console.slug;
 }
 } // namespace
@@ -98,10 +113,15 @@ ConsoleCard::ConsoleCard(const emu::Console& console) : consoleRef(console) {
     this->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
     name->setText(console.name);
     // The live model when it's there, else the pre-rendered views.
+    const auto art3d = [](const std::string& base) {
+        return Turntable::exists(base + ".mesh") ? base + ".mesh" : base + ".png";
+    };
     const std::string base = "img/3d/" + console.slug;
-    const std::string art3d = Turntable::exists(base + ".mesh") ? base + ".mesh" : base + ".png";
-    if (Turntable::exists(art3d))
-        turntable = std::make_unique<Turntable>(art3d);
+    if (Turntable::exists(art3d(base))) {
+        turntable = std::make_unique<Turntable>(art3d(base));
+        if (Turntable::exists(base + "-scene.png"))
+            scenePath = std::string(BRLS_RESOURCES) + base + "-scene.png";
+    }
 
     if (frameless()) {
         // No card: the object floats over the name, both centred.
@@ -323,11 +343,55 @@ void ConsoleCard::animateFocus(bool focused) {
     hop.start();
 }
 
+ConsoleCard::~ConsoleCard() {
+    if (sceneImage > 0)
+        nvgDeleteImage(Application::getNVGContext(), sceneImage);
+}
+
 void ConsoleCard::draw(NVGcontext* vg, float x, float y, float width,
                        float height, Style style, FrameContext* ctx) {
     if (frameless()) {
-        // Floats over the name, its shadow just above it.
-        turntable->draw(vg, x + width / 2, y + 38, 215, y + 100, getAlpha());
+        // Floats over the name, its shadow just above it. Opened, it grows
+        // into the scene over the free space and the name fades out.
+        float e = scenePath.empty() ? 0.0f : std::clamp(enteredAmount, 0.0f, 1.0f);
+        if (e > 0.01f && sceneImage == 0) {
+            sceneImage = nvgCreateImage(vg, scenePath.c_str(), 0);
+            if (sceneImage <= 0)
+                sceneImage = -1;
+        }
+        if (sceneImage < 0)
+            e = 0;
+        const float alpha = getAlpha();
+        const float cx = x + width / 2;
+        if (e < 0.99f)
+            turntable->draw(vg, cx, y + 38, 215 + (kRestingGrowW - 215) * e,
+                            y + 100, alpha * (1 - e));
+        if (e > 0.01f) {
+            // The still, fitted to the box, growing in as it fades in.
+            int iw = 0, ih = 0;
+            nvgImageSize(vg, sceneImage, &iw, &ih);
+            if (iw > 0 && ih > 0) {
+                const bool area = sceneArea.getWidth() > 2 * kSceneMargin &&
+                                  sceneArea.getHeight() > 2 * kSceneMargin;
+                const float boxW = area ? sceneArea.getWidth() - 2 * kSceneMargin : kSceneBoxW;
+                const float boxH = area ? sceneArea.getHeight() - 2 * kSceneMargin : kSceneBoxH;
+                // Fitted, never blown up past the picture's own size.
+                const float fit = std::min({boxW / iw, boxH / ih, 1.0f}) * (0.7f + 0.3f * e);
+                const float w = iw * fit, h = ih * fit;
+                // From the card's place into the middle of the free space.
+                const float fromX = cx, fromY = y + kSceneCentre;
+                const float toX = area ? sceneArea.getMidX() : fromX;
+                const float toY = area ? sceneArea.getMidY() : fromY;
+                const float midX = fromX + (toX - fromX) * e, midY = fromY + (toY - fromY) * e;
+                const float left = midX - w / 2, top = midY - h / 2;
+                nvgBeginPath(vg);
+                nvgRect(vg, left, top, w, h);
+                nvgFillPaint(vg, nvgImagePattern(vg, left, top, w, h, 0, sceneImage, alpha * e));
+                nvgFill(vg);
+            }
+        }
+        for (View* child : getChildren())
+            child->setAlpha(1 - e);
         PressableBox::draw(vg, x, y, width, height, style, ctx);
         return;
     }

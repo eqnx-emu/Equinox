@@ -103,6 +103,7 @@
     },
     "common": {
         "cancel": "Cancelar",
+        "continue_background": "Continuar em segundo plano",
         "close": "Close",
         "confirm": "Confirmar",
         "edit": "Editar",
@@ -211,7 +212,12 @@
         "screenscraper": "ScreenScraper",
         "screenscraper_user": "Usuário",
         "screenscraper_password": "Senha",
-        "screenscraper_note": "Usada só para baixar sinopses. Crie a conta em screenscraper.fr.",
+        "screenscraper_note": "Baixa a sinopse, a ficha e as imagens que faltam no libretro. Crie a conta em screenscraper.fr.",
+        "screenscraper_no_dev": "Esta versão foi compilada sem a chave de desenvolvedor do ScreenScraper: a conta fica salva, mas ainda não é usada. Crie a conta em screenscraper.fr.",
+        "steamgriddb": "SteamGridDB",
+        "steamgriddb_key": "Chave da API",
+        "steamgriddb_refused": "Chave recusada",
+        "steamgriddb_note": "Usada só para as capas que faltam no libretro. Pegue a chave em steamgriddb.com → Preferences → API.",
         "show_metrics": "Mostrar métricas na tela",
         "metric_fps": "FPS",
         "metric_latency": "Latência (ms)",
@@ -363,14 +369,17 @@
     "update": {
         "title": "Atualizações",
         "check_now": "Procurar atualizações agora",
-        "available": "O Equinox {} está disponível (você tem o {}).\n\nBaixar e instalar agora? O Equinox vai reiniciar.",
+        "available": "O Equinox {} está disponível (você tem o {}).\n\nBaixar agora? O download segue em segundo plano, e o Equinox pergunta antes de reiniciar.",
         "later": "Depois",
         "install": "Atualizar",
-        "downloading": "Baixando atualização...",
-        "installed": "O Equinox {} foi instalado. O Equinox vai reiniciar agora.",
+        "downloading": "Baixando a atualização em segundo plano...",
+        "downloading_percent": "Baixando a atualização: {}%",
+        "ready": "O Equinox {} foi baixado. Reiniciar agora para instalar?",
+        "restart_now": "Reiniciar agora",
         "failed": "A atualização falhou.",
         "up_to_date": "O Equinox está atualizado.",
-        "unsupported": "A atualização só funciona com o Equinox aberto como NRO do cartão SD."
+        "unsupported": "A atualização só funciona com o Equinox aberto como NRO do cartão SD.",
+        "disk": "O cartão SD está cheio. Libere espaço e tente a atualização de novo."
     },
     "title": "Equinox",
     "hosts": {
@@ -431,6 +440,7 @@
         "fav_empty": "Nenhum favorito ainda",
         "fav_empty_detail": "Marque jogos com Y na biblioteca",
         "fav_all": "Todos os favoritos",
+        "downloads_detail": "Capas, dados dos jogos, emuladores e atualizações",
         "settings_detail": "Qualidade do stream, controles e sistema",
         "about_status": "Versão {}",
         "about_detail": "Cliente de streaming para o host Solstice",
@@ -476,8 +486,11 @@
         "install_error": "Não foi possível instalar o {}.\n\n{}",
         "updated": "Emulador atualizado",
         "up_to_date": "O emulador já está atualizado",
+        "installed_background": "{} está pronto para jogar",
         "decimal_separator": ",",
         "error_network": "Não deu para baixar. Confira a conexão com a internet.",
+        "error_disk": "Não deu para gravar o emulador. O cartão SD pode estar cheio.",
+        "retrying": "Sem conexão. Tentando de novo…",
         "error_manifest": "A lista de emuladores no servidor está inválida. Tente mais tarde.",
         "error_console": "O servidor mandou um emulador de outro console. Tente mais tarde.",
         "error_folders": "Não deu para criar as pastas em sdmc:/equinox. Confira o cartão SD.",
@@ -537,6 +550,9 @@
             "count_one": "1 jogo",
             "count_many": "{} jogos",
             "count_filtered": "{} de {}",
+            "page": "Página {} de {}",
+            "page_prev": "Página anterior",
+            "page_next": "Próxima página",
             "search": "Buscar por nome",
             "none": "Nenhum jogo com “{}”",
             "sort_title": "Ordenar por",
@@ -544,8 +560,6 @@
             "hint_sort": "Ordenar",
             "hint_search": "Buscar",
             "download_all": "Baixar todos",
-            "missing": "{} sem dados",
-            "done": "Todos os jogos têm dados.",
             "running": "Baixando {} de {} · {}%",
             "stopped": "Parou: {} O que já foi baixado ficou salvo."
         },
@@ -568,7 +582,7 @@
             "step_identify": "Identificando o jogo",
             "step_snap": "Baixando a captura",
             "step_title": "Baixando a tela de título",
-            "step_synopsis": "Baixando a sinopse",
+            "step_synopsis": "Baixando a sinopse e a ficha",
             "step_done": "Concluindo",
             "snap_placeholder": "Captura de gameplay",
             "snap_missing": "Sem captura no libretro",
@@ -579,6 +593,9 @@
             "synopsis": "Sinopse",
             "synopsis_empty": "Sem sinopse para este jogo.",
             "synopsis_none": "Sem sinopse ainda. Baixe os dados deste jogo para ver a sinopse, a ficha e as imagens.",
+            "no_data": "Nada baixado deste jogo ainda. As imagens, a ficha e a sinopse aparecem depois de baixar os dados.",
+            "players_one": "1 jogador",
+            "players_many": "{} jogadores",
             "sources": "Fontes: libretro, libretro-database, ScreenScraper",
             "sources_free": "Fontes: libretro, libretro-database"
         },
@@ -612,5 +629,72 @@
             "Spain": "Espanha",
             "Italy": "Itália"
         }
+    },
+    "downloads": {
+        "title": "Downloads",
+        "open": "Abrir downloads",
+        "select": "Selecionar",
+        "row": "{} · {}",
+        "kind": {
+            "cover": "Capas",
+            "game_data": "Dados dos jogos",
+            "runner": "Emulador",
+            "app_update": "Atualização do Equinox",
+            "media": "Mídia"
+        },
+        "unit": {
+            "cover": "capas",
+            "cover_one": "capa",
+            "game_data": "jogos",
+            "game_data_one": "jogo",
+            "media": "itens",
+            "media_one": "item"
+        },
+        "state": {
+            "running": "Baixando",
+            "queued": "Aguardando a vez",
+            "held": "Em espera",
+            "paused": "Pausado",
+            "failed": "Falhou"
+        },
+        "short": {
+            "queued": "na fila",
+            "quota": "cota",
+            "login": "login",
+            "paused": "pausado",
+            "failed": "falhou"
+        },
+        "summary_running": "{} baixando",
+        "summary_paused": "{} pausados",
+        "summary_paused_one": "{} pausado",
+        "percent": "{}%",
+        "progress": "{} de {} {}",
+        "amount": "{} {}",
+        "tile": {
+            "now": "Agora",
+            "left": "Faltam",
+            "failed": "Com falha"
+        },
+        "action": {
+            "pause": "Pausar",
+            "resume": "Retomar",
+            "retry_failed": "Tentar as {} falhas",
+            "retry_one": "Tentar a falha",
+            "cancel": "Cancelar"
+        },
+        "cancel_message": "Cancelar os downloads de {}?",
+        "cancel_update_message": "Cancelar a atualização do Equinox?",
+        "keep": "Continuar baixando",
+        "pause_all": "Pausar tudo",
+        "resume_all": "Retomar tudo",
+        "empty_title": "Nada baixando",
+        "empty_body": "Capas, dados dos jogos, emuladores e atualizações do app aparecem aqui enquanto baixam. Eles começam quando você adiciona um console, ou em Baixar todos nos jogos de um console.",
+        "login_notice": "O ScreenScraper recusou seu login, então os dados dos jogos estão em espera. Confira sua conta nas Configurações.",
+        "quota_notice": "O limite diário do ScreenScraper acabou, então os dados dos jogos estão em espera até {}.",
+        "quota_today": "hoje às {}",
+        "quota_tomorrow": "amanhã às {}",
+        "try_now": "Tentar agora",
+        "disk_notice": "Cartão SD cheio — libere espaço e escolha Retomar tudo",
+        "disk_paused": "Downloads pausados: o cartão SD está cheio. Libere espaço e retome-os em Downloads."
     }
 }

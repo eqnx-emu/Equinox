@@ -70,12 +70,13 @@ void CoverCarousel::clearViews(bool free) {
     enter.reset(0.0f);
 }
 
-void CoverCarousel::setEntered(bool value, float offsetX) {
+void CoverCarousel::setEntered(bool value, float offsetX, brls::Rect area) {
     if (value == entered)
         return;
     entered = value;
     if (value) {
         enterOffset = offsetX;
+        enterArea = area;
         enterTime = getCPUTimeUsec();
     }
     enter.reset(enter.getValue());
@@ -211,8 +212,10 @@ void CoverCarousel::draw(NVGcontext* vg, float x, float y, float width,
         const float cy = cell->getY() + ch / 2;
         const float sw = cw * scale * squash;
         const float sh = ch * scale;
-        const auto* item = dynamic_cast<const ShelfItem*>(cell);
+        auto* item = dynamic_cast<ShelfItem*>(cell);
         const bool frameless = item && item->frameless();
+        if (item)
+            item->setEntered((int)i == selected ? e : 0.0f, enterArea);
 
         // Shadow on the ground: softer on the light theme's white ground.
         const float groundShade =

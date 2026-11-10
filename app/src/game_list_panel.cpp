@@ -5,7 +5,7 @@
 
 #include "game_list_panel.hpp"
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
 
 #include "Settings.hpp"
 #include "bold_label.hpp"
@@ -39,6 +39,11 @@ class LibraryScroll : public ScrollingFrame {
             return;
         const float limit = std::max(0.0f, getContentHeight() - getHeight());
         setContentOffsetY(std::clamp(middle - getHeight() / 2, 0.0f, limit), true);
+    }
+    // Puts y at the top of the view, as far as the content allows.
+    void showFrom(float y) {
+        const float limit = std::max(0.0f, getContentHeight() - getHeight());
+        setContentOffsetY(std::clamp(y, 0.0f, limit), true);
     }
 };
 
@@ -75,26 +80,29 @@ namespace {
 constexpr float kPanelWidth = 384;
 // Enough to fill the column twice over, so the next row is always ready.
 constexpr size_t kPoolSize = 24;
-constexpr float kRowStep = GameRowCell::RowHeight + 2;
-constexpr float kCartridgeExtra = GameRowCell::CartridgeHeight - GameRowCell::RowHeight;
+constexpr float kRowGap = 2;
+constexpr float kRowStep = GameRowCell::RowHeight + kRowGap;
+// Of the column, in mode 0; the neighbours share the rest.
+constexpr float kCartShare = 0.52f;
+constexpr float kMinTapeRow = 56;
 constexpr float kListTop = 4;
+// Games per page: the cartridge view shows about three, the list a column's worth
+// (kListPage until the column has a height).
+constexpr size_t kCartPage = 3;
+constexpr size_t kListPage = 10;
 constexpr float kListSide = 6;
 constexpr float kRowWidth = kPanelWidth - 16 - 24 - 2 * kListSide;
 constexpr size_t kNoPlace = GameRowCell::NoGame;
 constexpr float kControl = 44;
 constexpr float kRowHeight = 48;
 constexpr float kRadius = 10;
-constexpr float kSortWidth = 140;
 constexpr int kRecenterMs = 240;
 constexpr int kRecenterStillMs = 50;
 constexpr int kSortCount = 5;
 
-// material "memory", "view_list", "search", "expand_more", "file_download"
+// material "memory", "view_list"
 const char* const kCartGlyph = "\xEE\x8C\xA2";
 const char* const kListGlyph = "\xEE\xA3\xAF";
-const char* const kSearchGlyph = "\xEE\xA2\xB6";
-const char* const kArrowGlyph = "\xEE\x97\x8F";
-const char* const kDownloadGlyph = "\xEE\x8B\x84";
 
 NVGcolor themeColor(const char* name) {
     return Application::getTheme().getColor(name);
@@ -242,47 +250,6 @@ GameListPanel::GameListPanel(const emu::Console& console)
     listButton->setMarginLeft(2);
     header->addView(toggle);
 
-    // Search and sort.
-    auto* controls = new Box(Axis::ROW);
-    controls->setAlignItems(AlignItems::CENTER);
-    controls->setPadding(0, 0, 6, 0);
-    controls->setShrink(0);
-    addView(controls);
-
-    searchBox = touchBox(Axis::ROW, [this] { openSearch(); });
-    searchBox->setHeight(kControl);
-    searchBox->setGrow(1);
-    searchBox->setShrink(1);
-    searchBox->setPadding(0, 12, 0, 12);
-    searchBox->setCornerRadius(kRadius);
-    searchBox->setHighlightCornerRadius(kRadius + 3);
-    searchBox->setBackgroundColor(themeColor("equinox/card_inner"));
-    searchIcon = iconLabel(kSearchGlyph, 18);
-    searchBox->addView(searchIcon);
-    searchLabel = textLabel(15);
-    searchLabel->setMarginLeft(8);
-    searchLabel->setGrow(1);
-    searchLabel->setShrink(1);
-    searchBox->addView(searchLabel);
-    controls->addView(searchBox);
-
-    sortBox = touchBox(Axis::ROW, [this] { openSort(); });
-    sortBox->setWidth(kSortWidth);
-    sortBox->setHeight(kControl);
-    sortBox->setShrink(0);
-    sortBox->setMarginLeft(8);
-    sortBox->setPadding(0, 8, 0, 12);
-    sortBox->setCornerRadius(kRadius);
-    sortBox->setHighlightCornerRadius(kRadius + 3);
-    sortBox->setBackgroundColor(themeColor("equinox/card_inner"));
-    sortLabel = textLabel(15);
-    sortLabel->setGrow(1);
-    sortLabel->setShrink(1);
-    sortBox->addView(sortLabel);
-    sortArrow = iconLabel(kArrowGlyph, 18);
-    sortBox->addView(sortArrow);
-    controls->addView(sortBox);
-
     // The games.
     noneLabel = new Label();
     noneLabel->setFontSize(15);
@@ -307,7 +274,33 @@ GameListPanel::GameListPanel(const emu::Console& console)
     scroll->setContentView(list);
     addView(scroll);
 
-    // The download-all area: one of four states.
+    // Under the games: L, "Page X of Y", R. The shoulders turn the pages; the
+    // app's footer leaves them out.
+    pageRow = new Box(Axis::ROW);
+    pageRow->setJustifyContent(JustifyContent::CENTER);
+    pageRow->setAlignItems(AlignItems::CENTER);
+    pageRow->setMarginTop(6);
+    pageRow->setShrink(0);
+    pageRow->setVisibility(Visibility::GONE);
+    const auto pageKey = [&](ControllerButton button, int direction, Label*& key) {
+        Box* box = touchBox(Axis::ROW, [this, direction] { turnPage(direction); });
+        box->setFocusable(false); // a tap target; on the controller, L and R
+        box->setPadding(2, 6, 2, 6);
+        key = new Label();
+        key->setFontSize(18);
+        key->setText(Hint::getKeyIcon(button));
+        box->addView(key);
+        return box;
+    };
+    pageRow->addView(pageKey(BUTTON_LB, -1, pagePrevKey));
+    pageLabel = textLabel(14);
+    pageLabel->setMargins(0, 10, 0, 10);
+    pageRow->addView(pageLabel);
+    pageRow->addView(pageKey(BUTTON_RB, 1, pageNextKey));
+    addView(pageRow);
+
+    // While the games' data downloads, or after it stopped: its progress, or
+    // why it stopped. Starting it is in More options (and ZR).
     separator = new Rectangle();
     separator->setHeight(1);
     separator->setMarginTop(8);
@@ -318,33 +311,6 @@ GameListPanel::GameListPanel(const emu::Console& console)
     footer->setPadding(12, 0, 0, 0);
     footer->setShrink(0);
     addView(footer);
-
-    idleRow = touchBox(Axis::ROW, [this] { downloadAllOrCancel(); });
-    idleRow->setHeight(kRowHeight);
-    idleRow->setPadding(0, 14, 0, 14);
-    idleRow->setCornerRadius(kRadius);
-    idleRow->setHighlightCornerRadius(kRadius + 3);
-    idleRow->setBackgroundColor(themeColor("equinox/card_inner"));
-    idleIcon = iconLabel(kDownloadGlyph, 18);
-    idleRow->addView(idleIcon);
-    auto* idleTitle = new BoldLabel();
-    idleTitle->setFontSize(15);
-    idleTitle->setSingleLine(true);
-    idleTitle->setAutoAnimate(false);
-    idleTitle->setText("library/list/download_all"_i18n);
-    idleTitle->setMarginLeft(10);
-    idleTitle->setGrow(1);
-    idleRow->addView(idleTitle);
-    idleMissing = textLabel(14);
-    idleRow->addView(idleMissing);
-    footer->addView(idleRow);
-
-    doneLabel = new Label();
-    doneLabel->setFontSize(15);
-    doneLabel->setHeight(kRowHeight);
-    doneLabel->setVerticalAlign(VerticalAlign::CENTER);
-    doneLabel->setText("library/list/done"_i18n);
-    footer->addView(doneLabel);
 
     stoppedRow = new Box(Axis::ROW);
     stoppedRow->setAlignItems(AlignItems::CENTER);
@@ -391,8 +357,6 @@ GameListPanel::GameListPanel(const emu::Console& console)
     registerShortcuts(false);
 
     applyColors();
-    applyQuery();
-    applySort();
     applyToggle();
     applyCount();
     applyBatch();
@@ -410,18 +374,14 @@ void GameListPanel::willAppear(bool resetState) {
 void GameListPanel::applyColors() {
     const NVGcolor muted = themeColor("equinox/muted");
     countLabel->setTextColor(muted);
-    searchIcon->setTextColor(muted);
-    sortArrow->setTextColor(muted);
-    idleMissing->setTextColor(muted);
-    doneLabel->setTextColor(muted);
+    pageLabel->setTextColor(muted);
+    pagePrevKey->setTextColor(muted);
+    pageNextKey->setTextColor(muted);
     runningName->setTextColor(muted);
     noneLabel->setTextColor(muted);
     separator->setColor(themeColor("equinox/card"));
-    idleIcon->setTextColor(themeColor("brls/text"));
-    sortLabel->setTextColor(themeColor("brls/text"));
     retryButton->setBackgroundColor(themeColor("equinox/card_inner"));
     cancelButton->setBackgroundColor(themeColor("equinox/card_inner"));
-    applyQuery();
     applyToggle();
 }
 
@@ -436,22 +396,61 @@ void GameListPanel::applyCount() {
         text = "library/list/count_one"_i18n;
     else
         text = brls::getStr("library/list/count_many", total);
+    if (!scanning && !query.empty())
+        text += "  ·  “" + query + "”";
     countLabel->setText(text);
+    applyPage();
+}
+
+size_t GameListPanel::pageSize() const {
+    if (mode == 0)
+        return kCartPage;
+    const float column = scroll->getHeight();
+    if (column <= 0)
+        return kListPage;
+    return std::max<size_t>(1, static_cast<size_t>((column - kListTop) / kRowStep));
+}
+
+size_t GameListPanel::currentPlace() const {
+    if (current && *current < shownAt.size() && shownAt[*current] != kNoPlace)
+        return shownAt[*current];
+    return 0;
+}
+
+void GameListPanel::applyPage() {
+    const size_t size = pageSize();
+    shownPageSize = size;
+    const size_t pages = (shown.size() + size - 1) / size;
+    if (scanning || pages <= 1) {
+        pageRow->setVisibility(Visibility::GONE);
+        return;
+    }
+    pageLabel->setText(brls::getStr("library/list/page", currentPlace() / size + 1, pages));
+    pageRow->setVisibility(Visibility::VISIBLE);
+}
+
+void GameListPanel::turnPage(int direction) {
+    if (shown.empty())
+        return;
+    const size_t size = pageSize();
+    const size_t page = currentPlace() / size;
+    size_t place = 0;
+    if (direction > 0)
+        place = std::min((page + 1) * size, shown.size() - 1);
+    else if (page > 0)
+        place = (page - 1) * size;
+    focusGame(shown[place]);
+    // The whole page shows, its first game at the top. Giving the focus centred
+    // the row by its old position, so this comes after it, and the bumped token
+    // cancels the recentre the cartridge view schedules. With the cartridge on
+    // top and the two tapes under it, the page fills the column exactly.
+    recenterToken++;
+    scroll->showFrom(mode == 0 ? kListTop + place * step() : place * kRowStep);
 }
 
 void GameListPanel::setScanning(bool on) {
     scanning = on;
     applyCount();
-}
-
-void GameListPanel::applyQuery() {
-    searchLabel->setText(query.empty() ? "library/list/search"_i18n : query);
-    searchLabel->setTextColor(query.empty() ? themeColor("equinox/muted")
-                                            : themeColor("brls/text"));
-}
-
-void GameListPanel::applySort() {
-    sortLabel->setText(sortName(sort));
 }
 
 void GameListPanel::applyToggle() {
@@ -468,6 +467,7 @@ void GameListPanel::applyToggle() {
 void GameListPanel::setLook(int view) {
     mode = view == 1 ? 1 : 0;
     applyToggle();
+    applyPage();
     applyLooks(true);
     if (focusInList())
         scheduleRecenter();
@@ -489,9 +489,9 @@ emu::PreparedOrder GameListPanel::orderRequest() const {
 void GameListPanel::setItems(std::vector<emu::LibraryItem> nextItems,
                              emu::PreparedOrder prepared) {
     const int64_t started = liblog::nowUs();
-    // The old rows are about to go; the focus waits on the search field.
+    // The old rows are about to go; the focus waits on the mode toggle.
     if (focusInList())
-        Application::giveFocus(searchBox);
+        Application::giveFocus(cartButton);
     for (GameRowCell* cell : pool)
         cell->release();
     live.clear();
@@ -584,9 +584,9 @@ void GameListPanel::applyOrder(bool resetScroll, std::vector<size_t>* ready) {
         if (GameRowCell* first = rowAt(0))
             Application::giveFocus(first);
         else
-            Application::giveFocus(searchBox);
+            Application::giveFocus(cartButton);
     }
-    // Focus on the search field: the current game still follows the filter.
+    // Focus on the mode toggle: the current game still follows the filter.
     std::optional<size_t> next = current;
     if (next && !visible(*next))
         next.reset();
@@ -606,7 +606,32 @@ void GameListPanel::applyOrder(bool resetScroll, std::vector<size_t>* ready) {
 RowLook GameListPanel::lookOf(size_t index) const {
     if (mode != 0)
         return RowLook::Name;
-    return current && *current == index ? RowLook::Cartridge : RowLook::Thumb;
+    return current && *current == index ? RowLook::Cartridge : RowLook::Tape;
+}
+
+float GameListPanel::step() const {
+    return mode == 0 ? tapeRow : kRowStep;
+}
+
+float GameListPanel::extra() const {
+    return mode == 0 ? cartRow - tapeRow : 0;
+}
+
+// The column's height decides the rows' in mode 0: three games fill it.
+void GameListPanel::applySizes() {
+    const float column = scroll->getHeight();
+    if (column <= 0 || std::isnan(column))
+        return;
+    const float cart = std::round(column * kCartShare);
+    const float tape = std::max(kMinTapeRow, std::floor((column - cart) / 2));
+    if (cart == cartRow && tape == tapeRow)
+        return;
+    cartRow = cart;
+    tapeRow = tape;
+    for (GameRowCell* cell : pool)
+        cell->setSizes(cartRow, tapeRow);
+    if (focusInList())
+        scroll->recenterNextFrame();
 }
 
 void GameListPanel::applyLooks(bool animate) {
@@ -622,11 +647,11 @@ size_t GameListPanel::anchorPlace() {
     // Dragged by touch, nothing is focused: follow the middle of the column.
     float middle = scroll->getContentOffsetY() + scroll->getHeight() / 2 - kListTop;
     if (mode == 0 && current && shownAt[*current] != kNoPlace &&
-        middle > shownAt[*current] * kRowStep + kCartridgeExtra)
-        middle -= kCartridgeExtra;
+        middle > shownAt[*current] * step() + extra())
+        middle -= extra();
     if (middle <= 0)
         return 0;
-    return std::min(static_cast<size_t>(middle / kRowStep), shown.size() - 1);
+    return std::min(static_cast<size_t>(middle / step()), shown.size() - 1);
 }
 
 // Rows that still belong in the window stay as they are, the focused one
@@ -711,7 +736,7 @@ void GameListPanel::checkFocusAndView() const {
     if (live.empty())
         return;
     const long middle = static_cast<long>(
-        (scroll->getContentOffsetY() + scroll->getHeight() / 2 - kListTop) / kRowStep);
+        (scroll->getContentOffsetY() + scroll->getHeight() / 2 - kListTop) / step());
     const long first = static_cast<long>(windowStart);
     const long last = first + static_cast<long>(live.size());
     if (middle + kOffWindowMargin < first || middle > last + kOffWindowMargin)
@@ -780,17 +805,18 @@ void GameListPanel::placeRows() {
         mode == 0 && current && shownAt[*current] != kNoPlace
             ? std::optional<size_t>(shownAt[*current])
             : std::nullopt;
-    float y = kListTop + windowStart * kRowStep;
+    const float gap = mode == 0 ? 0 : kRowGap;
+    float y = kListTop + windowStart * step();
     if (cartridge && *cartridge < windowStart)
-        y += kCartridgeExtra;
+        y += extra();
     for (GameRowCell* cell : live) {
         cell->setDetachedPosition(kListSide, y);
-        y += cell->currentHeight() + (kRowStep - GameRowCell::RowHeight);
+        y += cell->currentHeight() + gap;
     }
     const size_t after = windowStart + live.size();
-    y += (shown.size() - after) * kRowStep + kListTop;
+    y += (shown.size() - after) * step() + kListTop;
     if (cartridge && *cartridge >= after)
-        y += kCartridgeExtra;
+        y += extra();
     if (std::abs(list->getHeight() - y) > 0.5f)
         list->setHeight(y);
 }
@@ -830,8 +856,12 @@ View* GameListPanel::defaultRow() const {
 void GameListPanel::draw(NVGcontext* vg, float x, float y, float width, float height,
                          Style style, FrameContext* ctx) {
     const int64_t start = liblog::nowUs();
+    if (mode == 0)
+        applySizes();
     fillWindow(anchorPlace());
     placeRows();
+    if (pageSize() != shownPageSize) // the column got its height, or a new one
+        applyPage();
     const int64_t placed = liblog::nowUs();
     Box::draw(vg, x, y, width, height, style, ctx);
     measureFrame(start, placed - start, liblog::nowUs() - placed);
@@ -843,6 +873,7 @@ void GameListPanel::setCurrent(std::optional<size_t> next, bool animate) {
         return;
     current = next;
     applyLooks(animate);
+    applyPage();
     scheduleRecenter();
     if (onFocusGame)
         onFocusGame(current);
@@ -856,13 +887,13 @@ void GameListPanel::focusedGame(size_t index) {
     // Aim at where the row ends up once the heights settle, in one movement:
     // the focused row is the only cartridge, so every row above it is plain.
     recenterToken++;
-    const float height = mode == 0 ? GameRowCell::CartridgeHeight : GameRowCell::RowHeight;
-    scroll->centerOn(kListTop + shownAt[index] * kRowStep + height / 2);
+    const float height = mode == 0 ? cartRow : GameRowCell::RowHeight;
+    scroll->centerOn(kListTop + shownAt[index] * step() + height / 2);
 }
 
 void GameListPanel::focusGame(size_t index) {
     if (shown.empty()) {
-        Application::giveFocus(searchBox);
+        Application::giveFocus(cartButton);
         setCurrent(std::nullopt, true);
         return;
     }
@@ -915,7 +946,6 @@ void GameListPanel::setQuery(const std::string& text) {
     if (text == query)
         return;
     query = text;
-    applyQuery();
     applyOrder(true);
 }
 
@@ -940,7 +970,6 @@ void GameListPanel::chooseSort(int value) {
     sort = value;
     Settings::instance().set_library_sort(sort);
     Settings::instance().save();
-    applySort();
     applyOrder(true);
 }
 
@@ -992,18 +1021,22 @@ GameListPanel::Batch GameListPanel::batchState() const {
 }
 
 void GameListPanel::registerShortcuts(bool hidden) {
-    registerAction("library/list/hint_mode"_i18n, BUTTON_RB, [this](View*) {
-        toggleMode();
+    // Sort and view live in More options; the shoulders turn whole pages,
+    // and the list shows them under the games instead of the app's footer.
+    registerAction("library/list/page_prev"_i18n, BUTTON_LB, [this](View*) {
+        turnPage(-1);
         return true;
-    }, hidden);
-    registerAction("library/list/hint_sort"_i18n, BUTTON_LB, [this](View*) {
-        openSort();
+    }, true);
+    registerAction("library/list/page_next"_i18n, BUTTON_RB, [this](View*) {
+        turnPage(1);
         return true;
-    }, hidden);
+    }, true);
+    // Search is the one shortcut always shown in the footer: the list has no
+    // search field of its own.
     registerAction("library/list/hint_search"_i18n, BUTTON_BACK, [this](View*) {
         openSearch();
         return true;
-    }, hidden);
+    });
     registerAction("library/list/download_all"_i18n, BUTTON_RT, [this](View*) {
         downloadAllOrCancel();
         return true;
@@ -1029,19 +1062,18 @@ bool GameListPanel::batchActionAvailable() const {
 void GameListPanel::applyBatch() {
     const Batch state = batchState();
     const bool footerFocused = isInside(Application::getCurrentFocus(), footer);
-    const Visibility area = items.empty() ? Visibility::GONE : Visibility::VISIBLE;
+    const Visibility area = items.empty() || state == Batch::Idle || state == Batch::Done
+                                ? Visibility::GONE
+                                : Visibility::VISIBLE;
     footer->setVisibility(area);
     separator->setVisibility(area);
 
     const auto shownWhen = [&](Batch b) {
         return state == b ? Visibility::VISIBLE : Visibility::GONE;
     };
-    idleRow->setVisibility(shownWhen(Batch::Idle));
-    doneLabel->setVisibility(shownWhen(Batch::Done));
     stoppedRow->setVisibility(shownWhen(Batch::Stopped));
     runningRow->setVisibility(shownWhen(Batch::Running));
 
-    idleMissing->setText(brls::getStr("library/list/missing", missing));
     if (stopped)
         stoppedLabel->setText(brls::getStr("library/list/stopped", libraryStopText(*stopped)));
     if (state == Batch::Running) {
@@ -1060,17 +1092,15 @@ void GameListPanel::applyBatch() {
     if (footerFocused) {
         View* now = Application::getCurrentFocus();
         const bool gone = !now || !now->isFocusable() ||
-                          (isInside(now, idleRow) && state != Batch::Idle) ||
                           (isInside(now, stoppedRow) && state != Batch::Stopped) ||
                           (isInside(now, runningRow) && state != Batch::Running);
         if (gone) {
             View* target = state == Batch::Running   ? static_cast<View*>(runningRow)
                            : state == Batch::Stopped ? static_cast<View*>(stoppedRow)
-                           : state == Batch::Idle    ? static_cast<View*>(idleRow)
                                                      : static_cast<View*>(scroll);
             Application::giveFocus(target);
         }
     }
 }
 
-#endif // PLATFORM_SWITCH
+#endif // EQX_EMU_UI

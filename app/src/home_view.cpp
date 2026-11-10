@@ -12,8 +12,10 @@
 #include "settings_tab.hpp"
 #include <Settings.hpp>
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
 #include "console_shelf_view.hpp"
+#include "download_service.hpp"
+#include "downloads_view.hpp"
 #include "emu_video_view.hpp"
 #include "emu/CoverStore.hpp"
 #include "emu/EmuLauncher.hpp"
@@ -91,7 +93,7 @@ std::string consolesText(int count) {
                       : brls::getStr("home/consoles_count", count);
 }
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
 // Latest manifest seen per console (update check or install), kept while
 // the app runs: the "Add" choice shows its size, the cards their update.
 std::map<std::string, emu::Manifest>& latestManifests() {
@@ -99,9 +101,26 @@ std::map<std::string, emu::Manifest>& latestManifests() {
     return manifests;
 }
 
-// One install at a time; the daily check leaves installed.json alone then.
-std::atomic<bool> installing{false};
 std::atomic<bool> checkingUpdates{false};
+
+// One install per console, from the manifest request to the end of its
+// task. The dialog is only a view of it: "Continue in background" closes
+// it while the task goes on, and the Add choice opens it again. UI thread
+// only.
+struct RunnerInstall {
+    const emu::Console* console = nullptr;
+    bool first = false;
+    bool submitted = false;
+    bool cancelled = false; // Cancel while the manifest was being fetched
+    std::string title, prefix, line;
+    Dialog* dialog = nullptr; // the open view, or null
+    Label* text = nullptr;
+};
+
+std::map<std::string, std::shared_ptr<RunnerInstall>>& runnerInstalls() {
+    static std::map<std::string, std::shared_ptr<RunnerInstall>> installs;
+    return installs;
+}
 
 // Translated reason for a failed install; curl's text only adds detail.
 std::string runnerErrorText(emu::RunnerError code, const std::string& detail) {
@@ -109,6 +128,8 @@ std::string runnerErrorText(emu::RunnerError code, const std::string& detail) {
     case emu::RunnerError::Network:
         return detail.empty() ? "emu/error_network"_i18n
                               : "emu/error_network"_i18n + "\n(" + detail + ")";
+    case emu::RunnerError::Disk:
+        return "emu/error_disk"_i18n;
     case emu::RunnerError::BadManifest:
         return "emu/error_manifest"_i18n;
     case emu::RunnerError::WrongConsole:
@@ -127,10 +148,85 @@ std::string runnerErrorText(emu::RunnerError code, const std::string& detail) {
 }
 
 bool runnerInstalled(const emu::Console& console) {
+    // A first install's files land before its task ends: the games wait.
+    auto install = runnerInstalls().find(console.slug);
+    if (install != runnerInstalls().end() && install->second->first &&
+        DownloadService::instance().active(emu::runnerId(console.slug)))
+        return false;
     const emu::ConsolePaths paths = emu::pathsFor(console);
     std::error_code ec;
     return std::filesystem::is_regular_file(emu::fromUtf8(paths.runner), ec) &&
            emu::readInstalled(paths.installed).has_value();
+}
+
+// The dialog is freed once closed: a pressed button only lets go of it in
+// its callback, after the fade-out, so isDialogClosing covers the fade.
+bool installDialogOpen(const RunnerInstall& install) {
+    return install.dialog && !isDialogClosing(install.dialog);
+}
+
+void setInstallLine(RunnerInstall& install, const std::string& line) {
+    install.line = line;
+    if (installDialogOpen(install))
+        install.text->setText(line);
+}
+
+// Closes the view if it is open, then runs `then` (an error, the shelf).
+void closeInstallDialog(RunnerInstall& install, std::function<void()> then) {
+    if (!then)
+        then = [] {};
+    Dialog* dialog = install.dialog;
+    const bool open = installDialogOpen(install);
+    install.dialog = nullptr;
+    install.text = nullptr;
+    if (open)
+        dialog->close(then);
+    else
+        then();
+}
+
+// The user's Cancel: drops the task and what it downloaded.
+void cancelInstall(const std::string& slug) {
+    auto found = runnerInstalls().find(slug);
+    if (found == runnerInstalls().end())
+        return; // it ended meanwhile
+    const std::shared_ptr<RunnerInstall> install = found->second;
+    runnerInstalls().erase(found);
+    if (!install->submitted) {
+        install->cancelled = true;
+        return;
+    }
+    DownloadService& service = DownloadService::instance();
+    const std::string id = emu::runnerId(slug);
+    service.cancel(id);
+    // While the worker still runs it, the runner removes the .part itself.
+    if (!service.active(id))
+        emu::discardRunnerDownload(*install->console);
+}
+
+void showInstallDialog(const std::shared_ptr<RunnerInstall>& install) {
+    const std::string slug = install->console->slug;
+    // Lets go of the view, unless another one replaced it meanwhile.
+    auto self = std::make_shared<Dialog*>(nullptr);
+    auto release = [slug, self] {
+        auto found = runnerInstalls().find(slug);
+        if (found != runnerInstalls().end() && found->second->dialog == *self) {
+            found->second->dialog = nullptr;
+            found->second->text = nullptr;
+        }
+    };
+    Label* text = nullptr;
+    Dialog* dialog = createLoadingDialog(
+        install->line,
+        [slug, release] {
+            release();
+            cancelInstall(slug);
+        },
+        &text, release);
+    *self = dialog;
+    install->dialog = dialog;
+    install->text = text;
+    dialog->open();
 }
 #endif
 
@@ -158,7 +254,7 @@ FavoriteSummary favoriteSummary() {
         summary.perHost.push_back({i, count});
         summary.names.push_back(hosts[i].hostname);
     }
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     const auto& local = Settings::instance().local_favorites();
     for (const emu::Console& console : emu::consoles()) {
         const int count = (int)std::count_if(
@@ -216,6 +312,9 @@ class HomeArt : public View {
             break;
         case HomeCardKind::FAVORITES:
             drawFavorites(vg);
+            break;
+        case HomeCardKind::DOWNLOADS:
+            drawDownloads(vg);
             break;
         case HomeCardKind::SETTINGS:
             drawSettings(vg);
@@ -317,6 +416,33 @@ class HomeArt : public View {
         nvgFillColor(vg, a(hex(0xF4B860)));
         nvgFill(vg);
         ground(vg);
+    }
+
+    // A download arrow over a tray, the ring around it partly full.
+    void drawDownloads(NVGcontext* vg) {
+        fillRect(vg, 0, 0, 272, 128, 11, 0x1F2347);
+        nvgLineCap(vg, NVG_ROUND);
+        nvgLineJoin(vg, NVG_ROUND);
+        nvgBeginPath(vg);
+        nvgCircle(vg, 136, 60, 38);
+        nvgStrokeColor(vg, a(hex(0x3A4074)));
+        nvgStrokeWidth(vg, 8);
+        nvgStroke(vg);
+        nvgBeginPath(vg);
+        nvgArc(vg, 136, 60, 38, -NVG_PI / 2, NVG_PI * 0.7f, NVG_CW);
+        nvgStrokeColor(vg, a(hex(0xF4B860)));
+        nvgStroke(vg);
+        line(vg, 136, 40, 136, 72, 0xF1F2FA, 6);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, 124, 62);
+        nvgLineTo(vg, 136, 74);
+        nvgLineTo(vg, 148, 62);
+        nvgStrokeColor(vg, a(hex(0xF1F2FA)));
+        nvgStrokeWidth(vg, 6);
+        nvgStroke(vg);
+        line(vg, 122, 84, 150, 84, 0x9DB8FF, 6);
+        nvgLineCap(vg, NVG_BUTT);
+        nvgLineJoin(vg, NVG_MITER);
     }
 
     // Three sliders.
@@ -495,8 +621,12 @@ void MotionBox::frame(FrameContext* ctx) {
     const float cx = getX() + getWidth() / 2;
     const float cy = getY() + getHeight() * originY;
     nvgSave(vg);
+    // A step this wide keeps every glyph at the size it has at rest, so text
+    // scales with the layer as one texture. Smaller steps re-rasterized it
+    // a few times over the zoom, and each new size rounded the glyph metrics
+    // differently: labels jumped in size and position.
     if (s != 1.0f)
-        nvgTextScaleSnap(vg, 0.06f);
+        nvgTextScaleSnap(vg, 10.0f);
     nvgTranslate(vg, cx + dx, cy);
     nvgScale(vg, s, s);
     nvgTranslate(vg, -cx, -cy);
@@ -521,6 +651,7 @@ HomeCard::HomeCard(HomeCardKind kind) : PressableBox(Axis::COLUMN), kind(kind) {
     std::string art3d;
     const char* object = kind == HomeCardKind::PCS         ? "img/3d/home-devices"
                          : kind == HomeCardKind::FAVORITES ? "img/3d/home-favorites"
+                         : kind == HomeCardKind::DOWNLOADS ? "img/3d/home-downloads"
                          : kind == HomeCardKind::SETTINGS  ? "img/3d/home-settings"
                          : kind == HomeCardKind::ABOUT     ? "img/3d/home-about"
                                                            : nullptr;
@@ -550,6 +681,9 @@ HomeCard::HomeCard(HomeCardKind kind) : PressableBox(Axis::COLUMN), kind(kind) {
     case HomeCardKind::FAVORITES:
         title = "home/favorites"_i18n;
         color = themeColor("equinox/status_on");
+        break;
+    case HomeCardKind::DOWNLOADS:
+        title = "downloads/title"_i18n;
         break;
     case HomeCardKind::SETTINGS:
         title = "home/settings"_i18n;
@@ -647,6 +781,32 @@ HomeView::HomeView() {
     title->setText("title"_i18n);
     header->addView(title);
     addView(header);
+
+#if defined(EQX_EMU_UI)
+    auto* badge = new DownloadIndicator();
+    badge->setPositionType(PositionType::ABSOLUTE);
+    badge->setPositionTop(33);
+    badge->setPositionRight(44);
+    badge->onOpen = [] { openDownloads(); };
+    badge->onSummary = [this](const std::string& summary) {
+        if (summary == downloadsStatus)
+            return;
+        downloadsStatus = summary;
+        updateHomeCards();
+        updateShelfInfo();
+    };
+    // Back to the shelf it was reached from.
+    badge->onHidden = [this] {
+        View* card = getDefaultFocus();
+        // An empty shelf: the home cards are always there.
+        if (!card && !homeCards.empty())
+            card = homeCards.front();
+        if (card)
+            Application::giveFocus(card);
+    };
+    downloadBadge = badge;
+    addView(badge);
+#endif
 
     homeLayer = makeLayer(home, false);
     pcLayer = makeLayer(pcs, true);
@@ -793,6 +953,9 @@ MotionBox* HomeView::makeLayer(Shelf& shelf, bool forPcs) {
 
 void HomeView::buildHomeCards() {
     const HomeCardKind kinds[] = {HomeCardKind::PCS, HomeCardKind::FAVORITES,
+#if defined(EQX_EMU_UI)
+                                  HomeCardKind::DOWNLOADS,
+#endif
                                   HomeCardKind::SETTINGS, HomeCardKind::ABOUT};
     for (HomeCardKind kind : kinds) {
         auto* card = new HomeCard(kind);
@@ -804,6 +967,8 @@ void HomeView::buildHomeCards() {
             }
             if (card->getKind() == HomeCardKind::PCS)
                 openPcs();
+            else if (card->getKind() == HomeCardKind::DOWNLOADS)
+                openDownloads();
             else
                 enter();
         };
@@ -840,7 +1005,7 @@ void HomeView::buildHostCards() {
     }
 
     consoleCards.clear();
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     for (const emu::Console& console : emu::consoles()) {
         if (!runnerInstalled(console))
             continue;
@@ -927,23 +1092,41 @@ void HomeView::updateHomeCards() {
         pcsStatus = "home/pcs_none"_i18n;
     if (running > 0)
         pcsStatus += "  ·  " + brls::getStr("home/pcs_running", running);
-    homeCards[0]->setStatus(pcsStatus);
-
     const FavoriteSummary fav = favoriteSummary();
-    homeCards[1]->setStatus(
-        fav.games == 0 ? "home/fav_empty"_i18n
-                       : brls::getStr("home/fav_status", gamesText(fav.games),
-                                      favoritePlaces(fav)));
-    homeCards[2]->setStatus(streamQuality());
-    homeCards[3]->setStatus(brls::getStr("home/about_status", APP_VERSION));
+    for (HomeCard* card : homeCards) {
+        switch (card->getKind()) {
+        case HomeCardKind::PCS:
+            card->setStatus(pcsStatus);
+            break;
+        case HomeCardKind::FAVORITES:
+            card->setStatus(
+                fav.games == 0 ? "home/fav_empty"_i18n
+                               : brls::getStr("home/fav_status", gamesText(fav.games),
+                                              favoritePlaces(fav)));
+            break;
+        case HomeCardKind::DOWNLOADS:
+            card->setStatus(downloadsStatus.empty() ? "downloads/empty_title"_i18n
+                                                    : downloadsStatus);
+            break;
+        case HomeCardKind::SETTINGS:
+            card->setStatus(streamQuality());
+            break;
+        case HomeCardKind::ABOUT:
+            card->setStatus(brls::getStr("home/about_status", APP_VERSION));
+            break;
+        }
+    }
 }
 
 void HomeView::updateShelfInfo() {
     // Home shelf.
     const int sel = home.carousel->selectedIndex();
     std::string info, detail;
-    switch (sel) {
-    case 0: {
+    const HomeCardKind selKind = sel >= 0 && sel < (int)homeCards.size()
+                                     ? homeCards[sel]->getKind()
+                                     : HomeCardKind::ABOUT;
+    switch (selKind) {
+    case HomeCardKind::PCS: {
         const int count = (int)hostCards.size();
         const int consoles = (int)consoleCards.size();
         info = count == 0   ? ""
@@ -966,7 +1149,7 @@ void HomeView::updateShelfInfo() {
         }
         break;
     }
-    case 1: {
+    case HomeCardKind::FAVORITES: {
         const FavoriteSummary fav = favoriteSummary();
         info = fav.games == 0   ? "home/fav_empty"_i18n
                : fav.games == 1 ? "home/fav_info_one"_i18n
@@ -976,11 +1159,15 @@ void HomeView::updateShelfInfo() {
                      : brls::getStr("home/fav_from", joinNames(fav.names));
         break;
     }
-    case 2:
+    case HomeCardKind::DOWNLOADS:
+        info = downloadsStatus.empty() ? "downloads/empty_title"_i18n : downloadsStatus;
+        detail = "home/downloads_detail"_i18n;
+        break;
+    case HomeCardKind::SETTINGS:
         info = "home/settings"_i18n;
         detail = "home/settings_detail"_i18n;
         break;
-    default:
+    case HomeCardKind::ABOUT:
         info = brls::getStr("about/version", APP_VERSION);
         detail = "home/about_detail"_i18n;
         break;
@@ -995,7 +1182,7 @@ void HomeView::updateShelfInfo() {
         pcs.info->setText(text.empty() || text == " " ? card->statusText()
                                                       : text);
         pcs.detail->setText(card->detailText());
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     } else if (ConsoleCard* console = selectedConsole()) {
         pcs.info->setText(console->statusText());
         pcs.detail->setText(console->detailText() + "  ·  " +
@@ -1084,7 +1271,9 @@ void HomeView::enter() {
     fillPanel();
 
     Shelf& shelf = level == Level::PCS ? pcs : home;
-    shelf.carousel->setEntered(true, kEnterOffset);
+    // The opened console's scene fills what the panel leaves on the left.
+    shelf.carousel->setEntered(true, kEnterOffset,
+                               Rect(getX(), getY(), kPanelLeft, getHeight()));
 
     panel->setVisibility(Visibility::VISIBLE);
     panel->set(1, 0, 60);
@@ -1140,7 +1329,7 @@ void HomeView::fillPanel() {
                 detail += "  ·  " + info;
             panelDetail->setText(detail);
             options = hostOptions(card);
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
         } else if (ConsoleCard* card = selectedConsole()) {
             panelName->setText(card->console().name);
             panelStatus->setText(card->statusText());
@@ -1187,6 +1376,7 @@ void HomeView::fillPanel() {
             options = aboutOptions();
             break;
         case HomeCardKind::PCS:
+        case HomeCardKind::DOWNLOADS:
             return;
         }
     }
@@ -1246,6 +1436,15 @@ View* HomeView::getDefaultFocus() {
 }
 
 View* HomeView::getNextFocus(FocusDirection direction, View* currentView) {
+#if defined(EQX_EMU_UI)
+    if (!downloadBadge)
+        return nullptr;
+    if (direction == FocusDirection::UP && !entered && downloadBadge->shown() &&
+        (currentView == homeLayer || currentView == pcLayer))
+        return downloadBadge;
+    if (direction == FocusDirection::DOWN && currentView == downloadBadge)
+        return getDefaultFocus();
+#endif
     return nullptr;
 }
 
@@ -1381,7 +1580,7 @@ std::vector<HomeOption> HomeView::hostOptions(HostCard* card) {
 
 void HomeView::openConsole(const emu::Console& console,
                            const std::string& selectRom) {
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     presentWithHeader(this, new ConsoleShelfView(console, selectRom));
 #else
     (void)console;
@@ -1400,7 +1599,7 @@ void HomeView::showAddChoices() {
         presentWithHeader(instance, screen);
     };
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     Style style = Application::getStyle();
     auto* box = new Box(Axis::COLUMN);
     box->setPadding(style["brls/dialog/paddingTopBottom"],
@@ -1468,7 +1667,7 @@ void HomeView::showAddChoices() {
 #endif
 }
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
 
 std::vector<HomeOption> HomeView::consoleOptions(ConsoleCard* card) {
     const emu::Console* console = &card->console();
@@ -1507,145 +1706,191 @@ std::vector<HomeOption> HomeView::consoleOptions(ConsoleCard* card) {
 }
 
 void HomeView::installConsole(const emu::Console& target) {
-    if (installing.exchange(true))
+    watchRunnerTasks();
+    auto found = runnerInstalls().find(target.slug);
+    if (found != runnerInstalls().end()) {
+        // Already under way: show it again. One a full card paused goes on.
+        const std::shared_ptr<RunnerInstall> install = found->second;
+        if (install->dialog)
+            return;
+        if (install->submitted)
+            DownloadService::instance().resume(emu::runnerId(target.slug));
+        showInstallDialog(install);
         return;
-    const emu::Console* console = &target;
-    const bool first = !runnerInstalled(target);
-    const std::string title = brls::getStr(
-        first ? "emu/installing" : "emu/updating", target.name);
+    }
 
-    // Touched from the download thread (cancel, percent) and the UI thread.
-    struct State {
-        std::atomic<bool> cancel{false};
-        std::atomic<bool> closed{false};
-        std::atomic<int> percent{-1};
-    };
-    auto state = std::make_shared<State>();
+    auto install = std::make_shared<RunnerInstall>();
+    install->console = &target;
+    install->first = !runnerInstalled(target);
+    install->title = brls::getStr(
+        install->first ? "emu/installing" : "emu/updating", target.name);
+    install->line = install->title;
+    runnerInstalls()[target.slug] = install;
+    showInstallDialog(install);
 
-    Label* text = nullptr;
-    Dialog* loader = createLoadingDialog(
-        title, [state] { state->cancel.store(true); }, &text);
-    loader->open();
-
-    // UI thread only. The dialog and its label are freed once it is
-    // cancelled or closed, so this is checked before touching either.
-    auto dialogAlive = [state, loader] {
-        return !state->cancel.load() && !state->closed.load() &&
-               !isDialogClosing(loader);
-    };
-    // Closes the dialog, then runs `then` (an error, a toast, the shelf).
-    // A cancelled install ends silently.
-    auto finish = [state, loader, dialogAlive](std::function<void()> then) {
-        brls::sync([state, loader, dialogAlive, then] {
-            installing.store(false);
-            if (!dialogAlive())
-                return;
-            state->closed.store(true);
-            loader->close(then ? then : std::function<void()>([] {}));
-        });
+    // Ends the install before it has a task.
+    auto finish = [install](std::function<void()> then) {
+        auto found = runnerInstalls().find(install->console->slug);
+        if (found != runnerInstalls().end() && found->second == install)
+            runnerInstalls().erase(found);
+        closeInstallDialog(*install, std::move(then));
     };
 
-    brls::async([state, loader, text, console, title, first, dialogAlive,
-                 finish] {
-        const emu::ConsolePaths paths = emu::pathsFor(*console);
+    brls::async([install, finish] {
+        const emu::Console* console = install->console;
         std::string error;
         emu::RunnerError code = emu::RunnerError::None;
-        std::optional<emu::Manifest> latest =
+        const std::optional<emu::Manifest> latest =
             emu::fetchLatest(*console, error, &code);
-        if (state->cancel.load()) {
-            finish(nullptr);
-            return;
-        }
-        if (!latest) {
-            finish([console, code, error] {
-                showError(brls::getStr("emu/install_error", console->name,
-                                       runnerErrorText(code, error)));
-            });
-            return;
-        }
-
-        const emu::Manifest manifest = *latest;
-        brls::sync([console, manifest] {
-            latestManifests()[console->slug] = manifest;
-        });
-
         // A first install ignores a stale installed.json left without its
         // runner.bin.
         const std::optional<emu::Installed> installed =
-            first ? std::nullopt : emu::readInstalled(paths.installed);
-        switch (emu::decide(installed, manifest, console->protocol)) {
-        case emu::RunnerAction::NeedsNewerEquinox:
-            finish([] { showAlert("emu/needs_newer"_i18n); });
-            return;
-        case emu::RunnerAction::UpToDate:
-            finish([console] {
-                Application::notify("emu/up_to_date"_i18n);
-                if (instance)
-                    instance->refreshConsole(*console);
-            });
-            return;
-        default:
-            break;
-        }
+            install->first
+                ? std::nullopt
+                : emu::readInstalled(emu::pathsFor(*console).installed);
+        const emu::RunnerAction action =
+            latest ? emu::decide(installed, *latest, console->protocol)
+                   : emu::RunnerAction::Install;
 
-        // "Snes9x · v1.0.0 · 11,4 MB · 62%", redrawn once per whole percent.
-        const std::string prefix = emuRunnerName(manifest) + "  ·  v" +
-                                   manifest.version + "  ·  " +
-                                   emuSizeText(manifest.size) + "  ·  ";
-        auto progress = [state, text, title, prefix, dialogAlive](
-                            uint64_t done, uint64_t total) {
-            if (state->cancel.load())
-                return false;
-            const int percent =
-                total > 0 ? (int)std::min<uint64_t>(100, done * 100 / total) : 0;
-            if (state->percent.exchange(percent) != percent) {
-                const std::string line =
-                    title + "\n" + prefix + std::to_string(percent) + "%";
-                brls::sync([text, line, dialogAlive] {
-                    if (dialogAlive())
-                        text->setText(line);
-                });
-            }
-            return true;
-        };
-        progress(0, manifest.size);
-
-        const emu::InstallResult result =
-            emu::installRunner(*console, manifest, progress);
-        if (!result.ok) {
-            if (result.cancelled || state->cancel.load())
-                finish(nullptr);
-            else
-                finish([console, code = result.code, error = result.error] {
+        brls::sync([install, finish, console, latest, code, error, action] {
+            if (install->cancelled)
+                return;
+            if (!latest) {
+                finish([console, code, error] {
                     showError(brls::getStr("emu/install_error", console->name,
                                            runnerErrorText(code, error)));
                 });
-            return;
-        }
-        // Installed, even if Cancel was pressed as the download ended: the
-        // shelf follows what is on the SD card either way.
-        brls::sync([console, first, dialogAlive, state, loader] {
-            installing.store(false);
-            if (!instance)
-                return;
-            if (!dialogAlive()) {
-                if (first)
-                    instance->rebuildHosts();
-                else
-                    instance->refreshConsole(*console);
                 return;
             }
-            state->closed.store(true);
-            loader->close([console, first] {
-                if (instance)
-                    instance->consoleInstalled(*console, first);
-            });
+            const emu::Manifest manifest = *latest;
+            latestManifests()[console->slug] = manifest;
+
+            switch (action) {
+            case emu::RunnerAction::NeedsNewerEquinox:
+                finish([] { showAlert("emu/needs_newer"_i18n); });
+                return;
+            case emu::RunnerAction::UpToDate:
+                finish([console] {
+                    Application::notify("emu/up_to_date"_i18n);
+                    if (instance)
+                        instance->refreshConsole(*console);
+                });
+                return;
+            default:
+                break;
+            }
+
+            // "Snes9x · v1.0.0 · 11,4 MB · 62%"
+            install->prefix = emuRunnerName(manifest) + "  ·  v" +
+                              manifest.version + "  ·  " +
+                              emuSizeText(manifest.size) + "  ·  ";
+            setInstallLine(*install,
+                           install->title + "\n" + install->prefix + "0%");
+            install->submitted = true;
+            DownloadService::instance().submit(
+                emu::runnerTask(*console, manifest));
         });
     });
 }
 
-void HomeView::consoleInstalled(const emu::Console& console, bool first) {
+void HomeView::watchRunnerTasks() {
+    static bool watching = false;
+    if (watching)
+        return;
+    watching = true;
+    // Never unsubscribed: an install outlives every screen.
+    DownloadService::instance().subscribe([](const DlEvent& event) {
+        const std::string prefix = emu::runnerId("");
+        if (event.id.rfind(prefix, 0) != 0)
+            return;
+        auto found = runnerInstalls().find(event.id.substr(prefix.size()));
+        if (found == runnerInstalls().end()) {
+            // Cancel pressed during the hash check or the swap: the runner
+            // was installed all the same, and the cards follow the SD card.
+            if (event.state == emu::DlState::Done &&
+                event.result == emu::DlResult::Done && instance)
+                instance->rebuildHosts();
+            return;
+        }
+        const std::shared_ptr<RunnerInstall> install = found->second;
+        const emu::Console* console = install->console;
+        auto showFailure = [console](emu::RunnerError code,
+                                     const std::string& error) {
+            return std::function<void()>([console, code, error] {
+                showError(brls::getStr("emu/install_error", console->name,
+                                       runnerErrorText(code, error)));
+            });
+        };
+
+        switch (event.state) {
+        case emu::DlState::Running: {
+            const int percent =
+                std::clamp((int)(event.progress * 100), 0, 100);
+            setInstallLine(*install, install->title + "\n" + install->prefix +
+                                         std::to_string(percent) + "%");
+            break;
+        }
+        case emu::DlState::Queued:
+            // Waits to try again; the percent comes back when it does.
+            if (event.result == emu::DlResult::Transient)
+                setInstallLine(*install,
+                               install->title + "\n" + "emu/retrying"_i18n);
+            break;
+        case emu::DlState::Paused:
+            // A full card paused everything; the Add choice resumes this one.
+            if (event.result == emu::DlResult::Disk)
+                closeInstallDialog(*install,
+                                   showFailure(emu::RunnerError::Disk, ""));
+            break;
+        case emu::DlState::Failed: {
+            runnerInstalls().erase(found);
+            // Out of the queue, so the next install starts a new task; the
+            // .part of a network failure stays for it.
+            DownloadService::instance().cancel(event.id);
+            const emu::RunnerError code = event.install
+                                              ? event.install->code
+                                              : emu::RunnerError::BadManifest;
+            closeInstallDialog(
+                *install,
+                showFailure(code, event.install ? event.install->error : ""));
+            break;
+        }
+        case emu::DlState::Done: {
+            runnerInstalls().erase(found);
+            if (event.result != emu::DlResult::Done) {
+                closeInstallDialog(*install, nullptr); // cancelled
+                break;
+            }
+            // Installed, even if Cancel was pressed as it ended: the shelf
+            // follows what is on the SD card.
+            const bool background = !installDialogOpen(*install);
+            const bool first = install->first;
+            closeInstallDialog(*install, [console, first, background] {
+                if (instance)
+                    instance->consoleInstalled(*console, first, background);
+                else
+                    Application::notify(brls::getStr(
+                        "emu/installed_background", console->name));
+            });
+            break;
+        }
+        }
+    });
+}
+
+void HomeView::consoleInstalled(const emu::Console& console, bool first,
+                                bool background) {
     emu::ensureFolders(emu::pathsFor(console));
+    if (background) {
+        // The user went on with something else: nothing opens over it.
+        if (first)
+            rebuildHosts();
+        else
+            refreshConsole(console);
+        Application::notify(
+            brls::getStr("emu/installed_background", console.name));
+        return;
+    }
     if (!first) {
         refreshConsole(console);
         Application::notify("emu/updated"_i18n);
@@ -1681,12 +1926,34 @@ void HomeView::removeConsole(const emu::Console& target) {
         new Dialog(brls::getStr("emu/remove_message", target.name));
     confirm->addButton("common/cancel"_i18n, [] {});
     confirm->addButton("common/remove"_i18n, [console] {
-        if (installing.load())
+        // An install still fetching its manifest would submit its task after
+        // the removal and put the emulator back.
+        auto pending = runnerInstalls().find(console->slug);
+        if (pending != runnerInstalls().end()) {
+            const std::shared_ptr<RunnerInstall> install = pending->second;
+            runnerInstalls().erase(pending);
+            install->cancelled = true;
+            closeInstallDialog(*install, nullptr);
+        }
+        DownloadService& service = DownloadService::instance();
+        for (emu::DlKind kind : {emu::DlKind::Runner, emu::DlKind::GameData,
+                                 emu::DlKind::Cover})
+            service.cancelGroup(console->slug, kind);
+        auto remove = [console] {
+            emu::removeRunner(*console);
+            latestManifests().erase(console->slug);
+            if (instance)
+                instance->rebuildHosts();
+        };
+        // A cancelled runner may still be writing in the emulator folder.
+        if (!service.active(emu::runnerId(console->slug))) {
+            remove();
             return;
-        emu::removeRunner(*console);
-        latestManifests().erase(console->slug);
-        if (instance)
-            instance->rebuildHosts();
+        }
+        service.suspend([remove] {
+            remove();
+            DownloadService::instance().resumeAll();
+        });
     });
     confirm->open();
 }
@@ -1763,7 +2030,8 @@ void HomeView::checkConsoleUpdates() {
             // pending update (or "Update Equinox") is asked again on every
             // launch, so the card keeps showing it. Read again first: an
             // install may have replaced the file meanwhile.
-            if (!installing.load()) {
+            if (!DownloadService::instance().active(
+                    emu::runnerId(console->slug))) {
                 auto fresh = emu::readInstalled(paths.installed);
                 if (fresh && emu::decide(fresh, *latest, console->protocol) ==
                                  emu::RunnerAction::UpToDate) {
@@ -1791,7 +2059,7 @@ void HomeView::checkConsoleUpdates() {
 void HomeView::resumeConsole() {}
 void HomeView::checkConsoleUpdates() {}
 
-#endif // PLATFORM_SWITCH
+#endif // EQX_EMU_UI
 
 void HomeView::willAppear(bool resetState) {
     Box::willAppear(resetState);
@@ -1805,7 +2073,7 @@ void HomeView::willAppear(bool resetState) {
     if (appeared) {
         for (HostCard* card : hostCards)
             card->refresh();
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
         // Back from a game or a screen: ROMs may have been added since.
         for (ConsoleCard* card : consoleCards)
             card->refresh();
@@ -1832,6 +2100,10 @@ void HomeView::draw(NVGcontext* vg, float x, float y, float width,
                     float height, Style style, FrameContext* ctx) {
     const float chrome = chromeFade.getValue();
     header->setAlpha(chrome);
+#if defined(EQX_EMU_UI)
+    if (downloadBadge)
+        downloadBadge->setAlpha(chrome);
+#endif
     for (Shelf* shelf : {&home, &pcs}) {
         shelf->crumb->getParent()->setAlpha(chrome);
         shelf->info->setAlpha(chrome);
@@ -1865,6 +2137,13 @@ void HomeView::openSettings(const std::string& group) {
     auto* settings = new SettingsTab(group);
     settings->getAppletFrameItem()->title = "home/settings"_i18n;
     presentWithHeader(instance, settings);
+}
+
+void HomeView::openDownloads() {
+#if defined(EQX_EMU_UI)
+    if (instance)
+        presentWithHeader(instance, new DownloadsView());
+#endif
 }
 
 void HomeView::hostsChanged() {

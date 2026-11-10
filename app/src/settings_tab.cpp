@@ -10,6 +10,7 @@
 #endif
 
 #include "settings_tab.hpp"
+#include "download_service.hpp"
 #include "app_theme.hpp"
 #include "Updater.hpp"
 #include "Settings.hpp"
@@ -997,7 +998,7 @@ SettingsTab::SettingsTab(const std::string& group) {
     reduceMotionNote->setText("settings/reduce_motion_note"_i18n);
     reduceMotionNote->setTextColor(Application::getTheme().getColor("equinox/muted"));
 
-    if (emu::ssDevConfigured()) {
+    {
         const auto showUser = [this] {
             screenscraperUser->setDetailText(Settings::instance().screenscraper_user());
         };
@@ -1011,6 +1012,7 @@ SettingsTab::SettingsTab(const std::string& group) {
             Application::getImeManager()->openForText(
                 [showUser](const std::string& text) {
                     Settings::instance().set_screenscraper_user(text);
+                    DownloadService::instance().credentialsChanged();
                     showUser();
                 },
                 "settings/screenscraper_user"_i18n, "", 64,
@@ -1023,17 +1025,47 @@ SettingsTab::SettingsTab(const std::string& group) {
             Application::getImeManager()->openForText(
                 [showPassword](const std::string& text) {
                     Settings::instance().set_screenscraper_password(text);
+                    DownloadService::instance().credentialsChanged();
                     showPassword();
                 },
                 "settings/screenscraper_password"_i18n, "", 64,
                 Settings::instance().screenscraper_password(), 0);
             return true;
         });
-        screenscraperNote->setText("settings/screenscraper_note"_i18n);
+        // The account is kept either way; a build without the developer key
+        // never sends it.
+        screenscraperNote->setText(emu::ssDevConfigured() ? "settings/screenscraper_note"_i18n
+                                                          : "settings/screenscraper_no_dev"_i18n);
         screenscraperNote->setTextColor(Application::getTheme().getColor("equinox/muted"));
-    } else {
-        screenscraperSection->setVisibility(Visibility::GONE);
     }
+
+    const auto showSgdbKey = [this] {
+        const std::string key = Settings::instance().steamgriddb_key();
+        if (key.empty())
+            steamgriddbKey->setDetailText("");
+        else if (DownloadService::instance().sgdbRejected())
+            steamgriddbKey->setDetailText("settings/steamgriddb_refused"_i18n);
+        else
+            steamgriddbKey->setDetailText("••••" + key.substr(key.size() > 4 ? key.size() - 4 : 0));
+    };
+    steamgriddbKey->setText("settings/steamgriddb_key"_i18n);
+    showSgdbKey();
+    steamgriddbKey->registerClickAction([showSgdbKey](View*) {
+        Application::getImeManager()->openForText(
+            [showSgdbKey](const std::string& text) {
+                std::string key;
+                for (char c : text)
+                    if (c != ' ' && c != '\t')
+                        key += c;
+                Settings::instance().set_steamgriddb_key(key);
+                DownloadService::instance().credentialsChanged();
+                showSgdbKey();
+            },
+            "settings/steamgriddb_key"_i18n, "", 64, Settings::instance().steamgriddb_key(), 0);
+        return true;
+    });
+    steamgriddbNote->setText("settings/steamgriddb_note"_i18n);
+    steamgriddbNote->setTextColor(Application::getTheme().getColor("equinox/muted"));
 
     writeLog->init("settings/debugging_view"_i18n,
                    Settings::instance().write_log(), [](bool value) {

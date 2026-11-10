@@ -2,73 +2,81 @@
 //  game_data_queue.hpp
 //  Equinox
 //
-//  Downloads the data of the games it is given (snap, title screen, synopsis),
-//  one game at a time. UI thread only; each game runs as one brls::async task
-//  that takes the shared network gate (emu::netTryAcquire) for as long as it
-//  downloads. Callbacks run on the UI thread.
+//  One console's view of the game data downloads, which run in
+//  DownloadService and go on after the view closes. Translates the service's
+//  ids to the view's list indexes. UI thread only; callbacks run on the UI
+//  thread.
 //
 
 #pragma once
 
 #include "emu/Console.hpp"
+#include "emu/DownloadQueue.hpp"
 #include "emu/GameDataJob.hpp"
-#include "emu/GameDb.hpp"
 #include "emu/RomScan.hpp"
 
-#include <atomic>
 #include <cstddef>
-#include <deque>
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
+#include <set>
+#include <string>
+#include <vector>
+
+struct DlEvent;
 
 class GameDataQueue {
   public:
-    GameDataQueue(const emu::Console& console, emu::ConsolePaths paths, const emu::GameDb* db);
+    // Picks up what is already downloading for this console.
+    explicit GameDataQueue(const emu::Console& console);
+    // Unsubscribes only: the downloads continue.
     ~GameDataQueue();
     GameDataQueue(const GameDataQueue&) = delete;
     GameDataQueue& operator=(const GameDataQueue&) = delete;
 
-    // Ignored when the game is already waiting or being downloaded.
-    void enqueue(size_t index, const emu::RomEntry& rom);
+    // The list as the view numbers it: indexes in the callbacks refer to this.
+    void setGames(std::vector<std::string> fileNames);
+
+    // When the game is already waiting, only raises an Interactive request.
+    // A ScreenScraper block that holds the game is lifted for one more try, at
+    // most once per pass of the UI loop, so a "download all" costs one request.
+    void enqueue(size_t index, const emu::RomEntry& rom,
+                 emu::DlPriority priority = emu::DlPriority::Interactive);
     // Stops the game in progress and drops the rest. No callback fires.
     void cancel();
 
-    bool running() const;
+    bool running() const { return !active_.empty(); }
     // Of the current batch; both go back to zero when the queue empties.
     size_t total() const { return total_; }
     size_t done() const { return done_; }
-    std::optional<size_t> current() const { return current_; }
+    std::optional<size_t> current() const;
     bool queued(size_t index) const;
 
     std::function<void(size_t index, emu::DataStep)> onStep;
     std::function<void(size_t index, const emu::DataOutcome&)> onFinished;
-    // The next game of the batch was just handed to the pool.
+    // The next game of the batch just started.
     std::function<void()> onAdvanced;
-    // The queue stopped (offline, bad login, quota, disk) without finishing.
+    // A download stopped and needs the user (bad login, quota, disk, gave up).
     std::function<void(emu::DataStop)> onStopped;
 
   private:
-    struct Pending {
-        size_t index;
-        emu::RomEntry rom;
-    };
-    struct Job;
-
-    void pump();
-    void schedule(std::shared_ptr<Job> job);
-    void finish(const std::shared_ptr<Job>& job, const emu::DataOutcome& outcome);
-    void reset();
-    static void work(std::shared_ptr<Job> job);
+    void adoptRunning();
+    void dropHeld();
+    void handle(const DlEvent& event);
+    void finishOne(const std::string& id);
+    std::optional<size_t> indexOf(const std::string& id) const;
 
     const emu::Console* console_;
-    emu::ConsolePaths paths_;
-    const emu::GameDb* db_;
+    std::string prefix_;  // of this console's task ids
+    int token_ = 0;
 
-    std::deque<Pending> pending_;
-    std::optional<size_t> current_;
+    std::vector<std::string> names_;
+    std::map<std::string, size_t> indexByName_;
+    std::set<std::string> active_;  // ids waiting or downloading
+    std::optional<std::string> currentId_;
     size_t total_ = 0;
     size_t done_ = 0;
-    std::shared_ptr<std::atomic<bool>> stop_;
-    std::shared_ptr<bool> alive_;
+    // Set while a ScreenScraper block was lifted in this pass of the UI loop.
+    std::shared_ptr<bool> unblocked_ = std::make_shared<bool>(false);
 };

@@ -66,6 +66,11 @@ class ShelfItem {
   public:
     virtual ~ShelfItem() = default;
     virtual bool frameless() const { return false; }
+    // 0 to 1 while the shelf enters this item (it slides aside and the
+    // panel opens next to it); 0 for the others. Set before each draw.
+    // area: the free space beside the panel, in screen coordinates, that the
+    // opened item may fill; empty when the shelf was given none.
+    virtual void setEntered(float /*amount*/, const brls::Rect& /*area*/) {}
 };
 
 class CoverCarousel : public brls::Box {
@@ -94,7 +99,8 @@ class CoverCarousel : public brls::Box {
 
     // "Entering" the focused item: it moves offsetX away from the centre
     // and settles at its normal size, the others fly off to the sides.
-    void setEntered(bool entered, float offsetX = 0);
+    // area is handed to the item (ShelfItem::setEntered).
+    void setEntered(bool entered, float offsetX = 0, brls::Rect area = {});
     bool isEntered() const { return entered; }
 
   private:
@@ -105,6 +111,7 @@ class CoverCarousel : public brls::Box {
     bool focused = false;
     bool entered = false;
     float enterOffset = 0;
+    brls::Rect enterArea;
     brls::Animatable position = 0.0f;
     brls::Animatable focusGlow = 0.0f;
     brls::Animatable enter = 0.0f;

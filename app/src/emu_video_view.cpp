@@ -44,7 +44,8 @@ class EmuVideoView : public Box {
   public:
     EmuVideoView(const emu::Console& console, const emu::ConsolePaths& paths)
         : Box(Axis::COLUMN), path(emu::videoDefaultsPath(paths)),
-          current(emu::readVideoDefaults(path)) {
+          current(emu::readVideoDefaults(path,
+                                         emu::videoDefaultsFor(console))) {
         getAppletFrameItem()->title = "emu/video/title"_i18n;
         setPadding(30, 80, 30, 80);
 

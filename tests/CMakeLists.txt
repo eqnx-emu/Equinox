@@ -69,6 +69,7 @@ add_executable(test_emu_installer
     test_emu_installer.cpp
     "${MOONLIGHT_ROOT}/app/src/utils/emu/RunnerInstaller.cpp"
     "${MOONLIGHT_ROOT}/app/src/utils/emu/ReplaceFile.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/ResumeState.cpp"
     "${MOONLIGHT_ROOT}/app/src/utils/emu/RunnerManifest.cpp"
     "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp")
 target_include_directories(test_emu_installer PRIVATE
@@ -148,6 +149,16 @@ target_include_directories(test_emu_screenscraper PRIVATE
     "${MOONLIGHT_ROOT}/extern")
 target_link_libraries(test_emu_screenscraper PRIVATE ${JANSSON_LIB})
 
+add_executable(test_emu_steamgriddb
+    test_emu_steamgriddb.cpp
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/SteamGridDb.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/CoverName.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp")
+target_include_directories(test_emu_steamgriddb PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
+target_link_libraries(test_emu_steamgriddb PRIVATE ${JANSSON_LIB})
+
 add_executable(test_emu_library
     test_emu_library.cpp
     "${MOONLIGHT_ROOT}/app/src/utils/emu/Library.cpp")
@@ -164,10 +175,13 @@ add_executable(test_emu_gamedata
     "${MOONLIGHT_ROOT}/app/src/utils/emu/CoverStore.cpp"
     "${MOONLIGHT_ROOT}/app/src/utils/emu/GameMeta.cpp"
     "${MOONLIGHT_ROOT}/app/src/utils/emu/ScreenScraper.cpp"
-    "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp")
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/SevenZip.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp"
+    ${LZMA_SRC})
 target_include_directories(test_emu_gamedata PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
-    "${MOONLIGHT_ROOT}/extern")
+    "${MOONLIGHT_ROOT}/extern"
+    "${MOONLIGHT_ROOT}/extern/lzma")
 target_link_libraries(test_emu_gamedata PRIVATE ${JANSSON_LIB} ${Z_LIB})
 
 add_executable(test_emu_video
@@ -181,3 +195,37 @@ target_include_directories(test_emu_video PRIVATE
 target_link_libraries(test_emu_video PRIVATE ${JANSSON_LIB})
 target_compile_definitions(test_emu_video PRIVATE
     EQX_I18N_DIR="${MOONLIGHT_ROOT}/resources/i18n")
+
+add_executable(test_emu_downloads
+    test_emu_downloads.cpp
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/DownloadQueue.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/DownloadStore.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/ResumeState.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/ReplaceFile.cpp")
+target_include_directories(test_emu_downloads PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
+target_link_libraries(test_emu_downloads PRIVATE ${JANSSON_LIB})
+
+add_executable(test_updater
+    test_updater.cpp
+    "${MOONLIGHT_ROOT}/app/src/utils/UpdateStage.cpp")
+target_include_directories(test_updater PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
+
+find_library(CURL_LIB curl)
+if(CURL_LIB)
+    add_executable(test_http_resumable
+        test_http_resumable.cpp
+        "${MOONLIGHT_ROOT}/app/src/utils/HttpDownload.cpp"
+        "${MOONLIGHT_ROOT}/app/src/utils/emu/ResumeState.cpp")
+    target_include_directories(test_http_resumable PRIVATE
+        "${MOONLIGHT_ROOT}/app/src/utils"
+        "${MOONLIGHT_ROOT}/extern")
+    target_compile_definitions(test_http_resumable PRIVATE APP_VERSION="test")
+    target_link_libraries(test_http_resumable PRIVATE ${CURL_LIB} ${JANSSON_LIB})
+    if(WIN32)
+        target_link_libraries(test_http_resumable PRIVATE ws2_32)
+    endif()
+endif()

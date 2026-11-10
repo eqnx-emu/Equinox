@@ -9,7 +9,7 @@
 #include "forwarder_maker.hpp"
 #include "helper.hpp"
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
 #include "console_shelf_view.hpp"
 #include "emu/CoverName.hpp"
 #include "emu/PathUtf8.hpp"
@@ -29,7 +29,7 @@ using namespace brls;
 using namespace brls::literals;
 
 namespace {
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
 bool fileExists(const std::string& path) {
     std::error_code ec;
     return std::filesystem::is_regular_file(emu::fromUtf8(path), ec);
@@ -90,7 +90,7 @@ void FavoritesView::setup(int hostIndex, const std::string& console) {
             filters.end())
         filter = hostIndex;
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     for (const emu::Console& c : emu::consoles())
         if (hasLocalFavorites(c.slug))
             consoleFilters.push_back(c.slug);
@@ -247,7 +247,7 @@ void FavoritesView::updateChips() {
     addChip("favorites/all"_i18n, -1, "");
     for (size_t index : filters)
         addChip(hosts[index].hostname, (int)index, "");
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     for (const std::string& slug : consoleFilters)
         if (const emu::Console* console = emu::findConsole(slug))
             addChip(console->name, -1, slug);
@@ -336,7 +336,7 @@ void FavoritesView::rebuild(int selectIndex) {
         }
     }
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     // Then the console games, under "all" or their console's chip. Only the
     // covers already on the SD card show: the shelf downloads them.
     for (const LocalFavorite& favorite : Settings::instance().local_favorites()) {
@@ -474,7 +474,7 @@ void FavoritesView::onSelected(int index) {
         return;
     dots->setState(entries.size(), index);
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     if (const auto* local = std::get_if<LocalEntry>(&entries[index])) {
         title->setText(local->favorite.title);
         meta->setText(local->missing ? local->console->name + "  ·  " +
@@ -501,7 +501,7 @@ void FavoritesView::onSelected(int index) {
 }
 
 void FavoritesView::play(int index) {
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     if (launching || index < 0 || index >= (int)entries.size())
         return;
     const auto* local = std::get_if<LocalEntry>(&entries[index]);
@@ -554,7 +554,7 @@ void FavoritesView::unstar(int index) {
     if (index < 0 || index >= (int)entries.size())
         return;
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     if (const auto* local = std::get_if<LocalEntry>(&entries[index])) {
         const LocalFavorite favorite = local->favorite;
         Settings::instance().toggle_local_favorite(favorite);

@@ -61,14 +61,16 @@ struct Fixture {
     GameDb db;
     FakeTransport net;
 
-    explicit Fixture(const char* name, const std::string& title = "Test Game") {
+    explicit Fixture(const char* name, const std::string& title = "Test Game",
+                     const char* slug = "snes", const char* ext = ".sfc")
+        : console(findConsole(slug)) {
         root = fs::temp_directory_path() / name;
         fs::remove_all(root);
         fs::create_directories(root);
         req.console = console;
         req.paths = pathsFor(*console, toUtf8(root));
         REQUIRE(ensureFolders(req.paths));
-        req.rom.fileName = title + ".sfc";
+        req.rom.fileName = title + ext;
         req.rom.title = title;
         req.rom.path = req.paths.roms + "/" + req.rom.fileName;
         std::ofstream(fromUtf8(req.rom.path), std::ios::binary) << "123456789";
@@ -152,6 +154,24 @@ TEST_CASE("unknown rom still gets images by file name") {
     CHECK(out.meta.title == PartState::Ok);
     CHECK(f.net.requested.front().find("Plain%20Name") != std::string::npos);
     CHECK(f.net.requested.front().find("Test%20Game") == std::string::npos);
+}
+
+TEST_CASE("a PlayStation disc is not hashed: images and facts by file name") {
+    // "123456789" is the crc the database knows; a disc must not be read to find it.
+    Fixture f("equinox_gamedata_ps1", "Test Game", "ps1", ".cue");
+    f.serve(ThumbKind::Snap, "Test Game");
+    f.serve(ThumbKind::Title, "Test Game");
+
+    const DataOutcome out = f.run();
+    CHECK(out.complete);
+    CHECK_FALSE(out.meta.identified);
+    CHECK(out.meta.crc == 0);
+    CHECK(out.meta.snap == PartState::Ok);
+    CHECK(out.meta.title == PartState::Ok);
+    CHECK(out.meta.synopsis == PartState::Ok);
+    CHECK(f.net.asked("systemeid=57"));
+    CHECK_FALSE(f.net.asked("crc="));
+    CHECK(f.net.asked("romnom=Test%20Game.cue"));
 }
 
 TEST_CASE("no snap anywhere") {
@@ -289,4 +309,41 @@ TEST_CASE("falls back to the file name when the canonical name has no image") {
     CHECK(out.complete);
     CHECK(out.meta.snap == PartState::Ok);
     CHECK(f.net.requested.size() >= 2);
+}
+
+TEST_CASE("screenscraper fills the facts and the images libretro lacks") {
+    Fixture f("equinox_gamedata_ssmedia");
+    f.serve(ThumbKind::Title, "Test Game (USA)");
+    f.net.api.content =
+        R"({"response":{"jeu":{"synopsis":[{"langue":"pt","text":"Sinopse"}],)"
+        R"("developpeur":{"text":"SS Dev"},"joueurs":{"text":"1-4"},)"
+        R"("medias":[{"type":"ss","region":"us","format":"png","url":"https://ss.example/snap"},)"
+        R"({"type":"box-2D","region":"us","format":"png","url":"https://ss.example/box"}]}}})";
+    f.net.files["https://ss.example/snap"] = {FetchResult::Ok, kPng};
+    f.net.files["https://ss.example/box"] = {FetchResult::Ok, kPng};
+
+    const DataOutcome out = f.run();
+    CHECK(out.complete);
+    CHECK(out.meta.developer == "SS Dev");
+    CHECK(out.meta.players == 4);
+    CHECK(out.meta.snap == PartState::Ok);
+    CHECK(f.exists(thumbPath(f.req.paths, ThumbKind::Snap, "Test Game")));
+    CHECK(f.exists(coverPath(f.req.paths, "Test Game")));
+    CHECK_FALSE(f.partLeft());
+
+    GameMeta saved;
+    REQUIRE(loadMeta(metaPath(f.req.paths, "Test Game"), saved));
+    CHECK(saved.developer == "SS Dev");
+    CHECK(saved.players == 4);
+}
+
+TEST_CASE("a screenscraper image that is not an image stays missing") {
+    Fixture f("equinox_gamedata_ssbadmedia");
+    f.net.api.content =
+        R"({"response":{"jeu":{"medias":[{"type":"ss","region":"us","format":"png","url":"https://ss.example/snap"}]}}})";
+    f.net.files["https://ss.example/snap"] = {FetchResult::Ok, "<html>"};
+    const DataOutcome out = f.run();
+    CHECK(out.complete);
+    CHECK(out.meta.snap == PartState::Missing);
+    CHECK_FALSE(f.exists(thumbPath(f.req.paths, ThumbKind::Snap, "Test Game")));
 }

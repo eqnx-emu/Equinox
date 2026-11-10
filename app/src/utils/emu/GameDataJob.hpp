@@ -43,7 +43,9 @@ struct DataOutcome {
     GameMeta meta;
 };
 
-// Identifies the ROM, then downloads its snap, title screen and synopsis. The
+// Identifies the ROM, then downloads its snap and title screen from libretro.
+// With a ScreenScraper account it then takes the synopsis and the facts, and
+// the snap, title screen and cover that libretro does not have. The
 // meta file is written only when every step has been decided; when the job
 // stops, what was already downloaded stays but no meta is written.
 // `onStep` runs on entering each step except Done; returning false cancels.

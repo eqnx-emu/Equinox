@@ -1,5 +1,7 @@
 #include "emu/CoverStore.hpp"
 
+#include <cstdint>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -52,6 +54,27 @@ bool looksLikePng(const std::string& path) {
     for (int i = 0; i < 8; ++i)
         if (head[i] != signature[i]) return false;
     return true;
+}
+
+bool looksLikeImage(const std::string& path) {
+    if (looksLikePng(path)) return true;
+    std::ifstream file(fromUtf8(path), std::ios::binary);
+    unsigned char head[3] = {};
+    if (!file.read(reinterpret_cast<char*>(head), sizeof(head))) return false;
+    return head[0] == 0xFF && head[1] == 0xD8 && head[2] == 0xFF;
+}
+
+std::string coverLookVersion(const std::string& appVersion, const std::string& sgdbKey) {
+    if (sgdbKey.empty()) return appVersion;
+    // A short FNV-1a of the key: tells keys apart without writing the key down.
+    uint32_t hash = 2166136261u;
+    for (unsigned char c : sgdbKey) {
+        hash ^= c;
+        hash *= 16777619u;
+    }
+    char tag[16];
+    std::snprintf(tag, sizeof tag, "%08x", hash);
+    return appVersion + "+sgdb-" + tag;
 }
 
 bool replaceFile(const std::string& from, const std::string& to) {

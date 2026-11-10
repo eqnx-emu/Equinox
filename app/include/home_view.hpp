@@ -22,6 +22,8 @@
 #include <string>
 #include <vector>
 
+class DownloadIndicator;
+
 // A box drawn scaled, shifted and faded as a whole (zoom between shelves,
 // the options panel sliding in). Touch areas do not follow the transform,
 // so it is only used for short transitions and fully shown/hidden states.
@@ -45,7 +47,7 @@ class MotionBox : public brls::Box {
     brls::Animatable shiftX = 0.0f;
 };
 
-enum class HomeCardKind { PCS, FAVORITES, SETTINGS, ABOUT };
+enum class HomeCardKind { PCS, FAVORITES, DOWNLOADS, SETTINGS, ABOUT };
 
 // One card of the home shelf: an illustration, the name and a status line.
 // A card with a 3D object (img/3d/home-<kind>.png) has no card around it:
@@ -88,7 +90,8 @@ class HomeView : public brls::Box {
     void willAppear(bool resetState) override;
     void draw(NVGcontext* vg, float x, float y, float width, float height,
               brls::Style style, brls::FrameContext* ctx) override;
-    // Focus never leaves the screen's own shelves and panel by direction.
+    // Focus never leaves the screen's own shelves and panel by direction,
+    // but for up from a shelf to the downloads indicator while it shows.
     brls::View* getNextFocus(brls::FocusDirection direction,
                              brls::View* currentView) override;
     brls::View* getDefaultFocus() override;
@@ -107,6 +110,8 @@ class HomeView : public brls::Box {
 
     // Opens a settings group ("video", "system", ...) over the home screen.
     static void openSettings(const std::string& group);
+    // The downloads screen, over the home screen. Switch only.
+    static void openDownloads();
 
     // PCs were renamed or removed: rebuild the PC shelf.
     static void hostsChanged();
@@ -125,6 +130,9 @@ class HomeView : public brls::Box {
     bool entered = false;
 
     brls::Box* header = nullptr;
+    // Says something downloads; empty while nothing does. Switch only.
+    DownloadIndicator* downloadBadge = nullptr;
+    std::string downloadsStatus; // the downloads card's line, empty when idle
     MotionBox* homeLayer = nullptr;
     MotionBox* pcLayer = nullptr;
     MotionBox* panel = nullptr;
@@ -180,9 +188,15 @@ class HomeView : public brls::Box {
     std::vector<HomeOption> hostOptions(HostCard* card);
     std::vector<HomeOption> consoleOptions(ConsoleCard* card);
 
-    // Downloads and installs (or updates) the console's emulator.
+    // Downloads and installs (or updates) the console's emulator, as a
+    // DownloadService task the dialog shows; it goes on in the background
+    // once the user leaves the dialog.
     void installConsole(const emu::Console& console);
-    void consoleInstalled(const emu::Console& console, bool first);
+    // background: the user left the dialog, so the shelf is not opened.
+    void consoleInstalled(const emu::Console& console, bool first,
+                          bool background);
+    // Handles the emulator tasks' events for as long as the app runs.
+    static void watchRunnerTasks();
     // Re-reads the installed version and the games, with the latest
     // manifest seen.
     void refreshConsole(const emu::Console& console);

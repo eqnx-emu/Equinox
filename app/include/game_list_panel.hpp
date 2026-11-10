@@ -3,7 +3,8 @@
 //  Equinox
 //
 //  The left column of the game library: console name and count, the cartridge
-//  or list toggle, search, sort, the games, and the "download all" area.
+//  or list toggle, the games, and the download progress area. Search (in
+//  the footer), sort and download all are shortcuts and in More options.
 //
 
 #pragma once
@@ -14,6 +15,7 @@
 #include "game_row_cell.hpp"
 #include <borealis.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -48,7 +50,8 @@ class GameListPanel : public brls::Box {
     void refreshRow(size_t index);
     void refreshRows();
     std::function<void(GameRowCell&, size_t)> bindRow;
-    // 0 cartridge for the picked game and names for the rest, 1 list with thumbnails.
+    // 0 cartridges, three at a time: the picked game big, the one above and
+    // the one below smaller beside their names. 1 list of names.
     void setLook(int view);
     // The count line says the folder is being read.
     void setScanning(bool on);
@@ -64,8 +67,18 @@ class GameListPanel : public brls::Box {
 
     // Index in the items given to setItems of the focused game, if any.
     std::optional<size_t> focusedIndex() const;
+    // The items shown within `radius` places of that item, in display order:
+    // `radius` before it and `radius` from it on. Empty when it is not shown.
+    std::vector<size_t> itemsAround(size_t index, size_t radius) const {
+        if (index >= shownAt.size() || shownAt[index] >= shown.size())
+            return {};
+        const size_t place = shownAt[index];
+        const size_t from = place > radius ? place - radius : 0;
+        const size_t to = std::min(place + radius, shown.size());
+        return std::vector<size_t>(shown.begin() + from, shown.begin() + to);
+    }
     // Focuses that game's row; when the filter hides it, the first result;
-    // with no result, the search field.
+    // with no result, the mode toggle.
     void focusGame(size_t index);
 
     // Keeps the shortcuts but takes them off the footer, for a screen that
@@ -103,10 +116,17 @@ class GameListPanel : public brls::Box {
     bool windowDirty = true;
     bool orderHeld = false;
     bool orderStale = false; // setItem changed the order while it was held
-    std::optional<size_t> current; // the cartridge, even while the search has focus
+    std::optional<size_t> current; // the cartridge, even while the mode toggle has focus
     std::string query;
     int sort = 0;
     int mode = 0;
+    // Mode 0: the picked game's row and its neighbours' rows, so that the
+    // three fill the column.
+    float cartRow = GameRowCell::CartridgeHeight;
+    float tapeRow = GameRowCell::TapeHeight;
+    float step() const;  // from one row's top to the next one's, without the cartridge
+    float extra() const; // what the cartridge's row adds
+    void applySizes();
     unsigned recenterToken = 0;
     bool restoringFocus = false;
     bool scanning = false;
@@ -120,26 +140,21 @@ class GameListPanel : public brls::Box {
 
     std::string consoleName;
     brls::Label* countLabel = nullptr;
+    brls::Box* pageRow = nullptr; // L, "Page X of Y", R; hidden with a single page
+    brls::Label* pageLabel = nullptr;
+    brls::Label* pagePrevKey = nullptr;
+    brls::Label* pageNextKey = nullptr;
+    size_t shownPageSize = 0;
     brls::Box* cartButton = nullptr;
     brls::Box* listButton = nullptr;
     brls::Label* cartIcon = nullptr;
     brls::Label* listIcon = nullptr;
-    brls::Box* searchBox = nullptr;
-    brls::Label* searchIcon = nullptr;
-    brls::Label* searchLabel = nullptr;
-    brls::Box* sortBox = nullptr;
-    brls::Label* sortLabel = nullptr;
-    brls::Label* sortArrow = nullptr;
     LibraryScroll* scroll = nullptr;
     brls::Box* list = nullptr;
     brls::Label* noneLabel = nullptr;
 
     brls::Rectangle* separator = nullptr;
     brls::Box* footer = nullptr;
-    brls::Box* idleRow = nullptr;
-    brls::Label* idleIcon = nullptr;
-    brls::Label* idleMissing = nullptr;
-    brls::Label* doneLabel = nullptr;
     brls::Box* stoppedRow = nullptr;
     brls::Label* stoppedLabel = nullptr;
     brls::Button* retryButton = nullptr;
@@ -151,8 +166,13 @@ class GameListPanel : public brls::Box {
 
     void applyColors();
     void applyCount();
-    void applyQuery();
-    void applySort();
+    // Games per page in the current view, the focused game's place, and the
+    // page line that follows them.
+    size_t pageSize() const;
+    size_t currentPlace() const;
+    void applyPage();
+    // Moves the focus to the first game of the next (1) or previous (-1) page.
+    void turnPage(int direction);
     void applyToggle();
     void applyBatch();
     void registerShortcuts(bool hidden);

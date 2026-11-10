@@ -55,6 +55,32 @@ PartState fetchThumb(const GameDataRequest& req, DataTransport& transport, Thumb
     return PartState::Missing;
 }
 
+// One ScreenScraper media into `dest`. Missing when the file is not an image.
+PartState fetchMedia(DataTransport& transport, const std::string& url, const std::string& dest,
+                     DataStop& stop) {
+    if (url.empty()) return PartState::Missing;
+    const std::string part = dest + ".part";
+    const FetchResult result = transport.toFile(url, part);
+    if (failed(result)) {
+        removeFile(part);
+        stop = stopFor(result);
+        return PartState::Unknown;
+    }
+    if (result == FetchResult::Ok && looksLikeImage(part)) {
+        if (replaceFile(part, dest)) return PartState::Ok;
+        removeFile(part);
+        stop = DataStop::Disk;
+        return PartState::Unknown;
+    }
+    removeFile(part);
+    return PartState::Missing;
+}
+
+bool fileExists(const std::string& path) {
+    std::error_code ec;
+    return fs::is_regular_file(fromUtf8(path), ec);
+}
+
 }  // namespace
 
 float stepProgress(DataStep step) {
@@ -81,7 +107,8 @@ DataOutcome fetchGameData(const GameDataRequest& req, DataTransport& transport,
     if (!enter(DataStep::Identify)) return out;
     romStat(req.rom.path, meta.size, meta.mtime);
     std::string error;
-    if (romCrc32(req.rom.path, *req.console, meta.crc, error) && req.db) {
+    if (hashesRoms(*req.console) && romCrc32(req.rom.path, *req.console, meta.crc, error) &&
+        req.db) {
         if (const GameInfo* info = req.db->find(meta.crc)) {
             meta.identified = true;
             meta.canonical = info->name;
@@ -117,11 +144,33 @@ DataOutcome fetchGameData(const GameDataRequest& req, DataTransport& transport,
                 meta.synopsisText = parsed.synopsis;
                 meta.synopsisLang = parsed.lang;
                 meta.synopsis = parsed.synopsis.empty() ? PartState::Missing : PartState::Ok;
+                meta.genre = parsed.genre;
+                meta.developer = parsed.developer;
+                meta.publisher = parsed.publisher;
+                meta.players = parsed.players;
+                meta.year = parsed.year;
                 break;
             case SsStatus::NotFound: meta.synopsis = PartState::Missing; break;
             case SsStatus::BadLogin: out.stop = DataStop::BadLogin; return out;
             case SsStatus::Quota: out.stop = DataStop::Quota; return out;
             case SsStatus::Transient: out.stop = DataStop::Offline; return out;
+        }
+        // The images libretro does not have, and the cover when there is none yet.
+        if (meta.snap == PartState::Missing) {
+            meta.snap = fetchMedia(transport, parsed.snapUrl,
+                                   thumbPath(req.paths, ThumbKind::Snap, req.rom.title), out.stop);
+            if (out.stop != DataStop::None) return out;
+        }
+        if (meta.title == PartState::Missing) {
+            meta.title = fetchMedia(transport, parsed.titleUrl,
+                                    thumbPath(req.paths, ThumbKind::Title, req.rom.title), out.stop);
+            if (out.stop != DataStop::None) return out;
+        }
+        const std::string cover = coverPath(req.paths, req.rom.title);
+        if (!parsed.boxUrl.empty() && !fileExists(cover)) {
+            if (fetchMedia(transport, parsed.boxUrl, cover, out.stop) == PartState::Ok)
+                clearCoverMiss(req.paths, req.rom.title);
+            if (out.stop != DataStop::None) return out;
         }
     }
 

@@ -103,6 +103,7 @@
     },
     "common": {
         "cancel": "Cancel",
+        "continue_background": "Continue in background",
         "close": "Close",
         "confirm": "Confirm",
         "edit": "Edit",
@@ -211,7 +212,12 @@
         "screenscraper": "ScreenScraper",
         "screenscraper_user": "User",
         "screenscraper_password": "Password",
-        "screenscraper_note": "Only used to download synopses. Create the account at screenscraper.fr.",
+        "screenscraper_note": "Downloads the synopsis, the details and the images libretro lacks. Create the account at screenscraper.fr.",
+        "screenscraper_no_dev": "This build has no ScreenScraper developer key: the account is saved but not used yet. Create the account at screenscraper.fr.",
+        "steamgriddb": "SteamGridDB",
+        "steamgriddb_key": "API key",
+        "steamgriddb_refused": "Key refused",
+        "steamgriddb_note": "Only used for the covers libretro lacks. Get the key at steamgriddb.com → Preferences → API.",
         "show_metrics": "Show stream metrics",
         "metric_fps": "FPS",
         "metric_latency": "Latency (ms)",
@@ -363,14 +369,17 @@
     "update": {
         "title": "Updates",
         "check_now": "Check for updates now",
-        "available": "Equinox {} is available (you have {}).\n\nDownload and install it now? Equinox will restart.",
+        "available": "Equinox {} is available (you have {}).\n\nDownload it now? It downloads in the background, and Equinox asks before restarting.",
         "later": "Later",
         "install": "Update",
-        "downloading": "Downloading update...",
-        "installed": "Equinox {} is installed. Equinox will now restart.",
+        "downloading": "Downloading the update in the background...",
+        "downloading_percent": "Downloading the update: {}%",
+        "ready": "Equinox {} is downloaded. Restart now to install it?",
+        "restart_now": "Restart now",
         "failed": "The update failed.",
         "up_to_date": "Equinox is up to date.",
-        "unsupported": "Updates only work when Equinox is launched as an NRO from the SD card."
+        "unsupported": "Updates only work when Equinox is launched as an NRO from the SD card.",
+        "disk": "The SD card is full. Free some space, then try the update again."
     },
     "title": "Equinox",
     "hosts": {
@@ -431,6 +440,7 @@
         "fav_empty": "No favorites yet",
         "fav_empty_detail": "Star games in a library with Y",
         "fav_all": "All favorites",
+        "downloads_detail": "Covers, game data, emulators and updates",
         "settings_detail": "Stream quality, controls and system",
         "about_status": "Version {}",
         "about_detail": "Streaming client for the Solstice host",
@@ -476,8 +486,11 @@
         "install_error": "Could not install {}.\n\n{}",
         "updated": "Emulator updated",
         "up_to_date": "The emulator is up to date",
+        "installed_background": "{} is ready to play",
         "decimal_separator": ".",
         "error_network": "Could not download it. Check the internet connection.",
+        "error_disk": "Could not save the emulator. The SD card may be full.",
+        "retrying": "No connection. Trying again…",
         "error_manifest": "The emulator list on the server is invalid. Try again later.",
         "error_console": "The server sent an emulator for another console. Try again later.",
         "error_folders": "Could not create the folders in sdmc:/equinox. Check the SD card.",
@@ -537,6 +550,9 @@
             "count_one": "1 game",
             "count_many": "{} games",
             "count_filtered": "{} of {}",
+            "page": "Page {} of {}",
+            "page_prev": "Previous page",
+            "page_next": "Next page",
             "search": "Search by name",
             "none": "No game with “{}”",
             "sort_title": "Sort by",
@@ -544,8 +560,6 @@
             "hint_sort": "Sort",
             "hint_search": "Search",
             "download_all": "Download all",
-            "missing": "{} without data",
-            "done": "All games have data.",
             "running": "Downloading {} of {} · {}%",
             "stopped": "Stopped: {} What was already downloaded is saved."
         },
@@ -568,7 +582,7 @@
             "step_identify": "Identifying the game",
             "step_snap": "Downloading the screenshot",
             "step_title": "Downloading the title screen",
-            "step_synopsis": "Downloading the synopsis",
+            "step_synopsis": "Downloading the synopsis and details",
             "step_done": "Finishing",
             "snap_placeholder": "Gameplay screenshot",
             "snap_missing": "No screenshot on libretro",
@@ -579,6 +593,9 @@
             "synopsis": "Synopsis",
             "synopsis_empty": "No synopsis for this game.",
             "synopsis_none": "No synopsis yet. Download this game's data to see the synopsis, the details and the images.",
+            "no_data": "Nothing downloaded for this game yet. Its screenshots, details and synopsis show up after downloading its data.",
+            "players_one": "1 player",
+            "players_many": "{} players",
             "sources": "Sources: libretro, libretro-database, ScreenScraper",
             "sources_free": "Sources: libretro, libretro-database"
         },
@@ -612,5 +629,72 @@
             "Spain": "Spain",
             "Italy": "Italy"
         }
+    },
+    "downloads": {
+        "title": "Downloads",
+        "open": "Open downloads",
+        "select": "Select",
+        "row": "{} · {}",
+        "kind": {
+            "cover": "Covers",
+            "game_data": "Game data",
+            "runner": "Emulator",
+            "app_update": "Equinox update",
+            "media": "Media"
+        },
+        "unit": {
+            "cover": "covers",
+            "cover_one": "cover",
+            "game_data": "games",
+            "game_data_one": "game",
+            "media": "items",
+            "media_one": "item"
+        },
+        "state": {
+            "running": "Downloading",
+            "queued": "Waiting its turn",
+            "held": "On hold",
+            "paused": "Paused",
+            "failed": "Failed"
+        },
+        "short": {
+            "queued": "queued",
+            "quota": "quota",
+            "login": "login",
+            "paused": "paused",
+            "failed": "failed"
+        },
+        "summary_running": "{} downloading",
+        "summary_paused": "{} paused",
+        "summary_paused_one": "{} paused",
+        "percent": "{}%",
+        "progress": "{} of {} {}",
+        "amount": "{} {}",
+        "tile": {
+            "now": "Now",
+            "left": "Left",
+            "failed": "Failed"
+        },
+        "action": {
+            "pause": "Pause",
+            "resume": "Resume",
+            "retry_failed": "Retry {} failed",
+            "retry_one": "Retry the failed one",
+            "cancel": "Cancel"
+        },
+        "cancel_message": "Cancel the downloads of {}?",
+        "cancel_update_message": "Cancel the Equinox update?",
+        "keep": "Keep downloading",
+        "pause_all": "Pause all",
+        "resume_all": "Resume all",
+        "empty_title": "Nothing downloading",
+        "empty_body": "Covers, game data, emulators and app updates show up here while they download. They start when you add a console, or from Download all in a console's games.",
+        "login_notice": "ScreenScraper refused your login, so game data is on hold. Check your account in Settings.",
+        "quota_notice": "ScreenScraper's daily limit was reached, so game data is on hold until {}.",
+        "quota_today": "today at {}",
+        "quota_tomorrow": "tomorrow at {}",
+        "try_now": "Try now",
+        "disk_notice": "SD card full — free space, then Resume all",
+        "disk_paused": "Downloads paused: the SD card is full. Free some space, then resume them in Downloads."
     }
 }

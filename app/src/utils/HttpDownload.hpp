@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <vector>
 
 // HTTPS GET over curl: verified TLS (romfs CA bundle on Switch, the system
 // store elsewhere), redirects followed, HTTP errors treated as failures.
@@ -20,6 +21,12 @@ bool httpGetToString(const std::string& url, std::string& out, long timeoutSec,
 bool httpGetToString(const std::string& url, std::string& out, long timeoutSec,
                      const Progress& progress, std::string& error, long& httpStatus);
 
+// Same, with extra request headers ("Name: value"). curl drops them when a
+// redirect leaves the host, so a key sent to an API does not reach a CDN.
+bool httpGetToString(const std::string& url, std::string& out, long timeoutSec,
+                     const Progress& progress, std::string& error, long& httpStatus,
+                     const std::vector<std::string>& headers);
+
 // Writes the body to `path`. On failure the partial file is left for the
 // caller to remove.
 bool httpGetToFile(const std::string& url, const std::string& path, long timeoutSec,
@@ -35,3 +42,21 @@ bool httpGetToFile(const std::string& url, const std::string& path, long timeout
 bool httpGetToFile(const std::string& url, const std::string& path, long timeoutSec,
                    const Progress& progress, std::string& error, long& httpStatus,
                    bool& writeFailed);
+
+struct ResumableResult {
+    bool ok;
+    bool writeFailed;  // the .part could not be opened or written, or the disk is too small
+    bool restarted;    // the server resent the whole file, so the .part began again
+    long status;       // HTTP status, 0 when there was no answer
+    std::string error;
+};
+
+// Downloads `url` into `partPath`, continuing a previous attempt when the
+// control file `<partPath>.resume` still matches (same URL, same validator).
+// There is no total timeout: the transfer fails after 30 s below 1 KiB/s.
+// `progress` counts bytes from the start of the file, not of this attempt. On
+// a network failure or a cancel the `.part` and control file stay for the next
+// attempt; the caller removes them after a failed validation or a user cancel.
+// HTTP 416 removes both. Success removes the control file only.
+ResumableResult httpGetResumable(const std::string& url, const std::string& partPath,
+                                 const Progress& progress);

@@ -626,7 +626,7 @@ AddHostCard::AddHostCard(bool primary) {
     // An open slot: no fill, dashed outline drawn in draw().
     this->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
     monitor->setAddMode(primary);
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     // A PC or a console.
     name->setText("home/add_title"_i18n);
 #else
@@ -636,7 +636,7 @@ AddHostCard::AddHostCard(bool primary) {
     status->setSingleLine(false);
     status->setFontSize(14);
     status->setTextColor(themeColor("equinox/muted"));
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     status->setText("home/add_body"_i18n);
 #else
     status->setText("hosts/add_body"_i18n);
@@ -655,7 +655,7 @@ AddHostCard::AddHostCard(bool primary) {
         press([] { HomeView::showAddChoices(); });
         return true;
     });
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     updateActionHint(ControllerButton::BUTTON_A, "home/add_title"_i18n);
 #else
     updateActionHint(ControllerButton::BUTTON_A, "hosts/add_action"_i18n);

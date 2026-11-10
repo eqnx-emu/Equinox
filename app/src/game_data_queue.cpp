@@ -5,137 +5,208 @@
 
 #include "game_data_queue.hpp"
 
-#include "emu/GameDataHttp.hpp"
-#include "emu/NetGate.hpp"
-#include "emu/SsCredentials.hpp"
+#include "download_service.hpp"
 
 #include <borealis.hpp>
 
+#include <algorithm>
+#include <cmath>
+
 namespace {
-// Retry period while another download or a launch holds the network gate.
-constexpr int kBusyRetryMs = 200;
+
+emu::DataStep stepFor(float progress) {
+    switch (std::lround(progress * 4)) {
+        case 0: return emu::DataStep::Identify;
+        case 1: return emu::DataStep::Snap;
+        case 2: return emu::DataStep::Title;
+        case 3: return emu::DataStep::Synopsis;
+        default: return emu::DataStep::Done;
+    }
+}
+
+bool stoppedAll(emu::DlResult result) {
+    return result == emu::DlResult::BadLogin || result == emu::DlResult::Quota ||
+           result == emu::DlResult::Disk;
+}
+
+emu::DataStop stopFor(const DlEvent& event) {
+    if (event.data && event.data->stop != emu::DataStop::None) return event.data->stop;
+    switch (event.result) {
+        case emu::DlResult::BadLogin: return emu::DataStop::BadLogin;
+        case emu::DlResult::Quota: return emu::DataStop::Quota;
+        case emu::DlResult::Disk: return emu::DataStop::Disk;
+        default: return emu::DataStop::Offline;
+    }
+}
+
 }  // namespace
 
-struct GameDataQueue::Job {
-    size_t index;
-    emu::GameDataRequest request;
-    std::shared_ptr<std::atomic<bool>> stop;
-    std::shared_ptr<bool> alive;
-    GameDataQueue* queue = nullptr;  // only used when *alive
-};
-
-GameDataQueue::GameDataQueue(const emu::Console& console, emu::ConsolePaths paths,
-                             const emu::GameDb* db)
-    : console_(&console), paths_(std::move(paths)), db_(db),
-      stop_(std::make_shared<std::atomic<bool>>(false)), alive_(std::make_shared<bool>(true)) {}
-
-GameDataQueue::~GameDataQueue() {
-    stop_->store(true);
-    *alive_ = false;
+GameDataQueue::GameDataQueue(const emu::Console& console)
+    : console_(&console), prefix_(emu::gameDataId(console.slug, "")) {
+    token_ = DownloadService::instance().subscribe([this](const DlEvent& event) { handle(event); });
+    adoptRunning();
 }
 
-bool GameDataQueue::running() const { return current_.has_value() || !pending_.empty(); }
+GameDataQueue::~GameDataQueue() { DownloadService::instance().unsubscribe(token_); }
+
+// Tasks a host block holds back stay out, or the footer would spin forever.
+void GameDataQueue::adoptRunning() {
+    DownloadService& service = DownloadService::instance();
+    for (const emu::DlTask& task : service.snapshot()) {
+        if (task.kind != emu::DlKind::GameData || task.group != console_->slug) continue;
+        if (task.state != emu::DlState::Queued && task.state != emu::DlState::Running) continue;
+        if (service.blocked(task)) continue;
+        active_.insert(task.id);
+        if (task.state == emu::DlState::Running) currentId_ = task.id;
+    }
+    total_ = done_ + active_.size();
+}
+
+// After another console's stop: bad login, quota and a full card hold back
+// this console's tasks too, and the service sends no event for those.
+void GameDataQueue::dropHeld() {
+    DownloadService& service = DownloadService::instance();
+    std::set<std::string> live;
+    for (const emu::DlTask& task : service.snapshot()) {
+        if (task.kind != emu::DlKind::GameData || task.group != console_->slug) continue;
+        if (task.state != emu::DlState::Queued && task.state != emu::DlState::Running) continue;
+        if (!service.blocked(task)) live.insert(task.id);
+    }
+    bool dropped = false;
+    for (auto it = active_.begin(); it != active_.end();) {
+        if (live.count(*it)) {
+            ++it;
+            continue;
+        }
+        if (currentId_ == *it) currentId_.reset();
+        it = active_.erase(it);
+        dropped = true;
+    }
+    if (!dropped) return;
+    total_ = active_.empty() ? 0 : done_ + active_.size();
+    if (active_.empty()) done_ = 0;
+    if (onAdvanced) onAdvanced();
+}
+
+void GameDataQueue::setGames(std::vector<std::string> fileNames) {
+    names_ = std::move(fileNames);
+    indexByName_.clear();
+    for (size_t i = 0; i < names_.size(); i++) indexByName_[names_[i]] = i;
+}
+
+std::optional<size_t> GameDataQueue::indexOf(const std::string& id) const {
+    auto it = indexByName_.find(id.substr(prefix_.size()));
+    if (it == indexByName_.end()) return std::nullopt;
+    return it->second;
+}
+
+std::optional<size_t> GameDataQueue::current() const {
+    return currentId_ ? indexOf(*currentId_) : std::nullopt;
+}
 
 bool GameDataQueue::queued(size_t index) const {
-    if (current_ == index) return true;
-    for (const Pending& p : pending_)
-        if (p.index == index) return true;
-    return false;
+    return index < names_.size() && active_.count(prefix_ + names_[index]) > 0;
 }
 
-void GameDataQueue::enqueue(size_t index, const emu::RomEntry& rom) {
-    if (queued(index)) return;
-    pending_.push_back({index, rom});
+void GameDataQueue::enqueue(size_t index, const emu::RomEntry& rom, emu::DlPriority priority) {
+    DownloadService& service = DownloadService::instance();
+    emu::DlTask task = emu::gameDataTask(*console_, rom, priority);
+    const std::string id = task.id;
+    const bool usesSs = std::find(task.hosts.begin(), task.hosts.end(),
+                                  emu::kHostScreenScraper) != task.hosts.end();
+    // The user asked: a ScreenScraper block that holds the task is lifted for
+    // one more try, which sets it again if the server still says no. Other
+    // hosts are left as they are, but retryHost also requeues every Failed
+    // task that uses ScreenScraper, whatever its console.
+    auto unblock = [&] {
+        if (!usesSs || *unblocked_ || !service.hostBlocked(emu::kHostScreenScraper)) return;
+        *unblocked_ = true;
+        brls::sync([flag = unblocked_] { *flag = false; });
+        service.retryHost(emu::kHostScreenScraper);
+    };
+    if (active_.count(id)) {
+        // Raises the priority and, for Interactive, skips the host wait once.
+        if (priority == emu::DlPriority::Interactive) service.submit(std::move(task));
+        unblock();
+        return;
+    }
+    if (index >= names_.size()) names_.resize(index + 1);
+    names_[index] = rom.fileName;
+    indexByName_[rom.fileName] = index;
+    active_.insert(id);
     total_++;
-    if (!current_) pump();
+    if (!service.submit(std::move(task))) {
+        // Left behind by an earlier stop: this is the user asking again.
+        service.resume(id);
+        service.retry(id);
+    }
+    unblock();
 }
 
 void GameDataQueue::cancel() {
-    stop_->store(true);
-    stop_ = std::make_shared<std::atomic<bool>>(false);
-    pending_.clear();
-    current_.reset();
+    DownloadService::instance().cancelGroup(console_->slug, emu::DlKind::GameData);
+    active_.clear();
+    currentId_.reset();
     total_ = done_ = 0;
 }
 
-void GameDataQueue::reset() {
-    pending_.clear();
-    current_.reset();
-    total_ = done_ = 0;
-}
-
-// Hands the next game to the pool.
-void GameDataQueue::pump() {
-    if (current_ || pending_.empty()) return;
-    Pending next = std::move(pending_.front());
-    pending_.pop_front();
-    current_ = next.index;
-
-    auto job = std::make_shared<Job>();
-    job->index = next.index;
-    job->request = {console_, paths_, std::move(next.rom), db_, emu::appSsConfig()};
-    job->stop = stop_;
-    job->alive = alive_;
-    job->queue = this;
-    schedule(job);
-}
-
-void GameDataQueue::schedule(std::shared_ptr<Job> job) {
-    brls::async([job] { work(job); });
-}
-
-// Pool thread: one game.
-void GameDataQueue::work(std::shared_ptr<Job> job) {
-    if (job->stop->load()) return;
-    // Covers or a launch have the network: try again soon, without holding
-    // this worker.
-    if (!emu::netTryAcquire()) {
-        brls::delay(kBusyRetryMs, [job] {
-            if (*job->alive && !job->stop->load()) job->queue->schedule(job);
-        });
-        return;
-    }
-    if (job->stop->load()) {
-        emu::netRelease();
-        return;
-    }
-
-    emu::HttpDataTransport transport(job->stop);
-    const emu::DataOutcome outcome =
-        emu::fetchGameData(job->request, transport, [job](emu::DataStep step) {
-            if (job->stop->load()) return false;
-            brls::sync([job, step] {
-                if (*job->alive && !job->stop->load() && job->queue->onStep)
-                    job->queue->onStep(job->index, step);
-            });
-            return true;
-        });
-    emu::netRelease();
-
-    brls::sync([job, outcome] {
-        if (*job->alive && !job->stop->load()) job->queue->finish(job, outcome);
-    });
-}
-
-// UI thread.
-void GameDataQueue::finish(const std::shared_ptr<Job>& job, const emu::DataOutcome& outcome) {
+// `id` left the batch, counted as handled.
+void GameDataQueue::finishOne(const std::string& id) {
+    active_.erase(id);
+    if (currentId_ == id) currentId_.reset();
     done_++;
-    current_.reset();
-    const bool stopped = outcome.stop != emu::DataStop::None;
-    if (stopped) pending_.clear();
-    if (onFinished) onFinished(job->index, outcome);
-    // A callback may have cancelled, or added games.
-    if (job->stop->load()) return;
+    if (active_.empty()) total_ = done_ = 0;
+}
 
-    if (stopped) {
-        if (!current_) reset();
-        if (onStopped) onStopped(outcome.stop);
+void GameDataQueue::handle(const DlEvent& event) {
+    if (event.id.rfind(prefix_, 0) != 0) {
+        // A cover that hit a full card holds the game data back too.
+        if (stoppedAll(event.result)) dropHeld();
         return;
     }
-    if (pending_.empty() && !current_) {
-        reset();
+    if (!active_.count(event.id)) {
+        // Started without this view asking, such as after new credentials.
+        if (event.state != emu::DlState::Running) return;
+        adoptRunning();
+        if (!active_.count(event.id)) return;
+    }
+    const std::optional<size_t> index = indexOf(event.id);
+
+    if (event.state == emu::DlState::Running) {
+        const bool advanced = currentId_ != event.id;
+        currentId_ = event.id;
+        if (index && onStep) onStep(*index, stepFor(event.progress));
+        if (advanced && onAdvanced) onAdvanced();
         return;
     }
-    pump();
-    if (current_ && onAdvanced) onAdvanced();
+
+    const bool needsUser = stoppedAll(event.result) || event.state == emu::DlState::Failed;
+    if (event.state == emu::DlState::Queued && !needsUser) {
+        // Will run again: a retry after a transient failure, or a suspend.
+        if (currentId_ != event.id) return;
+        currentId_.reset();
+        if (onAdvanced) onAdvanced();
+        return;
+    }
+    if (event.state == emu::DlState::Paused && !needsUser) {
+        active_.erase(event.id);
+        if (currentId_ == event.id) currentId_.reset();
+        if (total_ > 0) total_--;
+        if (active_.empty()) total_ = done_ = 0;
+        if (onAdvanced) onAdvanced();
+        return;
+    }
+
+    // The service holds every other task back after these.
+    if (stoppedAll(event.result)) {
+        active_.clear();
+        currentId_.reset();
+        total_ = done_ = 0;
+    } else {
+        finishOne(event.id);
+    }
+
+    if (event.result == emu::DlResult::Cancelled) return;
+    if (index && onFinished) onFinished(*index, event.data.value_or(emu::DataOutcome{}));
+    if (needsUser && onStopped) onStopped(stopFor(event));
 }

@@ -30,7 +30,7 @@ bool isDialogClosing(brls::Dialog* dialog) {
 
 brls::Dialog* createLoadingDialog(
     const std::string& text, const std::function<void(void)>& onCancel,
-    brls::Label** textLabel) {
+    brls::Label** textLabel, const std::function<void()>& onBackground) {
     Style style = Application::getStyle();
     Box* holder = new Box(Axis::COLUMN);
 
@@ -55,12 +55,16 @@ brls::Dialog* createLoadingDialog(
                        style["brls/dialog/paddingLeftRight"]);
 
     auto* dialog = new Dialog(holder);
+    if (onBackground)
+        dialog->addButton("common/continue_background"_i18n,
+                          [onBackground] { onBackground(); });
     if (onCancel) {
         dialog->addButton("common/cancel"_i18n, [onCancel] { onCancel(); });
     }
     dialog->setCancelable(false);
-    dialog->setFocusable(!onCancel);
-    dialog->setHideHighlight(!onCancel);
+    const bool buttons = onCancel || onBackground;
+    dialog->setFocusable(!buttons);
+    dialog->setHideHighlight(!buttons);
     return dialog;
 }
 

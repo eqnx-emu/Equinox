@@ -3,9 +3,32 @@
 #include <filesystem>
 #include <system_error>
 
+#if defined(EQX_FAKE_EMU)
+#include <fstream>
+
+#include "emu/RunnerManifest.hpp"
+#endif
+
 namespace emu {
 
 const std::vector<Console>& consoles() {
+#if defined(EQX_FAKE_EMU)
+    // Desktop testing: a Super Nintendo whose runner is never fetched (no
+    // repo) and never opened. Covers and game data download as usual.
+    static const std::vector<Console> fake = {
+        {"snes",
+         "Super Nintendo",
+         {".sfc", ".smc", ".zip", ".7z"},
+         "Nintendo - Super Nintendo Entertainment System",
+         "",
+         1,
+         0x3a2f52,
+         0x1b1828,
+         "SNES",
+         0xb5a8e0},
+    };
+    return fake;
+#endif
     static const std::vector<Console> all = {
         {"snes",
          "Super Nintendo",
@@ -37,9 +60,22 @@ const std::vector<Console>& consoles() {
          0x0f2a2b,
          "GBC",
          0x7fd6c4},
+        // .bin and .img are the tracks a .cue lists, so they are not shown on their own.
+        {"ps1",
+         "PlayStation",
+         {".cue", ".chd", ".pbp", ".m3u", ".iso"},
+         "Sony - PlayStation",
+         "eqnx-emu/equinox-pcsx-rearmed",
+         1,
+         0x3b3e4c,
+         0x1a1b23,
+         "PS1",
+         0xc4c8d8},
     };
     return all;
 }
+
+bool hashesRoms(const Console& console) { return console.slug != "ps1"; }
 
 const Console* findConsole(const std::string& slug) {
     for (const Console& c : consoles())
@@ -73,5 +109,17 @@ bool ensureFolders(const ConsolePaths& paths) {
     }
     return ok;
 }
+
+#if defined(EQX_FAKE_EMU)
+void seedFakeConsole() {
+    for (const Console& console : consoles()) {
+        const ConsolePaths paths = pathsFor(console);
+        if (!ensureFolders(paths)) continue;
+        std::error_code ec;
+        if (!std::filesystem::exists(paths.runner, ec)) std::ofstream(paths.runner, std::ios::binary) << "fake runner";
+        if (!readInstalled(paths.installed)) writeInstalled(paths.installed, Installed{"0.0.0-fake", "", 1, 0});
+    }
+}
+#endif
 
 }  // namespace emu

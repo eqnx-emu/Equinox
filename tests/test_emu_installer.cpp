@@ -16,7 +16,9 @@ namespace fs = std::filesystem;
 namespace fake {
 std::string body;   // what a download returns
 bool fail = false;  // the transfer fails after writing the whole body
+bool writeFail = false;  // the .part cannot be written (full card)
 bool holdPart = false;  // keep the downloaded file open after the download
+long failStatus = 0;  // the HTTP status a failed transfer reports
 std::unique_ptr<std::ifstream> held;
 std::string lastUrl;
 }  // namespace fake
@@ -31,24 +33,20 @@ bool httpGetToString(const std::string& url, std::string& out, long, std::string
     return true;
 }
 
-bool httpGetToFile(const std::string& url, const std::string& path, long,
-                   const Progress& progress, std::string& error) {
+ResumableResult httpGetResumable(const std::string& url, const std::string& partPath,
+                                 const Progress& progress) {
     fake::lastUrl = url;
-    std::ofstream f(path, std::ios::binary);
+    if (fake::writeFail) return {false, true, false, 0, "could not write " + partPath};
+    std::ofstream f(partPath, std::ios::binary);
     uint64_t total = fake::body.size();
     f.write(fake::body.data(), static_cast<std::streamsize>(total / 2));
-    if (progress && !progress(total / 2, total)) {
-        error = "cancelled";
-        return false;
-    }
+    f.flush();
+    if (progress && !progress(total / 2, total)) return {false, false, false, 200, "cancelled"};
     f.write(fake::body.data() + total / 2, static_cast<std::streamsize>(total - total / 2));
-    if (fake::fail) {
-        error = "network down";
-        return false;
-    }
+    if (fake::fail) return {false, false, false, fake::failStatus, "network down"};
     f.close();
-    if (fake::holdPart) fake::held = std::make_unique<std::ifstream>(path, std::ios::binary);
-    return true;
+    if (fake::holdPart) fake::held = std::make_unique<std::ifstream>(partPath, std::ios::binary);
+    return {true, false, false, 200, {}};
 }
 
 static const char* kHelloSha = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
@@ -83,7 +81,9 @@ struct Sandbox {
         manifest.sha256 = kHelloSha;
         fake::body = "hello";
         fake::fail = false;
+        fake::writeFail = false;
         fake::holdPart = false;
+        fake::failStatus = 0;
         fake::held.reset();
         fake::lastUrl.clear();
     }
@@ -156,7 +156,7 @@ TEST_CASE("installRunner keeps the old runner when the size does not match") {
     CHECK_FALSE(fs::exists(s.paths.runner + ".part"));
 }
 
-TEST_CASE("installRunner cleans up after a failed download") {
+TEST_CASE("installRunner keeps the .part after a network failure") {
     Sandbox s;
     s.installOld();
     fake::fail = true;
@@ -166,10 +166,30 @@ TEST_CASE("installRunner cleans up after a failed download") {
     CHECK(r.code == RunnerError::Network);
     CHECK_FALSE(r.cancelled);
     CHECK(readAll(s.paths.runner) == "old");
-    CHECK_FALSE(fs::exists(s.paths.runner + ".part"));
+    // The next attempt in this session continues it.
+    CHECK(fs::exists(s.paths.runner + ".part"));
 }
 
-TEST_CASE("installRunner stops when progress cancels") {
+TEST_CASE("installRunner reports the HTTP status of a failed download") {
+    Sandbox s;
+    fake::fail = true;
+    fake::failStatus = 404;
+    InstallResult r = installRunner(s.snes, s.manifest, Progress(), s.root.string());
+    CHECK(r.code == RunnerError::Network);
+    CHECK(r.httpStatus == 404);
+}
+
+TEST_CASE("installRunner reports a full card as a disk error") {
+    Sandbox s;
+    s.installOld();
+    fake::writeFail = true;
+    InstallResult r = installRunner(s.snes, s.manifest, Progress(), s.root.string());
+    CHECK_FALSE(r.ok);
+    CHECK(r.code == RunnerError::Disk);
+    CHECK(readAll(s.paths.runner) == "old");
+}
+
+TEST_CASE("installRunner keeps the .part when stopped, and discarding removes it") {
     Sandbox s;
     s.installOld();
     InstallResult r = installRunner(
@@ -179,7 +199,13 @@ TEST_CASE("installRunner stops when progress cancels") {
     CHECK(r.code == RunnerError::Cancelled);
     CHECK(r.cancelled);
     CHECK(readAll(s.paths.runner) == "old");
+    CHECK(fs::exists(s.paths.runner + ".part"));
+
+    writeAll(s.paths.runner + ".part.resume", "{}");
+    discardRunnerDownload(s.snes, s.root.string());
     CHECK_FALSE(fs::exists(s.paths.runner + ".part"));
+    CHECK_FALSE(fs::exists(s.paths.runner + ".part.resume"));
+    CHECK(readAll(s.paths.runner) == "old");
 }
 
 TEST_CASE("installRunner clears a stale runner.bin.old") {

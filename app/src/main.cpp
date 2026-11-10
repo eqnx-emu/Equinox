@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "add_host_tab.hpp"
+#include "download_service.hpp"
 #include "bold_label.hpp"
 #include "host_card.hpp"
 #include "link_cell.hpp"
@@ -28,10 +29,12 @@
 #include "settings_tab.hpp"
 #include "app_theme.hpp"
 #include "splash_view.hpp"
+#include "Updater.hpp"
 #include "metrics_hud.hpp"
 #include "views/boolean_slider_cell.hpp"
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
+#include "downloads_view.hpp"
 #include "emu/EmuLauncher.hpp"
 #include "emu/LaunchLine.hpp"
 #endif
@@ -182,6 +185,7 @@ int main(int argc, char* argv[]) {
     auto home = Application::getPlatform()->getHomeDirectory("Moonlight-Switch");
     Settings::instance().set_working_dir(home);
     Settings::instance().set_launch_path(argc > 0 ? argv[0] : "");
+    Updater::recoverInstall();
     app_theme::apply(Settings::instance().theme());
     brls::Logger::info("Working dir, {}", home);
 
@@ -315,6 +319,10 @@ int main(int argc, char* argv[]) {
     brls::getStyle().addMetric("about/padding_sides", 75);
     brls::getStyle().addMetric("about/description_margin", 50);
 
+#if defined(EQX_FAKE_EMU)
+    emu::seedFakeConsole();
+#endif
+
     // Back from a console game: the runner passes a resume token. The home
     // screen opens straight on the console's shelf, without the splash.
     bool resuming = false;
@@ -340,11 +348,17 @@ int main(int argc, char* argv[]) {
 
     brls::Application::enableDebuggingView(Settings::instance().write_log());
 
+    DownloadService::instance().start();
+#if defined(PLATFORM_SWITCH)
+    watchDiskStops();
+#endif
+
     // Run the app.
     while (brls::Application::mainLoop()) {
     }
 
     // Exit
-    
+    DownloadService::instance().shutdown();
+
     return EXIT_SUCCESS;
 }

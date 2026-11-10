@@ -349,6 +349,23 @@
                 </brls:Box>
 
                 <brls:Header
+                    title="@i18n/settings/steamgriddb"
+                    paddingTop="60"/>
+
+                <brls:DetailCell
+                    id="steamgriddb_key"/>
+
+                <brls:Label
+                    id="steamgriddb_note"
+                    width="auto"
+                    height="auto"
+                    fontSize="15"
+                    marginLeft="16"
+                    marginRight="16"
+                    marginTop="8"
+                    marginBottom="8"/>
+
+                <brls:Header
                     title="@i18n/settings/ingame"
                     paddingTop="60"/>
 

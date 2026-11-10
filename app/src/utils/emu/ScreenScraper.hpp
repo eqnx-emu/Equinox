@@ -26,8 +26,14 @@ enum class SsStatus { Ok, NotFound, BadLogin, Quota, Transient };
 struct SsResult {
     SsStatus status = SsStatus::Transient;
     std::string synopsis, lang;
+    std::string genre, developer, publisher;
+    int players = 0;  // the most at once ("1-2" is 2)
+    int year = 0;     // the earliest release
+    // PNG or JPEG media; empty when ScreenScraper has none.
+    std::string snapUrl, titleUrl, boxUrl;
 };
-// The synopsis comes in `lang`, else English, else the first one available.
+// The synopsis and the genre come in `lang`, else English, else the first
+// one available. Media of the whole world come first, then USA, Europe, Japan.
 SsResult ssParse(long httpStatus, const std::string& body, const std::string& lang);
 
 }  // namespace emu

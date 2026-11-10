@@ -44,7 +44,7 @@ project(Moonlight)
 include(GNUInstallDirs)
 
 set(VERSION_MAJOR "1")
-set(VERSION_MINOR "10")
+set(VERSION_MINOR "11")
 set(VERSION_ALTER "0")
 set(VERSION_BUILD "7")
 set(PACKAGE_NAME "ru.xitrix.Moonlight")
@@ -264,6 +264,15 @@ endif ()
 
 if (SUPPORT_UPSCALING)
     add_definitions(-DSUPPORT_UPSCALING)
+endif ()
+
+# Emulator screens: the Switch ships them; the desktop build can show them
+# with a fake console whose games open nothing, to try the screens out.
+option(EQX_FAKE_EMU "Desktop: show the emulator screens with a fake console" ON)
+if (PLATFORM_SWITCH)
+    add_definitions(-DEQX_EMU_UI)
+elseif (EQX_FAKE_EMU)
+    add_definitions(-DEQX_EMU_UI -DEQX_FAKE_EMU)
 endif ()
 
 # Copy the MSYS2 DLLs the executable needs next to it.

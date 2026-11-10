@@ -19,6 +19,9 @@ struct GameMeta {
     std::string canonical;
     PartState snap = PartState::Unknown, title = PartState::Unknown, synopsis = PartState::Unknown;
     std::string synopsisText, synopsisLang;
+    // From ScreenScraper; libretro-database's own facts come first.
+    std::string genre, developer, publisher;
+    int players = 0, year = 0;
 };
 
 std::string metaPath(const ConsolePaths& paths, const std::string& title);  // <meta>/<title>.json
