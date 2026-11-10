@@ -587,6 +587,9 @@
             "synopsis": "Synopsis",
             "synopsis_empty": "No synopsis for this game.",
             "synopsis_none": "No synopsis yet. Download this game's data to see the synopsis, the details and the images.",
+            "no_data": "Nothing downloaded for this game yet. Its screenshots, details and synopsis show up after downloading its data.",
+            "players_one": "1 player",
+            "players_many": "{} players",
             "sources": "Sources: libretro, libretro-database, ScreenScraper",
             "sources_free": "Sources: libretro, libretro-database"
         },

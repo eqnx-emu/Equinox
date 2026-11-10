@@ -587,6 +587,9 @@
             "synopsis": "Sinopse",
             "synopsis_empty": "Sem sinopse para este jogo.",
             "synopsis_none": "Sem sinopse ainda. Baixe os dados deste jogo para ver a sinopse, a ficha e as imagens.",
+            "no_data": "Nada baixado deste jogo ainda. As imagens, a ficha e a sinopse aparecem depois de baixar os dados.",
+            "players_one": "1 jogador",
+            "players_many": "{} jogadores",
             "sources": "Fontes: libretro, libretro-database, ScreenScraper",
             "sources_free": "Fontes: libretro, libretro-database"
         },

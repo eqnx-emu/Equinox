@@ -2,8 +2,9 @@
 //  game_details_panel.hpp
 //  Equinox
 //
-//  The right-hand column of the game library: name, the download action,
-//  the gameplay and title screen images, the fact sheet and the synopsis.
+//  The right-hand column of the game library: name, genre/year/players, the
+//  download action, the gameplay screenshot beside the fact sheet and the
+//  title screen, and the synopsis. Before any download, one sentence instead.
 //
 
 #pragma once
@@ -61,6 +62,10 @@ class GameDetailsPanel : public brls::Box {
     brls::Box* content = nullptr;
     brls::Label* title = nullptr;
     brls::Label* fileLine = nullptr;
+    brls::Label* metaLine = nullptr;  // genre · year · players
+    brls::Label* emptyText = nullptr; // nothing downloaded yet
+    brls::Box* media = nullptr;       // screenshot, facts, title screen
+    brls::Box* synopsis = nullptr;
     brls::Button* downloadButton = nullptr;
     brls::Box* queuedRow = nullptr;
     brls::Label* waitingLabel = nullptr;

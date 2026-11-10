@@ -272,6 +272,12 @@ GameDetailsPanel::GameDetailsPanel() : Box(Axis::COLUMN) {
     fileLine->setShrink(0);
     content->addView(fileLine);
 
+    // Genre, year and players: the facts that say what the game is.
+    metaLine = makeLabel(16);
+    metaLine->setMarginTop(6);
+    metaLine->setShrink(0);
+    content->addView(metaLine);
+
     auto* action = new Box(Axis::COLUMN);
     action->setAlignItems(AlignItems::FLEX_START);
     action->setMarginTop(12);
@@ -330,7 +336,17 @@ GameDetailsPanel::GameDetailsPanel() : Box(Axis::COLUMN) {
     readyRow->addView(updateButton);
     action->addView(readyRow);
 
-    auto* media = new Box(Axis::ROW);
+    // Nothing downloaded yet: one sentence instead of empty frames.
+    emptyText = makeLabel(16);
+    emptyText->setText(text("library/details/no_data"));
+    emptyText->setMarginTop(16);
+    emptyText->setMaxWidth(560);
+    emptyText->setShrink(0);
+    content->addView(emptyText);
+
+    // The gameplay screenshot on the left; the fact sheet and the title
+    // screen stacked beside it, as tall as the screenshot.
+    media = new Box(Axis::ROW);
     media->setAlignItems(AlignItems::FLEX_START);
     media->setMarginTop(20);
     media->setShrink(0);
@@ -339,23 +355,29 @@ GameDetailsPanel::GameDetailsPanel() : Box(Axis::COLUMN) {
     snapFrame = new ArtFrame(kSnapW, kSnapH, kSnapRadius, 15);
     media->addView(snapFrame);
 
-    auto* titleColumn = new Box(Axis::COLUMN);
-    titleColumn->setMarginLeft(20);
-    titleColumn->setShrink(0);
-    titleFrame = new ArtFrame(kTitleW, kTitleH, kTitleRadius, 14);
-    titleColumn->addView(titleFrame);
-    titleCaption = makeLabel(14);
-    titleCaption->setText(text("library/details/title_caption"));
-    titleCaption->setMarginTop(8);
-    titleColumn->addView(titleCaption);
-    media->addView(titleColumn);
+    auto* side = new Box(Axis::COLUMN);
+    side->setMarginLeft(24);
+    side->setGrow(1);
+    side->setShrink(1);
+    side->setWidth(0);
+    side->setHeight(kSnapH);
+    side->setJustifyContent(JustifyContent::SPACE_BETWEEN);
+    media->addView(side);
 
     facts = new Box(Axis::COLUMN);
-    facts->setMarginLeft(20);
-    facts->setGrow(1);
     facts->setShrink(1);
-    facts->setWidth(0);
-    media->addView(facts);
+    side->addView(facts);
+
+    auto* titleRow = new Box(Axis::ROW);
+    titleRow->setAlignItems(AlignItems::FLEX_END);
+    titleRow->setShrink(0);
+    titleFrame = new ArtFrame(kTitleW, kTitleH, kTitleRadius, 14);
+    titleRow->addView(titleFrame);
+    titleCaption = makeLabel(14);
+    titleCaption->setText(text("library/details/title_caption"));
+    titleCaption->setMarginLeft(12);
+    titleRow->addView(titleCaption);
+    side->addView(titleRow);
 
     factSentence = makeLabel(15);
     facts->addView(factSentence);
@@ -363,7 +385,7 @@ GameDetailsPanel::GameDetailsPanel() : Box(Axis::COLUMN) {
         addFactRow();
 
     // A long synopsis scrolls inside the room left, so "Fontes" stays in place.
-    auto* synopsis = new Box(Axis::COLUMN);
+    synopsis = new Box(Axis::COLUMN);
     synopsis->setMarginTop(20);
     synopsis->setMaxWidth(760);
     synopsis->setGrow(1);
@@ -403,6 +425,8 @@ void GameDetailsPanel::willAppear(bool resetState) {
 void GameDetailsPanel::applyColors() {
     const NVGcolor muted = themeColor("equinox/muted");
     fileLine->setTextColor(muted);
+    metaLine->setTextColor(muted);
+    emptyText->setTextColor(muted);
     queuedLabel->setTextColor(muted);
     readyLabel->setTextColor(muted);
     titleCaption->setTextColor(muted);
@@ -466,6 +490,10 @@ void GameDetailsPanel::applyDetails() {
                           : details.hasData         ? text("library/details/synopsis_empty")
                                                     : text("library/details/synopsis_none"));
     synopsisScroll->setContentOffsetY(0, false);
+    const Visibility withData = details.hasData ? Visibility::VISIBLE : Visibility::GONE;
+    media->setVisibility(withData);
+    synopsis->setVisibility(withData);
+    emptyText->setVisibility(details.hasData ? Visibility::GONE : Visibility::VISIBLE);
     applyAction();
     applyMedia();
     applyFacts();
@@ -541,18 +569,24 @@ void GameDetailsPanel::applyFacts() {
         std::string value;
     };
     std::vector<Fact> list;
+    std::string meta; // genre · year · players, over the action
     if (details.hasData) {
         if (const emu::GameInfo* info = details.info) {
+            const auto add = [&](const std::string& part) {
+                meta += (meta.empty() ? "" : "  ·  ") + part;
+            };
             if (!info->genre.empty())
-                list.push_back({"library/fact/genre", info->genre});
-            if (info->players > 0)
-                list.push_back({"library/fact/players", std::to_string(info->players)});
+                add(info->genre);
+            if (info->year > 0)
+                add(std::to_string(info->year));
+            if (info->players == 1)
+                add(text("library/details/players_one"));
+            else if (info->players > 1)
+                add(brls::getStr("library/details/players_many", std::to_string(info->players)));
             if (!info->developer.empty())
                 list.push_back({"library/fact/developer", info->developer});
             if (!info->publisher.empty())
                 list.push_back({"library/fact/publisher", info->publisher});
-            if (info->year > 0)
-                list.push_back({"library/fact/released", std::to_string(info->year)});
         }
         if (!details.regions.empty()) {
             std::string joined;
@@ -567,10 +601,12 @@ void GameDetailsPanel::applyFacts() {
             list.push_back({"library/fact/franchise", details.info->franchise});
     }
 
-    if (list.empty())
-        factSentence->setText(text(details.hasData ? "library/details/facts_none"
-                                                   : "library/details/facts_pending"));
-    factSentence->setVisibility(list.empty() ? Visibility::VISIBLE : Visibility::GONE);
+    metaLine->setText(meta);
+    metaLine->setVisibility(meta.empty() ? Visibility::GONE : Visibility::VISIBLE);
+
+    if (list.empty() && meta.empty())
+        factSentence->setText(text("library/details/facts_none"));
+    factSentence->setVisibility(list.empty() && meta.empty() ? Visibility::VISIBLE : Visibility::GONE);
 
     while (factCells.size() < list.size())
         addFactRow();
