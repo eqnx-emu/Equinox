@@ -140,7 +140,10 @@ class GameListPanel : public brls::Box {
 
     std::string consoleName;
     brls::Label* countLabel = nullptr;
-    brls::Label* pageLabel = nullptr; // "Page X of Y", hidden with a single page
+    brls::Box* pageRow = nullptr; // L, "Page X of Y", R; hidden with a single page
+    brls::Label* pageLabel = nullptr;
+    brls::Label* pagePrevKey = nullptr;
+    brls::Label* pageNextKey = nullptr;
     size_t shownPageSize = 0;
     brls::Box* cartButton = nullptr;
     brls::Box* listButton = nullptr;

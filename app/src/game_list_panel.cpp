@@ -218,10 +218,6 @@ GameListPanel::GameListPanel(const emu::Console& console)
     countLabel = textLabel(14);
     countLabel->setMarginTop(2);
     titles->addView(countLabel);
-    pageLabel = textLabel(13);
-    pageLabel->setMarginTop(1);
-    pageLabel->setVisibility(Visibility::GONE);
-    titles->addView(pageLabel);
     header->addView(titles);
 
     auto* toggle = new Box(Axis::ROW);
@@ -272,6 +268,31 @@ GameListPanel::GameListPanel(const emu::Console& console)
     }
     scroll->setContentView(list);
     addView(scroll);
+
+    // Under the games: L, "Page X of Y", R. The shoulders turn the pages; the
+    // app's footer leaves them out.
+    pageRow = new Box(Axis::ROW);
+    pageRow->setJustifyContent(JustifyContent::CENTER);
+    pageRow->setAlignItems(AlignItems::CENTER);
+    pageRow->setMarginTop(6);
+    pageRow->setShrink(0);
+    pageRow->setVisibility(Visibility::GONE);
+    const auto pageKey = [&](ControllerButton button, int direction, Label*& key) {
+        Box* box = touchBox(Axis::ROW, [this, direction] { turnPage(direction); });
+        box->setFocusable(false); // a tap target; on the controller, L and R
+        box->setPadding(2, 6, 2, 6);
+        key = new Label();
+        key->setFontSize(18);
+        key->setText(Hint::getKeyIcon(button));
+        box->addView(key);
+        return box;
+    };
+    pageRow->addView(pageKey(BUTTON_LB, -1, pagePrevKey));
+    pageLabel = textLabel(14);
+    pageLabel->setMargins(0, 10, 0, 10);
+    pageRow->addView(pageLabel);
+    pageRow->addView(pageKey(BUTTON_RB, 1, pageNextKey));
+    addView(pageRow);
 
     // While the games' data downloads, or after it stopped: its progress, or
     // why it stopped. Starting it is in More options (and ZR).
@@ -349,6 +370,8 @@ void GameListPanel::applyColors() {
     const NVGcolor muted = themeColor("equinox/muted");
     countLabel->setTextColor(muted);
     pageLabel->setTextColor(muted);
+    pagePrevKey->setTextColor(muted);
+    pageNextKey->setTextColor(muted);
     runningName->setTextColor(muted);
     noneLabel->setTextColor(muted);
     separator->setColor(themeColor("equinox/card"));
@@ -394,11 +417,11 @@ void GameListPanel::applyPage() {
     shownPageSize = size;
     const size_t pages = (shown.size() + size - 1) / size;
     if (scanning || pages <= 1) {
-        pageLabel->setVisibility(Visibility::GONE);
+        pageRow->setVisibility(Visibility::GONE);
         return;
     }
     pageLabel->setText(brls::getStr("library/list/page", currentPlace() / size + 1, pages));
-    pageLabel->setVisibility(Visibility::VISIBLE);
+    pageRow->setVisibility(Visibility::VISIBLE);
 }
 
 void GameListPanel::turnPage(int direction) {
@@ -987,15 +1010,16 @@ GameListPanel::Batch GameListPanel::batchState() const {
 }
 
 void GameListPanel::registerShortcuts(bool hidden) {
-    // Sort and view live in More options; the shoulders turn whole pages.
+    // Sort and view live in More options; the shoulders turn whole pages,
+    // and the list shows them under the games instead of the app's footer.
     registerAction("library/list/page_prev"_i18n, BUTTON_LB, [this](View*) {
         turnPage(-1);
         return true;
-    });
+    }, true);
     registerAction("library/list/page_next"_i18n, BUTTON_RB, [this](View*) {
         turnPage(1);
         return true;
-    });
+    }, true);
     // Search is the one shortcut always shown in the footer: the list has no
     // search field of its own.
     registerAction("library/list/hint_search"_i18n, BUTTON_BACK, [this](View*) {
