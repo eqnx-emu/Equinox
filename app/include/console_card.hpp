@@ -9,7 +9,10 @@
 //  hops upright.
 //
 //  A console with a 3D turntable (img/3d/<slug>.png) has no card:
-//  its object floats over the name and spins while it is selected.
+//  its object floats over the name and spins while it is selected. Opened,
+//  it turns into its scene (img/3d/<slug>-scene, the console plugged into a
+//  TV) when there is one, larger and without the name, which the panel on
+//  the right already shows.
 //
 
 #pragma once
@@ -31,6 +34,7 @@ class ConsoleCard : public PressableBox, public ShelfItem {
     explicit ConsoleCard(const emu::Console& console);
 
     bool frameless() const override { return turntable != nullptr; }
+    void setEntered(float amount) override { enteredAmount = amount; }
 
     // Re-reads the installed runner and counts the ROMs again, off the UI
     // thread.
@@ -88,6 +92,9 @@ class ConsoleCard : public PressableBox, public ShelfItem {
 
     // The 3D object instead of the card, when the console has one.
     std::unique_ptr<Turntable> turntable;
+    // What it turns into when opened; null without one.
+    std::unique_ptr<Turntable> scene;
+    float enteredAmount = 0;
 
     void update();
     void animateFocus(bool focused);

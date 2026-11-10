@@ -10,6 +10,7 @@
 #include "emu/CoverStore.hpp"
 #include "emu/RomScan.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <fmt/core.h>
@@ -20,6 +21,13 @@ using namespace brls;
 using namespace brls::literals;
 
 namespace {
+// The opened console's scene: its width, how far its centre moves (up is
+// negative) and how far its shadow drops, from the card's resting object.
+// It fills the column left of the panel, where the name was.
+constexpr float kSceneWidth = 440;
+constexpr float kSceneRise = -5;
+constexpr float kSceneGround = 88;
+
 NVGcolor themeColor(const std::string& name) {
     return Application::getTheme().getColor(name);
 }
@@ -98,10 +106,15 @@ ConsoleCard::ConsoleCard(const emu::Console& console) : consoleRef(console) {
     this->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
     name->setText(console.name);
     // The live model when it's there, else the pre-rendered views.
+    const auto art3d = [](const std::string& base) {
+        return Turntable::exists(base + ".mesh") ? base + ".mesh" : base + ".png";
+    };
     const std::string base = "img/3d/" + console.slug;
-    const std::string art3d = Turntable::exists(base + ".mesh") ? base + ".mesh" : base + ".png";
-    if (Turntable::exists(art3d))
-        turntable = std::make_unique<Turntable>(art3d);
+    if (Turntable::exists(art3d(base))) {
+        turntable = std::make_unique<Turntable>(art3d(base));
+        if (Turntable::exists(art3d(base + "-scene")))
+            scene = std::make_unique<Turntable>(art3d(base + "-scene"));
+    }
 
     if (frameless()) {
         // No card: the object floats over the name, both centred.
@@ -308,6 +321,8 @@ void ConsoleCard::onFocusLost() {
 void ConsoleCard::animateFocus(bool focused) {
     if (turntable)
         turntable->setActive(focused);
+    if (scene)
+        scene->setActive(focused);
     const float to = focused ? 1.0f : 0.0f;
     focus.stop();
     focus.reset();
@@ -326,8 +341,19 @@ void ConsoleCard::animateFocus(bool focused) {
 void ConsoleCard::draw(NVGcontext* vg, float x, float y, float width,
                        float height, Style style, FrameContext* ctx) {
     if (frameless()) {
-        // Floats over the name, its shadow just above it.
-        turntable->draw(vg, x + width / 2, y + 38, 215, y + 100, getAlpha());
+        // Floats over the name, its shadow just above it. Opened, it grows
+        // into the scene over the free space and the name fades out.
+        const float e = scene ? std::clamp(enteredAmount, 0.0f, 1.0f) : 0.0f;
+        const float alpha = getAlpha();
+        const float objectW = 215 + (kSceneWidth - 215) * e;
+        const float cy = y + 38 + kSceneRise * e;
+        const float groundY = y + 100 + kSceneGround * e;
+        if (e < 0.99f)
+            turntable->draw(vg, x + width / 2, cy, objectW, groundY, alpha * (1 - e));
+        if (e > 0.01f)
+            scene->draw(vg, x + width / 2, cy, objectW, groundY, alpha * e);
+        for (View* child : getChildren())
+            child->setAlpha(1 - e);
         PressableBox::draw(vg, x, y, width, height, style, ctx);
         return;
     }

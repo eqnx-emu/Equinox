@@ -66,6 +66,9 @@ class ShelfItem {
   public:
     virtual ~ShelfItem() = default;
     virtual bool frameless() const { return false; }
+    // 0 to 1 while the shelf enters this item (it slides aside and the
+    // panel opens next to it); 0 for the others. Set before each draw.
+    virtual void setEntered(float /*amount*/) {}
 };
 
 class CoverCarousel : public brls::Box {
