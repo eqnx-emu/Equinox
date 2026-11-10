@@ -31,8 +31,8 @@ ConsolePaths pathsFor(const Console& console, const std::string& root = kDataRoo
 bool ensureFolders(const ConsolePaths& paths);
 
 #if defined(EQX_FAKE_EMU)
-// Desktop testing: the fake console's runner and a few empty games, so its
-// screens open. Nothing is downloaded for it and its games open nothing.
+// Desktop testing: a runner file for each console, so their screens open.
+// The games are whatever is in <data root>/roms/<slug>; none opens.
 void seedFakeConsole();
 #endif
 
