@@ -67,7 +67,10 @@ class PressableBox : public brls::Box {
         const float cx = getX() + getWidth() / 2;
         const float cy = getY() + getHeight() / 2;
         nvgSave(ctx->vg);
-        nvgTextScaleSnap(ctx->vg, 0.06f);
+        // Glyphs stay at their resting size and scale as a texture: with a
+        // 6% step the press dip (0.94) sat on a step edge and the text
+        // flipped between two raster sizes.
+        nvgTextScaleSnap(ctx->vg, 10.0f);
         nvgTranslate(ctx->vg, cx, cy);
         nvgScale(ctx->vg, s, s);
         nvgTranslate(ctx->vg, -cx, -cy);
