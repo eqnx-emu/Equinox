@@ -40,6 +40,11 @@ class LibraryScroll : public ScrollingFrame {
         const float limit = std::max(0.0f, getContentHeight() - getHeight());
         setContentOffsetY(std::clamp(middle - getHeight() / 2, 0.0f, limit), true);
     }
+    // Puts y at the top of the view, as far as the content allows.
+    void showFrom(float y) {
+        const float limit = std::max(0.0f, getContentHeight() - getHeight());
+        setContentOffsetY(std::clamp(y, 0.0f, limit), true);
+    }
 };
 
 // The rows stand at positions the panel works out, in no particular child
@@ -403,7 +408,7 @@ size_t GameListPanel::pageSize() const {
     const float column = scroll->getHeight();
     if (column <= 0)
         return kListPage;
-    return std::max<size_t>(1, static_cast<size_t>(column / kRowStep));
+    return std::max<size_t>(1, static_cast<size_t>((column - kListTop) / kRowStep));
 }
 
 size_t GameListPanel::currentPlace() const {
@@ -435,6 +440,12 @@ void GameListPanel::turnPage(int direction) {
     else if (page > 0)
         place = (page - 1) * size;
     focusGame(shown[place]);
+    // The list shows the whole page, its first game at the top. Giving the
+    // focus centred the row by its old position, so this comes after it.
+    if (mode == 1) {
+        recenterToken++;
+        scroll->showFrom(place * kRowStep);
+    }
 }
 
 void GameListPanel::setScanning(bool on) {
