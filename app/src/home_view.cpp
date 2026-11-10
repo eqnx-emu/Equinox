@@ -621,8 +621,12 @@ void MotionBox::frame(FrameContext* ctx) {
     const float cx = getX() + getWidth() / 2;
     const float cy = getY() + getHeight() * originY;
     nvgSave(vg);
+    // A step this wide keeps every glyph at the size it has at rest, so text
+    // scales with the layer as one texture. Smaller steps re-rasterized it
+    // a few times over the zoom, and each new size rounded the glyph metrics
+    // differently: labels jumped in size and position.
     if (s != 1.0f)
-        nvgTextScaleSnap(vg, 0.06f);
+        nvgTextScaleSnap(vg, 10.0f);
     nvgTranslate(vg, cx + dx, cy);
     nvgScale(vg, s, s);
     nvgTranslate(vg, -cx, -cy);
