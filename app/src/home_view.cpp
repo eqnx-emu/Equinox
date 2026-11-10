@@ -1271,7 +1271,9 @@ void HomeView::enter() {
     fillPanel();
 
     Shelf& shelf = level == Level::PCS ? pcs : home;
-    shelf.carousel->setEntered(true, kEnterOffset);
+    // The opened console's scene fills what the panel leaves on the left.
+    shelf.carousel->setEntered(true, kEnterOffset,
+                               Rect(getX(), getY(), kPanelLeft, getHeight()));
 
     panel->setVisibility(Visibility::VISIBLE);
     panel->set(1, 0, 60);

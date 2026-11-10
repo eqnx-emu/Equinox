@@ -21,8 +21,10 @@ using namespace brls;
 using namespace brls::literals;
 
 namespace {
-// The opened console's scene fits this box, centred kSceneCentre below the
-// card's top: the column left of the panel, down to where the name was.
+// The opened console's scene fills the free space beside the panel, less this
+// margin, centred in it both ways. Without that space, it fits the box below,
+// centred kSceneCentre below the card's top.
+constexpr float kSceneMargin = 40;
 constexpr float kSceneBoxW = 440;
 constexpr float kSceneBoxH = 330;
 constexpr float kSceneCentre = 30;
@@ -365,9 +367,19 @@ void ConsoleCard::draw(NVGcontext* vg, float x, float y, float width,
             int iw = 0, ih = 0;
             nvgImageSize(vg, sceneImage, &iw, &ih);
             if (iw > 0 && ih > 0) {
-                const float fit = std::min(kSceneBoxW / iw, kSceneBoxH / ih) * (0.7f + 0.3f * e);
+                const bool area = sceneArea.getWidth() > 2 * kSceneMargin &&
+                                  sceneArea.getHeight() > 2 * kSceneMargin;
+                const float boxW = area ? sceneArea.getWidth() - 2 * kSceneMargin : kSceneBoxW;
+                const float boxH = area ? sceneArea.getHeight() - 2 * kSceneMargin : kSceneBoxH;
+                // Fitted, never blown up past the picture's own size.
+                const float fit = std::min({boxW / iw, boxH / ih, 1.0f}) * (0.7f + 0.3f * e);
                 const float w = iw * fit, h = ih * fit;
-                const float left = cx - w / 2, top = y + kSceneCentre - h / 2;
+                // From the card's place into the middle of the free space.
+                const float fromX = cx, fromY = y + kSceneCentre;
+                const float toX = area ? sceneArea.getMidX() : fromX;
+                const float toY = area ? sceneArea.getMidY() : fromY;
+                const float midX = fromX + (toX - fromX) * e, midY = fromY + (toY - fromY) * e;
+                const float left = midX - w / 2, top = midY - h / 2;
                 nvgBeginPath(vg);
                 nvgRect(vg, left, top, w, h);
                 nvgFillPaint(vg, nvgImagePattern(vg, left, top, w, h, 0, sceneImage, alpha * e));

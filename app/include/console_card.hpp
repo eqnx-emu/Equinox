@@ -35,7 +35,10 @@ class ConsoleCard : public PressableBox, public ShelfItem {
     ~ConsoleCard() override;
 
     bool frameless() const override { return turntable != nullptr; }
-    void setEntered(float amount) override { enteredAmount = amount; }
+    void setEntered(float amount, const brls::Rect& area) override {
+        enteredAmount = amount;
+        sceneArea = area;
+    }
 
     // Re-reads the installed runner and counts the ROMs again, off the UI
     // thread.
@@ -98,6 +101,7 @@ class ConsoleCard : public PressableBox, public ShelfItem {
     std::string scenePath;
     int sceneImage = 0;
     float enteredAmount = 0;
+    brls::Rect sceneArea;
 
     void update();
     void animateFocus(bool focused);
