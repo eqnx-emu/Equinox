@@ -105,12 +105,19 @@ emu::LibraryItem makeItem(const emu::GameDb* gameDb, const ConsoleShelfView::Gam
         item.year = info->year;
         item.genre = info->genre;
     }
+    if (game.hasData) {
+        if (item.year <= 0)
+            item.year = game.meta.year;
+        if (item.genre.empty())
+            item.genre = game.meta.genre;
+    }
     return item;
 }
 
 void readCoverState(const emu::ConsolePaths& where, ConsoleShelfView::Game& game) {
     game.hasCover = fileExists(emu::coverPath(where, game.rom.title));
-    game.missed = !game.hasCover && emu::coverMissed(where, game.rom.title, APP_VERSION);
+    game.missed = !game.hasCover && emu::coverMissed(where, game.rom.title,
+                                                      DownloadService::instance().coverVersion());
 }
 
 // Off the UI thread: the game's data, when it still describes the ROM.
@@ -379,7 +386,7 @@ void ConsoleShelfView::openLibrary() {
         std::shared_ptr<const emu::GameDb> gameDb = loadGameDb(*console);
         const int64_t dbDone = liblog::nowUs();
         auto scan = std::make_shared<Scan>();
-        const bool usable = emu::loadLibraryIndex(where, APP_VERSION, scan->games);
+        const bool usable = emu::loadLibraryIndex(where, DownloadService::instance().coverVersion(), scan->games);
         const int64_t indexDone = liblog::nowUs();
         if (usable) {
             scan->items.reserve(scan->games.size());
@@ -494,7 +501,7 @@ void ConsoleShelfView::saveIndex(bool wait) {
         return;
     if (wait) {
         indexDirty = false;
-        emu::saveLibraryIndex(paths, APP_VERSION, games);
+        emu::saveLibraryIndex(paths, DownloadService::instance().coverVersion(), games);
         emu::writeRomCount(paths, static_cast<int>(games.size()));
         return;
     }
@@ -506,7 +513,7 @@ void ConsoleShelfView::saveIndex(bool wait) {
     const emu::ConsolePaths where = paths;
     std::shared_ptr<bool> token = alive;
     brls::async([this, token, snapshot, where] {
-        if (!emu::saveLibraryIndex(where, APP_VERSION, *snapshot))
+        if (!emu::saveLibraryIndex(where, DownloadService::instance().coverVersion(), *snapshot))
             emu::liblog::bug("library index could not be saved");
         emu::writeRomCount(where, static_cast<int>(snapshot->size()));
         brls::sync([this, token] {
@@ -591,7 +598,7 @@ void ConsoleShelfView::rescan(bool clearMisses) {
                 liblog::bug("scan order points at game {} of {}", index, found.size());
                 break;
             }
-        if (!emu::saveLibraryIndex(where, APP_VERSION, found))
+        if (!emu::saveLibraryIndex(where, DownloadService::instance().coverVersion(), found))
             liblog::bug("library index could not be saved");
         liblog::flushSoon();
         brls::sync([this, token, scan, gameDb, finished] {
@@ -708,7 +715,22 @@ GameDetails ConsoleShelfView::detailsFor(size_t index) const {
     details.hasData = game.hasData;
     // Before the download nothing says the game is unknown.
     details.identified = !game.hasData || game.meta.identified;
-    details.info = infoFor(game);
+    if (const emu::GameInfo* info = infoFor(game))
+        details.facts = *info;
+    if (game.hasData) {
+        emu::GameInfo& facts = details.facts;
+        const emu::GameMeta& meta = game.meta;
+        if (facts.genre.empty())
+            facts.genre = meta.genre;
+        if (facts.developer.empty())
+            facts.developer = meta.developer;
+        if (facts.publisher.empty())
+            facts.publisher = meta.publisher;
+        if (facts.players <= 0)
+            facts.players = meta.players;
+        if (facts.year <= 0)
+            facts.year = meta.year;
+    }
     if (game.hasData && game.meta.identified)
         details.regions = emu::noIntroRegions(game.meta.canonical);
     details.snapPath = game.snapPath;
@@ -1015,6 +1037,8 @@ void ConsoleShelfView::dataFinished(size_t index, const emu::DataOutcome& outcom
         std::shared_ptr<bool> token = alive;
         brls::async([this, token, game, where, index, forGeneration] {
             readGameData(where, *game);
+            // ScreenScraper may have brought the cover along.
+            game->hasCover = fileExists(emu::coverPath(where, game->rom.title));
             brls::sync([this, token, game, index, forGeneration] {
                 if (*token && forGeneration == generation && index < games.size())
                     dataRead(index, *game);
@@ -1039,6 +1063,8 @@ void ConsoleShelfView::dataRead(size_t index, const Game& read) {
         applyAmbient();
         applyActions();
     }
+    if (read.hasCover)
+        coverArrived(index);
     retryCover(index);
     if (!dataQueue || !dataQueue->running())
         saveIndex();

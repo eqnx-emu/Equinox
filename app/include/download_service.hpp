@@ -85,7 +85,14 @@ class DownloadService {
     void retry(const std::string& id);
     // `host` refused the login or is out of quota.
     bool hostBlocked(const std::string& host) const;
+    // ScreenScraper account or SteamGridDB key changed in Settings.
     void credentialsChanged();
+    // The SteamGridDB key covers are looked for with: empty without one, or
+    // after SteamGridDB refused it (until it changes).
+    std::string sgdbKey() const;
+    bool sgdbRejected() const;
+    // What a cover miss is remembered for (see emu::coverLookVersion).
+    std::string coverVersion() const;
 
     // Nested: each suspend needs one resumeAll. UI thread; `stopped` runs on the
     // UI thread once nothing is transferring.
@@ -142,6 +149,8 @@ class DownloadService {
     emu::DownloadQueue queue_;
     std::map<emu::DlKind, Runner> runners_;
     emu::SsConfig ss_;
+    std::string sgdbKey_;
+    bool sgdbRejected_ = false;
     // <launch path>.new.part, read on the UI thread at start; empty when the
     // app cannot update itself.
     std::string updatePart_;

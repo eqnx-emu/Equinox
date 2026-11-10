@@ -171,6 +171,8 @@ class Settings : public Singleton<Settings> {
     void set_screenscraper_user(const std::string& user) { m_screenscraper_user = user; }
     [[nodiscard]] const std::string& screenscraper_password() const { return m_screenscraper_password; }
     void set_screenscraper_password(const std::string& password) { m_screenscraper_password = password; }
+    [[nodiscard]] const std::string& steamgriddb_key() const { return m_steamgriddb_key; }
+    void set_steamgriddb_key(const std::string& key) { m_steamgriddb_key = key; }
 
     [[nodiscard]] int resolution() const { return m_resolution; }
     void set_resolution(int resolution) { m_resolution = resolution; }
@@ -427,6 +429,7 @@ class Settings : public Singleton<Settings> {
     int m_theme = 0;
     std::string m_screenscraper_user;
     std::string m_screenscraper_password;
+    std::string m_steamgriddb_key;
     int m_resolution = 720;
     int m_native_resolution_scale = 100;
     int m_fps = 60;

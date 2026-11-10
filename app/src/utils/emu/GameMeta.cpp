@@ -86,6 +86,13 @@ bool metaFromJson(const json_t* object, GameMeta& out) {
     meta.synopsis = partFrom(object, "synopsis");
     meta.synopsisText = stringField(object, "synopsisText");
     meta.synopsisLang = stringField(object, "synopsisLang");
+    if (const json_t* facts = json_object_get(object, "facts"); json_is_object(facts)) {
+        meta.genre = stringField(facts, "genre");
+        meta.developer = stringField(facts, "developer");
+        meta.publisher = stringField(facts, "publisher");
+        meta.players = static_cast<int>(integerField(facts, "players"));
+        meta.year = static_cast<int>(integerField(facts, "year"));
+    }
     out = std::move(meta);
     return true;
 }
@@ -105,6 +112,16 @@ json_t* metaToJson(const GameMeta& meta) {
     setPart(root, "synopsis", meta.synopsis);
     json_object_set_new(root, "synopsisText", json_string(meta.synopsisText.c_str()));
     json_object_set_new(root, "synopsisLang", json_string(meta.synopsisLang.c_str()));
+    if (!meta.genre.empty() || !meta.developer.empty() || !meta.publisher.empty() ||
+        meta.players > 0 || meta.year > 0) {
+        json_t* facts = json_object();
+        json_object_set_new(facts, "genre", json_string(meta.genre.c_str()));
+        json_object_set_new(facts, "developer", json_string(meta.developer.c_str()));
+        json_object_set_new(facts, "publisher", json_string(meta.publisher.c_str()));
+        json_object_set_new(facts, "players", json_integer(meta.players));
+        json_object_set_new(facts, "year", json_integer(meta.year));
+        json_object_set_new(root, "facts", facts);
+    }
     return root;
 }
 

@@ -290,3 +290,40 @@ TEST_CASE("falls back to the file name when the canonical name has no image") {
     CHECK(out.meta.snap == PartState::Ok);
     CHECK(f.net.requested.size() >= 2);
 }
+
+TEST_CASE("screenscraper fills the facts and the images libretro lacks") {
+    Fixture f("equinox_gamedata_ssmedia");
+    f.serve(ThumbKind::Title, "Test Game (USA)");
+    f.net.api.content =
+        R"({"response":{"jeu":{"synopsis":[{"langue":"pt","text":"Sinopse"}],)"
+        R"("developpeur":{"text":"SS Dev"},"joueurs":{"text":"1-4"},)"
+        R"("medias":[{"type":"ss","region":"us","format":"png","url":"https://ss.example/snap"},)"
+        R"({"type":"box-2D","region":"us","format":"png","url":"https://ss.example/box"}]}}})";
+    f.net.files["https://ss.example/snap"] = {FetchResult::Ok, kPng};
+    f.net.files["https://ss.example/box"] = {FetchResult::Ok, kPng};
+
+    const DataOutcome out = f.run();
+    CHECK(out.complete);
+    CHECK(out.meta.developer == "SS Dev");
+    CHECK(out.meta.players == 4);
+    CHECK(out.meta.snap == PartState::Ok);
+    CHECK(f.exists(thumbPath(f.req.paths, ThumbKind::Snap, "Test Game")));
+    CHECK(f.exists(coverPath(f.req.paths, "Test Game")));
+    CHECK_FALSE(f.partLeft());
+
+    GameMeta saved;
+    REQUIRE(loadMeta(metaPath(f.req.paths, "Test Game"), saved));
+    CHECK(saved.developer == "SS Dev");
+    CHECK(saved.players == 4);
+}
+
+TEST_CASE("a screenscraper image that is not an image stays missing") {
+    Fixture f("equinox_gamedata_ssbadmedia");
+    f.net.api.content =
+        R"({"response":{"jeu":{"medias":[{"type":"ss","region":"us","format":"png","url":"https://ss.example/snap"}]}}})";
+    f.net.files["https://ss.example/snap"] = {FetchResult::Ok, "<html>"};
+    const DataOutcome out = f.run();
+    CHECK(out.complete);
+    CHECK(out.meta.snap == PartState::Missing);
+    CHECK_FALSE(f.exists(thumbPath(f.req.paths, ThumbKind::Snap, "Test Game")));
+}

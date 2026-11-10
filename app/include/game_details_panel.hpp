@@ -23,7 +23,8 @@ struct GameDetails {
     std::string name, fileName;
     bool identified = false;
     bool hasData = false;
-    const emu::GameInfo* info = nullptr; // null when not identified
+    // libretro-database's facts, ScreenScraper's filling the gaps.
+    emu::GameInfo facts;
     std::vector<std::string> regions;    // noIntroRegions(canonical); empty when not identified
     std::string snapPath, titlePath;     // empty when the file does not exist
     // Tells "libretro has no such image" (Missing) from "never downloaded".

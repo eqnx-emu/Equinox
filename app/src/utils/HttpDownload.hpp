@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <vector>
 
 // HTTPS GET over curl: verified TLS (romfs CA bundle on Switch, the system
 // store elsewhere), redirects followed, HTTP errors treated as failures.
@@ -19,6 +20,12 @@ bool httpGetToString(const std::string& url, std::string& out, long timeoutSec,
 // (0 when there was no answer). The body of an HTTP error is not kept.
 bool httpGetToString(const std::string& url, std::string& out, long timeoutSec,
                      const Progress& progress, std::string& error, long& httpStatus);
+
+// Same, with extra request headers ("Name: value"). curl drops them when a
+// redirect leaves the host, so a key sent to an API does not reach a CDN.
+bool httpGetToString(const std::string& url, std::string& out, long timeoutSec,
+                     const Progress& progress, std::string& error, long& httpStatus,
+                     const std::vector<std::string>& headers);
 
 // Writes the body to `path`. On failure the partial file is left for the
 // caller to remove.

@@ -571,7 +571,8 @@ void GameDetailsPanel::applyFacts() {
     std::vector<Fact> list;
     std::string meta; // genre · year · players, over the action
     if (details.hasData) {
-        if (const emu::GameInfo* info = details.info) {
+        {
+            const emu::GameInfo* info = &details.facts;
             const auto add = [&](const std::string& part) {
                 meta += (meta.empty() ? "" : "  ·  ") + part;
             };
@@ -597,8 +598,8 @@ void GameDetailsPanel::applyFacts() {
             }
             list.push_back({"library/fact/region", joined});
         }
-        if (details.info && !details.info->franchise.empty())
-            list.push_back({"library/fact/franchise", details.info->franchise});
+        if (!details.facts.franchise.empty())
+            list.push_back({"library/fact/franchise", details.facts.franchise});
     }
 
     metaLine->setText(meta);

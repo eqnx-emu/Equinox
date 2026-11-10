@@ -69,7 +69,7 @@ void applyCommon(CURL* curl, const std::string& url) {
 // to GitHub's object storage).
 bool httpGet(const std::string& url, curl_write_callback write, void* user, long timeout,
              const Progress* progress, std::string& error, long* status = nullptr,
-             bool* writeError = nullptr) {
+             bool* writeError = nullptr, const std::vector<std::string>* extraHeaders = nullptr) {
     CURL* curl = curl_easy_init();
     if (!curl) {
         error = "curl_easy_init failed";
@@ -80,6 +80,9 @@ bool httpGet(const std::string& url, curl_write_callback write, void* user, long
     struct curl_slist* headers = nullptr;
     if (hostOf(url) == "api.github.com")
         headers = curl_slist_append(headers, "Accept: application/vnd.github+json");
+    if (extraHeaders)
+        for (const std::string& header : *extraHeaders)
+            headers = curl_slist_append(headers, header.c_str());
 
     applyCommon(curl, url);
     if (headers) curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -122,6 +125,15 @@ bool httpGetToString(const std::string& url, std::string& out, long timeoutSec,
     out.clear();
     httpStatus = 0;
     return httpGet(url, writeToString, &out, timeoutSec, &progress, error, &httpStatus);
+}
+
+bool httpGetToString(const std::string& url, std::string& out, long timeoutSec,
+                     const Progress& progress, std::string& error, long& httpStatus,
+                     const std::vector<std::string>& headers) {
+    out.clear();
+    httpStatus = 0;
+    return httpGet(url, writeToString, &out, timeoutSec, &progress, error, &httpStatus, nullptr,
+                   &headers);
 }
 
 bool httpGetToFile(const std::string& url, const std::string& path, long timeoutSec,

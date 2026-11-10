@@ -149,6 +149,16 @@ target_include_directories(test_emu_screenscraper PRIVATE
     "${MOONLIGHT_ROOT}/extern")
 target_link_libraries(test_emu_screenscraper PRIVATE ${JANSSON_LIB})
 
+add_executable(test_emu_steamgriddb
+    test_emu_steamgriddb.cpp
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/SteamGridDb.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/CoverName.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp")
+target_include_directories(test_emu_steamgriddb PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
+target_link_libraries(test_emu_steamgriddb PRIVATE ${JANSSON_LIB})
+
 add_executable(test_emu_library
     test_emu_library.cpp
     "${MOONLIGHT_ROOT}/app/src/utils/emu/Library.cpp")
@@ -165,10 +175,13 @@ add_executable(test_emu_gamedata
     "${MOONLIGHT_ROOT}/app/src/utils/emu/CoverStore.cpp"
     "${MOONLIGHT_ROOT}/app/src/utils/emu/GameMeta.cpp"
     "${MOONLIGHT_ROOT}/app/src/utils/emu/ScreenScraper.cpp"
-    "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp")
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/SevenZip.cpp"
+    "${MOONLIGHT_ROOT}/app/src/utils/emu/Console.cpp"
+    ${LZMA_SRC})
 target_include_directories(test_emu_gamedata PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
-    "${MOONLIGHT_ROOT}/extern")
+    "${MOONLIGHT_ROOT}/extern"
+    "${MOONLIGHT_ROOT}/extern/lzma")
 target_link_libraries(test_emu_gamedata PRIVATE ${JANSSON_LIB} ${Z_LIB})
 
 add_executable(test_emu_video

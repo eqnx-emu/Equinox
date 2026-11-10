@@ -112,3 +112,37 @@ TEST_CASE("ssParse treats unusable 200 bodies as transient") {
     CHECK(ssParse(200, R"({"response":{}})", "pt").status == SsStatus::Transient);
     CHECK(ssParse(200, "", "pt").status == SsStatus::Transient);
 }
+
+TEST_CASE("ssParse reads the facts and the media") {
+    const char* body = R"({"response":{"jeu":{
+        "synopsis":[{"langue":"en","text":"Text"}],
+        "genres":[{"principale":"1","noms":[{"langue":"en","text":"Platform"},{"langue":"pt","text":"Plataforma"}]}],
+        "developpeur":{"text":"Dev Co"},"editeur":{"text":"Pub Co"},"joueurs":{"text":"1-2"},
+        "dates":[{"region":"us","text":"1993-08-01"},{"region":"jp","text":"1992-11-21"}],
+        "medias":[
+            {"type":"ss","region":"jp","format":"png","url":"https://ss.example/jp-snap"},
+            {"type":"ss","region":"us","format":"png","url":"https://ss.example/us-snap"},
+            {"type":"sstitle","region":"wor","format":"jpg","url":"https://ss.example/title"},
+            {"type":"box-2D","region":"eu","format":"mp4","url":"https://ss.example/box-video"},
+            {"type":"box-2D","region":"eu","format":"png","url":"http://ss.example/plain-http"}
+        ]}}})";
+    const SsResult r = ssParse(200, body, "pt");
+    CHECK(r.status == SsStatus::Ok);
+    CHECK(r.genre == "Plataforma");
+    CHECK(r.developer == "Dev Co");
+    CHECK(r.publisher == "Pub Co");
+    CHECK(r.players == 2);
+    CHECK(r.year == 1992);
+    CHECK(r.snapUrl == "https://ss.example/us-snap");
+    CHECK(r.titleUrl == "https://ss.example/title");
+    CHECK(r.boxUrl.empty());  // a video and a plain http link are not covers
+}
+
+TEST_CASE("ssParse leaves missing facts empty") {
+    const SsResult r = ssParse(200, R"({"response":{"jeu":{"joueurs":{"text":"?"}}}})", "en");
+    CHECK(r.status == SsStatus::Ok);
+    CHECK(r.genre.empty());
+    CHECK(r.players == 0);
+    CHECK(r.year == 0);
+    CHECK(r.snapUrl.empty());
+}

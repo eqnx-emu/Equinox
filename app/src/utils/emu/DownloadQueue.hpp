@@ -18,6 +18,7 @@ enum class DlResult { Done, Gone, Transient, BadLogin, Quota, Disk, Invalid, Can
 inline constexpr const char* kHostScreenScraper = "screenscraper";
 inline constexpr const char* kHostLibretro = "libretro";
 inline constexpr const char* kHostGitHub = "github";
+inline constexpr const char* kHostSteamGridDb = "steamgriddb";
 
 // Whether a failed transfer is worth trying again: no HTTP error (no answer, a
 // body cut short), a 5xx or a 429. Any other 4xx is the server's clear "no".

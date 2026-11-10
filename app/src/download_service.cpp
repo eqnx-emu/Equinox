@@ -17,6 +17,7 @@
 #include "emu/PathUtf8.hpp"
 #include "emu/ResumeState.hpp"
 #include "emu/SsCredentials.hpp"
+#include "emu/SteamGridDb.hpp"
 
 #include <borealis.hpp>
 #include <curl/curl.h>
@@ -113,6 +114,7 @@ DlTask coverTask(const Console& console, const std::string& title, const std::st
     task.priority = priority;
     task.group = console.slug;
     task.hosts = {kHostLibretro};
+    if (!DownloadService::instance().sgdbKey().empty()) task.hosts.push_back(kHostSteamGridDb);
     task.resumable = false;
 
     json_t* params = json_object();
@@ -184,6 +186,7 @@ void DownloadService::start() {
     if (!emu::loadDownloads(kQueueFile, queue_) && exists)
         brls::Logger::warning("DownloadService: {} is corrupt, starting empty", kQueueFile);
     ss_ = emu::appSsConfig();
+    sgdbKey_ = Settings::instance().steamgriddb_key();
     runners_[emu::DlKind::GameData] = [this](const emu::DlTask& task, DlContext& context) {
         return runGameData(task, context);
     };
@@ -398,6 +401,11 @@ void DownloadService::credentialsChanged() {
     emu::SsConfig fresh = emu::appSsConfig();
     std::lock_guard<std::mutex> lock(mutex_);
     ss_ = std::move(fresh);
+    const std::string key = Settings::instance().steamgriddb_key();
+    if (key != sgdbKey_) {
+        sgdbKey_ = key;
+        sgdbRejected_ = false;
+    }
     queue_.clearLoginBlock();
     dirty_ = true;
     wake_.notify_all();
@@ -500,6 +508,21 @@ std::optional<emu::DlState> DownloadService::stateOf(const std::string& id) cons
     for (const emu::DlTask& task : queue_.tasks())
         if (task.id == id) return task.state;
     return std::nullopt;
+}
+
+std::string DownloadService::sgdbKey() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return sgdbRejected_ ? std::string() : sgdbKey_;
+}
+
+bool DownloadService::sgdbRejected() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return sgdbRejected_ && !sgdbKey_.empty();
+}
+
+std::string DownloadService::coverVersion() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return emu::coverLookVersion(APP_VERSION, sgdbKey_);
 }
 
 emu::SsConfig DownloadService::ssConfig() const {
@@ -785,7 +808,57 @@ emu::DlResult DownloadService::runCover(const emu::DlTask& task, DlContext& cont
         // says nothing.
         if (!ok && emu::retryable(status)) return emu::DlResult::Transient;
     }
-    emu::markCoverMissed(emu::pathsFor(*console), title, APP_VERSION);
+
+    // libretro has none: SteamGridDB, with the user's key.
+    const std::string key = sgdbKey();
+    if (!key.empty()) {
+        const std::vector<std::string> auth{emu::sgdbAuthHeader(key)};
+        const auto busy = [&context] {
+            context.failedHost = emu::kHostSteamGridDb;
+            return emu::DlResult::Transient;
+        };
+        const auto refused = [this] {
+            brls::Logger::warning("DownloadService: SteamGridDB refused the key");
+            std::lock_guard<std::mutex> lock(mutex_);
+            sgdbRejected_ = true;
+        };
+        const std::string term = emu::sgdbSearchTerm(canonical, title);
+        std::string body, error;
+        long status = 0;
+        httpGetToString(emu::sgdbSearchUrl(term), body, kCoverTimeout, keepGoing, error, status, auth);
+        if (context.stop->load()) return emu::DlResult::Cancelled;
+        const emu::SgdbGame game = emu::sgdbParseSearch(status, body, term);
+        emu::SgdbGrid grid;
+        grid.status = game.status;
+        if (game.status == emu::SgdbStatus::Ok) {
+            httpGetToString(emu::sgdbGridsUrl(game.id), body, kCoverTimeout, keepGoing, error, status,
+                            auth);
+            if (context.stop->load()) return emu::DlResult::Cancelled;
+            grid = emu::sgdbParseGrids(status, body);
+        }
+        if (grid.status == emu::SgdbStatus::Busy) return busy();
+        if (grid.status == emu::SgdbStatus::BadKey) refused();
+        if (grid.status == emu::SgdbStatus::Ok) {
+            // The image comes from the CDN, without the key.
+            bool writeFailed = false;
+            const bool ok = httpGetToFile(grid.url, part, kCoverTimeout, keepGoing, error, status,
+                                          writeFailed);
+            if (ok && emu::looksLikeImage(part)) {
+                if (emu::replaceFile(part, path)) return emu::DlResult::Done;
+                fs::remove(emu::fromUtf8(part), ec);
+                emu::liblog::bug("cover could not be saved: {}", path);
+                return emu::DlResult::Disk;
+            }
+            fs::remove(emu::fromUtf8(part), ec);
+            if (context.stop->load()) return emu::DlResult::Cancelled;
+            if (writeFailed) {
+                emu::liblog::bug("cover could not be saved: {}", path);
+                return emu::DlResult::Disk;
+            }
+            if (!ok && emu::retryable(status)) return busy();
+        }
+    }
+    emu::markCoverMissed(emu::pathsFor(*console), title, coverVersion());
     return emu::DlResult::Gone;
 }
 

@@ -469,6 +469,11 @@ void Settings::load() {
                     m_screenscraper_password = json_string_value(ss_password);
             }
 
+            if (json_t* sgdb_key = json_object_get(settings, "steamgriddb_key")) {
+                if (json_typeof(sgdb_key) == JSON_STRING)
+                    m_steamgriddb_key = json_string_value(sgdb_key);
+            }
+
             if (json_t* show_metrics = json_object_get(settings, "show_metrics")) {
                 m_show_metrics = json_typeof(show_metrics) == JSON_TRUE;
             }
@@ -753,6 +758,7 @@ void Settings::save() {
             json_object_set_new(settings, "theme", json_integer(m_theme));
             json_object_set_new(settings, "screenscraper_user", json_string(m_screenscraper_user.c_str()));
             json_object_set_new(settings, "screenscraper_password", json_string(m_screenscraper_password.c_str()));
+            json_object_set_new(settings, "steamgriddb_key", json_string(m_steamgriddb_key.c_str()));
             json_object_set_new(settings, "show_metrics", m_show_metrics ? json_true() : json_false());
             json_object_set_new(settings, "metrics_mask", json_integer(m_metrics_mask));
             json_object_set_new(settings, "metrics_position", json_integer(m_metrics_position));

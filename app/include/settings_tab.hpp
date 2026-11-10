@@ -83,6 +83,8 @@ class SettingsTab : public brls::Box {
     BRLS_BIND(brls::DetailCell, screenscraperUser, "screenscraper_user");
     BRLS_BIND(brls::DetailCell, screenscraperPassword, "screenscraper_password");
     BRLS_BIND(brls::Label, screenscraperNote, "screenscraper_note");
+    BRLS_BIND(brls::DetailCell, steamgriddbKey, "steamgriddb_key");
+    BRLS_BIND(brls::Label, steamgriddbNote, "steamgriddb_note");
     BRLS_BIND(brls::BooleanCell, writeLog, "writeLog");
     BRLS_BIND(brls::DetailCell, checkUpdate, "check_update");
 

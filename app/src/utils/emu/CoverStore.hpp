@@ -20,6 +20,12 @@ void clearCoverMisses(const ConsolePaths& paths);
 
 // True when the file starts with the PNG signature.
 bool looksLikePng(const std::string& path);
+// PNG or JPEG: what ScreenScraper and SteamGridDB send, and the app can show.
+bool looksLikeImage(const std::string& path);
+
+// The version a cover miss is remembered for: the app version, and which
+// SteamGridDB key looked (a new key looks again). `sgdbKey` empty: none.
+std::string coverLookVersion(const std::string& appVersion, const std::string& sgdbKey);
 
 // Puts `from` at `to`. FAT will not rename over an existing file, so `to` is
 // removed first when the plain rename fails.

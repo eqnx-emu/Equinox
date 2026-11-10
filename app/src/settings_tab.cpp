@@ -1038,6 +1038,34 @@ SettingsTab::SettingsTab(const std::string& group) {
         screenscraperSection->setVisibility(Visibility::GONE);
     }
 
+    const auto showSgdbKey = [this] {
+        const std::string key = Settings::instance().steamgriddb_key();
+        if (key.empty())
+            steamgriddbKey->setDetailText("");
+        else if (DownloadService::instance().sgdbRejected())
+            steamgriddbKey->setDetailText("settings/steamgriddb_refused"_i18n);
+        else
+            steamgriddbKey->setDetailText("••••" + key.substr(key.size() > 4 ? key.size() - 4 : 0));
+    };
+    steamgriddbKey->setText("settings/steamgriddb_key"_i18n);
+    showSgdbKey();
+    steamgriddbKey->registerClickAction([showSgdbKey](View*) {
+        Application::getImeManager()->openForText(
+            [showSgdbKey](const std::string& text) {
+                std::string key;
+                for (char c : text)
+                    if (c != ' ' && c != '\t')
+                        key += c;
+                Settings::instance().set_steamgriddb_key(key);
+                DownloadService::instance().credentialsChanged();
+                showSgdbKey();
+            },
+            "settings/steamgriddb_key"_i18n, "", 64, Settings::instance().steamgriddb_key(), 0);
+        return true;
+    });
+    steamgriddbNote->setText("settings/steamgriddb_note"_i18n);
+    steamgriddbNote->setTextColor(Application::getTheme().getColor("equinox/muted"));
+
     writeLog->init("settings/debugging_view"_i18n,
                    Settings::instance().write_log(), [](bool value) {
                        Settings::instance().set_write_log(value);
