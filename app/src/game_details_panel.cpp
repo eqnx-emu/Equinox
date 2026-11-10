@@ -5,7 +5,7 @@
 
 #include "game_details_panel.hpp"
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
 
 #include "Settings.hpp"
 #include "bold_label.hpp"
@@ -588,4 +588,4 @@ void GameDetailsPanel::applyFacts() {
         factRows[r]->setVisibility(r * 2 < list.size() ? Visibility::VISIBLE : Visibility::GONE);
 }
 
-#endif // PLATFORM_SWITCH
+#endif // EQX_EMU_UI

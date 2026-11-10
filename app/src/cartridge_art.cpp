@@ -5,7 +5,7 @@
 
 #include "cartridge_art.hpp"
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
 
 #include <algorithm>
 
@@ -174,4 +174,4 @@ void drawCartridge(NVGcontext* vg, float x, float y, float w, float h,
     nvgRestore(vg);
 }
 
-#endif // PLATFORM_SWITCH
+#endif // EQX_EMU_UI

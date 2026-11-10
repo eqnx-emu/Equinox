@@ -3,6 +3,12 @@
 #include <filesystem>
 #include <system_error>
 
+#if defined(EQX_FAKE_EMU)
+#include <fstream>
+
+#include "emu/RunnerManifest.hpp"
+#endif
+
 namespace emu {
 
 const std::vector<Console>& consoles() {
@@ -37,6 +43,19 @@ const std::vector<Console>& consoles() {
          0x0f2a2b,
          "GBC",
          0x7fd6c4},
+#if defined(EQX_FAKE_EMU)
+        // Desktop testing only: no runner repo, no thumbnails, no ScreenScraper id.
+        {"fake",
+         "Console Falso",
+         {".fake"},
+         "",
+         "",
+         1,
+         0x5a2f3a,
+         0x2a1520,
+         "FAKE",
+         0xf0a8b5},
+#endif
     };
     return all;
 }
@@ -73,5 +92,24 @@ bool ensureFolders(const ConsolePaths& paths) {
     }
     return ok;
 }
+
+#if defined(EQX_FAKE_EMU)
+void seedFakeConsole() {
+    const Console* fake = findConsole("fake");
+    if (!fake) return;
+    const ConsolePaths paths = pathsFor(*fake);
+    if (!ensureFolders(paths)) return;
+    auto touch = [](const std::string& path, const std::string& body) {
+        std::error_code ec;
+        if (std::filesystem::exists(path, ec)) return;
+        std::ofstream(path, std::ios::binary) << body;
+    };
+    touch(paths.runner, "fake runner");
+    if (!readInstalled(paths.installed)) writeInstalled(paths.installed, Installed{"0.0.0-fake", "", 1, 0});
+    for (const char* title : {"Aventura no Vale", "Corrida Turbo", "Castelo Sombrio", "Puzzle Estelar",
+                              "Lutadores da Rua", "Nave Cometa", "Fazenda Feliz", "Ninja das Sombras"})
+        touch(paths.roms + "/" + title + ".fake", std::string("fake rom: ") + title);
+}
+#endif
 
 }  // namespace emu

@@ -33,7 +33,7 @@
 #include "metrics_hud.hpp"
 #include "views/boolean_slider_cell.hpp"
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
 #include "downloads_view.hpp"
 #include "emu/EmuLauncher.hpp"
 #include "emu/LaunchLine.hpp"
@@ -318,6 +318,10 @@ int main(int argc, char* argv[]) {
     brls::getStyle().addMetric("about/padding_top_bottom", 50);
     brls::getStyle().addMetric("about/padding_sides", 75);
     brls::getStyle().addMetric("about/description_margin", 50);
+
+#if defined(EQX_FAKE_EMU)
+    emu::seedFakeConsole();
+#endif
 
     // Back from a console game: the runner passes a resume token. The home
     // screen opens straight on the console's shelf, without the splash.

@@ -5,7 +5,7 @@
 
 #include "library_widgets.hpp"
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
 
 #include <algorithm>
 
@@ -54,4 +54,4 @@ std::string libraryStopText(emu::DataStop stop) {
     return "";
 }
 
-#endif // PLATFORM_SWITCH
+#endif // EQX_EMU_UI

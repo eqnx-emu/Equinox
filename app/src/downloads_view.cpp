@@ -5,7 +5,7 @@
 
 #include "downloads_view.hpp"
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
 
 #include "bold_label.hpp"
 #include "download_service.hpp"
@@ -1081,4 +1081,4 @@ void DownloadIndicator::setActive(bool on) {
         onHidden();
 }
 
-#endif // PLATFORM_SWITCH
+#endif // EQX_EMU_UI

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include "emu/DataRoot.hpp"
 #include <vector>
 
 namespace emu {
@@ -25,8 +26,14 @@ struct ConsolePaths {
 
 const std::vector<Console>& consoles();
 const Console* findConsole(const std::string& slug);
-ConsolePaths pathsFor(const Console& console, const std::string& root = "sdmc:/equinox");
+ConsolePaths pathsFor(const Console& console, const std::string& root = kDataRoot);
 // Creates every folder; true when all of them exist afterwards.
 bool ensureFolders(const ConsolePaths& paths);
+
+#if defined(EQX_FAKE_EMU)
+// Desktop testing: the fake console's runner and a few empty games, so its
+// screens open. Nothing is downloaded for it and its games open nothing.
+void seedFakeConsole();
+#endif
 
 }  // namespace emu

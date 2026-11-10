@@ -12,7 +12,7 @@
 #include "settings_tab.hpp"
 #include <Settings.hpp>
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
 #include "console_shelf_view.hpp"
 #include "download_service.hpp"
 #include "downloads_view.hpp"
@@ -93,7 +93,7 @@ std::string consolesText(int count) {
                       : brls::getStr("home/consoles_count", count);
 }
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
 // Latest manifest seen per console (update check or install), kept while
 // the app runs: the "Add" choice shows its size, the cards their update.
 std::map<std::string, emu::Manifest>& latestManifests() {
@@ -254,7 +254,7 @@ FavoriteSummary favoriteSummary() {
         summary.perHost.push_back({i, count});
         summary.names.push_back(hosts[i].hostname);
     }
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     const auto& local = Settings::instance().local_favorites();
     for (const emu::Console& console : emu::consoles()) {
         const int count = (int)std::count_if(
@@ -782,7 +782,7 @@ HomeView::HomeView() {
     header->addView(title);
     addView(header);
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     auto* badge = new DownloadIndicator();
     badge->setPositionType(PositionType::ABSOLUTE);
     badge->setPositionTop(33);
@@ -953,7 +953,7 @@ MotionBox* HomeView::makeLayer(Shelf& shelf, bool forPcs) {
 
 void HomeView::buildHomeCards() {
     const HomeCardKind kinds[] = {HomeCardKind::PCS, HomeCardKind::FAVORITES,
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
                                   HomeCardKind::DOWNLOADS,
 #endif
                                   HomeCardKind::SETTINGS, HomeCardKind::ABOUT};
@@ -1005,7 +1005,7 @@ void HomeView::buildHostCards() {
     }
 
     consoleCards.clear();
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     for (const emu::Console& console : emu::consoles()) {
         if (!runnerInstalled(console))
             continue;
@@ -1182,7 +1182,7 @@ void HomeView::updateShelfInfo() {
         pcs.info->setText(text.empty() || text == " " ? card->statusText()
                                                       : text);
         pcs.detail->setText(card->detailText());
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     } else if (ConsoleCard* console = selectedConsole()) {
         pcs.info->setText(console->statusText());
         pcs.detail->setText(console->detailText() + "  ·  " +
@@ -1327,7 +1327,7 @@ void HomeView::fillPanel() {
                 detail += "  ·  " + info;
             panelDetail->setText(detail);
             options = hostOptions(card);
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
         } else if (ConsoleCard* card = selectedConsole()) {
             panelName->setText(card->console().name);
             panelStatus->setText(card->statusText());
@@ -1434,7 +1434,7 @@ View* HomeView::getDefaultFocus() {
 }
 
 View* HomeView::getNextFocus(FocusDirection direction, View* currentView) {
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     if (!downloadBadge)
         return nullptr;
     if (direction == FocusDirection::UP && !entered && downloadBadge->shown() &&
@@ -1578,7 +1578,7 @@ std::vector<HomeOption> HomeView::hostOptions(HostCard* card) {
 
 void HomeView::openConsole(const emu::Console& console,
                            const std::string& selectRom) {
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     presentWithHeader(this, new ConsoleShelfView(console, selectRom));
 #else
     (void)console;
@@ -1597,7 +1597,7 @@ void HomeView::showAddChoices() {
         presentWithHeader(instance, screen);
     };
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     Style style = Application::getStyle();
     auto* box = new Box(Axis::COLUMN);
     box->setPadding(style["brls/dialog/paddingTopBottom"],
@@ -1665,7 +1665,7 @@ void HomeView::showAddChoices() {
 #endif
 }
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
 
 std::vector<HomeOption> HomeView::consoleOptions(ConsoleCard* card) {
     const emu::Console* console = &card->console();
@@ -2057,7 +2057,7 @@ void HomeView::checkConsoleUpdates() {
 void HomeView::resumeConsole() {}
 void HomeView::checkConsoleUpdates() {}
 
-#endif // PLATFORM_SWITCH
+#endif // EQX_EMU_UI
 
 void HomeView::willAppear(bool resetState) {
     Box::willAppear(resetState);
@@ -2071,7 +2071,7 @@ void HomeView::willAppear(bool resetState) {
     if (appeared) {
         for (HostCard* card : hostCards)
             card->refresh();
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
         // Back from a game or a screen: ROMs may have been added since.
         for (ConsoleCard* card : consoleCards)
             card->refresh();
@@ -2098,7 +2098,7 @@ void HomeView::draw(NVGcontext* vg, float x, float y, float width,
                     float height, Style style, FrameContext* ctx) {
     const float chrome = chromeFade.getValue();
     header->setAlpha(chrome);
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     if (downloadBadge)
         downloadBadge->setAlpha(chrome);
 #endif
@@ -2138,7 +2138,7 @@ void HomeView::openSettings(const std::string& group) {
 }
 
 void HomeView::openDownloads() {
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
     if (instance)
         presentWithHeader(instance, new DownloadsView());
 #endif

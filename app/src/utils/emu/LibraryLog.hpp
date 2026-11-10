@@ -12,7 +12,11 @@
 
 namespace emu::liblog {
 
+#if defined(PLATFORM_SWITCH)
 constexpr const char* kFile = "sdmc:/equinox/library.log";
+#else
+constexpr const char* kFile = "equinox-data/library.log";
+#endif
 
 int64_t nowUs();
 // Stamped with the seconds since the app started.

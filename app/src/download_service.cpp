@@ -32,7 +32,11 @@ namespace fs = std::filesystem;
 
 namespace {
 
+#if defined(PLATFORM_SWITCH)
 constexpr const char* kQueueFile = "sdmc:/equinox/downloads.json";
+#else
+constexpr const char* kQueueFile = "equinox-data/downloads.json";
+#endif
 constexpr auto kSaveEvery = std::chrono::seconds(2);
 constexpr auto kProgressEvery = std::chrono::milliseconds(100);
 // Backoff and quota expire without anyone waking the worker.
@@ -215,7 +219,19 @@ void DownloadService::registerKind(emu::DlKind kind, Runner runner) {
     runners_[kind] = std::move(runner);
 }
 
+// The fake console of the desktop test build has nothing to download.
+static bool fakeTask(const emu::DlTask& task) {
+#if defined(EQX_FAKE_EMU)
+    const emu::Console* console = emu::findConsole(task.group);
+    return console && console->repo.empty();
+#else
+    (void)task;
+    return false;
+#endif
+}
+
 bool DownloadService::submit(emu::DlTask task) {
+    if (fakeTask(task)) return false;
     std::lock_guard<std::mutex> lock(mutex_);
     const std::string id = task.id;
     const bool created = queue_.submit(std::move(task));
@@ -226,6 +242,7 @@ bool DownloadService::submit(emu::DlTask task) {
 }
 
 void DownloadService::submitAll(std::vector<emu::DlTask> tasks) {
+    tasks.erase(std::remove_if(tasks.begin(), tasks.end(), fakeTask), tasks.end());
     if (tasks.empty()) return;
     std::lock_guard<std::mutex> lock(mutex_);
     const bool saved = std::any_of(tasks.begin(), tasks.end(),

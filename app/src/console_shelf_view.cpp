@@ -7,7 +7,7 @@
 #include "console_card.hpp"
 #include "options_sheet.hpp"
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
 
 #include "Settings.hpp"
 #include "bold_label.hpp"
@@ -1297,4 +1297,4 @@ void ConsoleShelfView::draw(NVGcontext* vg, float x, float y, float width,
     Box::draw(vg, x, y, width, height, style, ctx);
 }
 
-#endif // PLATFORM_SWITCH
+#endif // EQX_EMU_UI

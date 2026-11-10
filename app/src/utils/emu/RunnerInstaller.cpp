@@ -35,6 +35,10 @@ std::optional<Manifest> fetchLatest(const Console& console, std::string& error,
         return std::nullopt;
     };
     if (code) *code = RunnerError::None;
+    if (console.repo.empty()) {  // the desktop build's fake console
+        error = "no runner to fetch";
+        return failWith(RunnerError::Network);
+    }
 
     std::string body;
     if (!httpGetToString(manifestUrl(console), body, MANIFEST_TIMEOUT, error))

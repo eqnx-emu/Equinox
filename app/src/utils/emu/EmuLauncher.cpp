@@ -107,7 +107,22 @@ bool launchRom(const Console& console, const RomEntry& rom, Origin origin, int f
 
 #else
 
-bool launchRom(const Console&, const RomEntry&, Origin, int) { return false; }
+#if defined(EQX_FAKE_EMU)
+}  // namespace emu
+#include <borealis.hpp>
+namespace emu {
+#endif
+
+bool launchRom(const Console& console, const RomEntry& rom, Origin, int) {
+#if defined(EQX_FAKE_EMU)
+    // The desktop test build opens no game: it only says which one it would open.
+    brls::Application::notify(console.name + ": " + rom.title);
+#else
+    (void)console;
+    (void)rom;
+#endif
+    return false;
+}
 
 #endif
 

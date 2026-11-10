@@ -5,7 +5,7 @@
 
 #include "game_row_cell.hpp"
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
 
 #include "Settings.hpp"
 #include "bold_label.hpp"
@@ -462,4 +462,4 @@ void GameRowCell::drawThumb(NVGcontext* vg, float x, float y, float height) {
     nvgFill(vg);
 }
 
-#endif // PLATFORM_SWITCH
+#endif // EQX_EMU_UI

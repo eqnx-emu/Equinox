@@ -266,6 +266,15 @@ if (SUPPORT_UPSCALING)
     add_definitions(-DSUPPORT_UPSCALING)
 endif ()
 
+# Emulator screens: the Switch ships them; the desktop build can show them
+# with a fake console whose games open nothing, to try the screens out.
+option(EQX_FAKE_EMU "Desktop: show the emulator screens with a fake console" ON)
+if (PLATFORM_SWITCH)
+    add_definitions(-DEQX_EMU_UI)
+elseif (EQX_FAKE_EMU)
+    add_definitions(-DEQX_EMU_UI -DEQX_FAKE_EMU)
+endif ()
+
 # Copy the MSYS2 DLLs the executable needs next to it.
 if (PLATFORM_DESKTOP AND NOT MOONLIGHT_DESKTOP_SYSTEM_PREFIX STREQUAL "")
     set(_moonlight_runtime_dependency_dir "${MOONLIGHT_DESKTOP_SYSTEM_PREFIX}/bin")

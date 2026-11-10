@@ -5,7 +5,7 @@
 
 #include "game_list_panel.hpp"
 
-#if defined(PLATFORM_SWITCH)
+#if defined(EQX_EMU_UI)
 
 #include "Settings.hpp"
 #include "bold_label.hpp"
@@ -1073,4 +1073,4 @@ void GameListPanel::applyBatch() {
     }
 }
 
-#endif // PLATFORM_SWITCH
+#endif // EQX_EMU_UI

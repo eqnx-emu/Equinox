@@ -47,12 +47,12 @@ std::optional<Manifest> fetchLatest(const Console& console, std::string& error,
 // left as it was on any failure.
 InstallResult installRunner(const Console& console, const Manifest& manifest,
                             const Progress& progress,
-                            const std::string& root = "sdmc:/equinox");
+                            const std::string& root = kDataRoot);
 
 // Removes what a stopped installRunner kept: after a user cancel.
-void discardRunnerDownload(const Console& console, const std::string& root = "sdmc:/equinox");
+void discardRunnerDownload(const Console& console, const std::string& root = kDataRoot);
 
 // Deletes only <emulator>; ROMs, saves, states and covers stay.
-bool removeRunner(const Console& console, const std::string& root = "sdmc:/equinox");
+bool removeRunner(const Console& console, const std::string& root = kDataRoot);
 
 }  // namespace emu
