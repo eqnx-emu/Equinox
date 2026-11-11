@@ -63,18 +63,39 @@ std::string fullPath(const std::string& path) {
 class RenderThread {
   public:
     static void post(std::function<void()> job) {
-        // Never destroyed: the thread may still wait on it while the app exits.
-        static RenderThread* instance = new RenderThread();
+        RenderThread& self = instance();
         {
-            std::lock_guard<std::mutex> lock(instance->mutex);
-            instance->jobs.push_back(std::move(job));
+            std::lock_guard<std::mutex> lock(self.mutex);
+            if (self.stopping)
+                return;
+            self.jobs.push_back(std::move(job));
         }
-        instance->wake.notify_one();
+        self.wake.notify_one();
+    }
+
+    static void stop() {
+        RenderThread& self = instance();
+        {
+            std::lock_guard<std::mutex> lock(self.mutex);
+            if (self.stopping)
+                return;
+            self.stopping = true;
+            self.jobs.clear();
+        }
+        self.wake.notify_one();
+        if (self.thread.joinable())
+            self.thread.join();
     }
 
   private:
+    // Never destroyed: stop() ends the thread, and a job posted after it is
+    // dropped instead of touching a dead object.
+    static RenderThread& instance() {
+        static RenderThread* instance = new RenderThread();
+        return *instance;
+    }
+
     // Kept, not detached: libnx has no pthread_detach, so detach() throws.
-    // The instance is never destroyed, so the thread is never joined.
     RenderThread() : thread([this] { run(); }) {}
 
     void run() {
@@ -100,7 +121,9 @@ class RenderThread {
             std::function<void()> job;
             {
                 std::unique_lock<std::mutex> lock(mutex);
-                wake.wait(lock, [this] { return !jobs.empty(); });
+                wake.wait(lock, [this] { return stopping || !jobs.empty(); });
+                if (stopping)
+                    return;
                 job = std::move(jobs.front());
                 jobs.pop_front();
             }
@@ -113,9 +136,12 @@ class RenderThread {
     std::mutex mutex;
     std::condition_variable wake;
     std::deque<std::function<void()>> jobs;
+    bool stopping = false;
     std::thread thread; // last: run() uses the members above
 };
 } // namespace
+
+void Turntable::stopRenders() { RenderThread::stop(); }
 
 // Shared with the worker, so a Turntable can go while a render is running.
 // While working is set the worker owns mesh and pixels; the UI thread touches

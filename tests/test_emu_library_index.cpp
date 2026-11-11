@@ -23,6 +23,7 @@ static emu::ConsolePaths tempPaths(const char* name) {
 }
 
 static void touch(const fs::path& path, const std::string& body) {
+    fs::create_directories(path.parent_path());
     std::ofstream file(path, std::ios::binary);
     file << body;
 }
@@ -121,4 +122,59 @@ TEST_CASE("empty files are not games") {
     CHECK(emu::romFileUsable(paths.roms + "/full.7z"));
     CHECK_FALSE(emu::romFileUsable(paths.roms + "/empty.7z"));
     CHECK_FALSE(emu::romFileUsable(paths.roms + "/gone.7z"));
+}
+
+TEST_CASE("games inside folders are found, with the folder in their file name") {
+    const emu::ConsolePaths paths = tempPaths("equinox_index_folders");
+    const fs::path roms = emu::fromUtf8(paths.roms);
+    touch(roms / "Crash Bandicoot (USA)" / "Crash Bandicoot (USA).cue", "x");
+    touch(roms / "Crash Bandicoot (USA)" / "Crash Bandicoot (USA).bin", "x");
+    touch(roms / "Tekken 3.chd", "x");
+    touch(roms / "a" / "b" / "c" / "Deep.chd", "x");
+    touch(roms / "a" / "b" / "c" / "d" / "Too Deep.chd", "x");
+    touch(roms / ".hidden" / "Secret.chd", "x");
+    touch(roms / "Empty" / "Empty.chd", "");
+
+    emu::Console console;
+    console.extensions = {".cue", ".chd", ".m3u"};
+    const std::vector<emu::RomEntry> found = emu::scanRoms(paths.roms, console);
+    std::vector<std::string> names;
+    for (const emu::RomEntry& rom : found) names.push_back(rom.fileName);
+    CHECK(names == std::vector<std::string>{"Crash Bandicoot (USA)/Crash Bandicoot (USA).cue",
+                                            "a/b/c/Deep.chd", "Tekken 3.chd"});
+    CHECK(found[0].title == "Crash Bandicoot (USA)");
+    CHECK(found[0].path == paths.roms + "/Crash Bandicoot (USA)/Crash Bandicoot (USA).cue");
+
+    std::vector<std::string> listed;
+    REQUIRE(emu::listRomNames(paths.roms, console, listed));
+    std::sort(listed.begin(), listed.end());
+    CHECK(listed == std::vector<std::string>{"Crash Bandicoot (USA)/Crash Bandicoot (USA).cue",
+                                             "Empty/Empty.chd", "Tekken 3.chd", "a/b/c/Deep.chd"});
+}
+
+TEST_CASE("the discs an m3u lists show only as the m3u") {
+    const emu::ConsolePaths paths = tempPaths("equinox_index_m3u");
+    const fs::path roms = emu::fromUtf8(paths.roms);
+    const fs::path game = roms / "Final Fantasy VII (USA)";
+    touch(game / "Final Fantasy VII (USA).m3u",
+          "# discs\r\nFinal Fantasy VII (USA) (Disc 1).chd\r\n.\\Final Fantasy VII (USA) (Disc 2).CHD\r\n");
+    touch(game / "Final Fantasy VII (USA) (Disc 1).chd", "x");
+    touch(game / "Final Fantasy VII (USA) (Disc 2).chd", "x");
+    touch(game / "Final Fantasy VII (USA) (Disc 3).chd", "x");
+
+    emu::Console console;
+    console.extensions = {".chd", ".m3u"};
+    std::vector<std::string> names;
+    for (const emu::RomEntry& rom : emu::scanRoms(paths.roms, console)) names.push_back(rom.fileName);
+    CHECK(names == std::vector<std::string>{
+                       "Final Fantasy VII (USA)/Final Fantasy VII (USA) (Disc 3).chd",
+                       "Final Fantasy VII (USA)/Final Fantasy VII (USA).m3u"});
+}
+
+TEST_CASE("file names sort by the game's own name, whatever folder holds it") {
+    CHECK(emu::romFileNameLess("Zelda/Alpha.sfc", "Beta.sfc"));
+    CHECK(emu::romFileNameLess("beta.sfc", "Gamma/Beta.sfc"));
+    CHECK_FALSE(emu::romFileNameLess("Gamma.sfc", "Alpha/Beta.sfc"));
+    CHECK(emu::romBaseName("a/b/Game.cue") == "Game.cue");
+    CHECK(emu::romBaseName("Game.cue") == "Game.cue");
 }

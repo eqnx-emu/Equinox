@@ -86,7 +86,8 @@ Equinox can also run games on the console itself:
 
 1. On the home screen, open the **Add** card and pick the console. Equinox downloads the
    emulator to `sdmc:/equinox/emulators/<folder>/`.
-2. Copy your own game files to `sdmc:/equinox/roms/<folder>/`.
+2. Copy your own game files to `sdmc:/equinox/roms/<folder>/`, loose or in folders up to
+   three levels deep (one folder per game, or `Hacks/`, `USA/RPG/`).
 3. Select the console's card to see your games. Covers are fetched on their own.
 
 Saves and save states live in `sdmc:/equinox/saves/<folder>/` and
@@ -94,7 +95,8 @@ Saves and save states live in `sdmc:/equinox/saves/<folder>/` and
 and covers on the SD card. Equinox does not provide games or BIOS files.
 
 PlayStation games are disc images: keep a `.cue` next to its `.bin` tracks, and list the
-discs of a multi-disc game in an `.m3u` to swap them from the pause menu. `.zip` and `.7z`
+discs of a multi-disc game in an `.m3u` to swap them from the pause menu; the game then
+shows once, as the `.m3u`, not once per disc it lists. `.zip` and `.7z`
 are not read; `.chd` saves space instead. Put the BIOS (`scph5501.bin` and the like) in
 `sdmc:/equinox/bios/`; without one the emulator uses its built-in BIOS, which runs most
 games but not all. Discs are too big to identify by checksum on the console, so their
