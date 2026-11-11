@@ -33,6 +33,11 @@ class Turntable {
     // The image is in the resources: use a Turntable instead of the card.
     static bool exists(const std::string& path);
 
+    // Ends the render thread once its current render is done; renders asked
+    // for later are dropped. Called on the way out: a thread still alive keeps
+    // its stack mapped, and the Homebrew Loader then cannot load the emulator.
+    static void stopRenders();
+
     // Spin (selected) or turn back to the front; hops when it starts.
     void setActive(bool active);
 

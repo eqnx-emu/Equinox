@@ -26,6 +26,7 @@
 #include "main_activity.hpp"
 #include "backdrop_frame.hpp"
 #include "home_view.hpp"
+#include "turntable.hpp"
 #include "settings_tab.hpp"
 #include "app_theme.hpp"
 #include "splash_view.hpp"
@@ -357,8 +358,10 @@ int main(int argc, char* argv[]) {
     while (brls::Application::mainLoop()) {
     }
 
-    // Exit
+    // Exit. Every thread must end here: one still alive keeps its stack mapped
+    // and the Homebrew Loader cannot load the emulator that comes next.
     DownloadService::instance().shutdown();
+    Turntable::stopRenders();
 
     return EXIT_SUCCESS;
 }
