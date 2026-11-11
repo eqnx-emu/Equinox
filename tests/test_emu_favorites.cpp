@@ -91,6 +91,14 @@ TEST_CASE("toggle adds then removes, and the list round-trips through JSON") {
 
     // Nothing unsafe gets in through toggle either.
     CHECK_FALSE(emu::toggleLocalFavorite(list, {"snes", "../x.sfc", "x"}));
+    CHECK_FALSE(emu::toggleLocalFavorite(list, {"snes", "a/../../x.sfc", "x"}));
+    CHECK_FALSE(emu::toggleLocalFavorite(list, {"snes", "/x.sfc", "x"}));
+    CHECK_FALSE(emu::toggleLocalFavorite(list, {"snes", "a//x.sfc", "x"}));
+    CHECK_FALSE(emu::toggleLocalFavorite(list, {"snes", "a\\x.sfc", "x"}));
     CHECK_FALSE(emu::toggleLocalFavorite(list, {"", "x.sfc", "x"}));
     CHECK(list.size() == 1);
+
+    // A game in a folder is kept with its folder.
+    CHECK(emu::toggleLocalFavorite(list, {"ps1", "Crash (USA)/Crash (USA).cue", "Crash (USA)"}));
+    CHECK(list.size() == 2);
 }

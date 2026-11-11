@@ -38,7 +38,8 @@ TEST_CASE("scanRoms filters and sorts") {
     put(dir / "sub" / "x.sfc", "x");
 
     auto roms = emu::scanRoms(emu::toUtf8(dir), *snes);
-    REQUIRE(roms.size() == 5);
+    // The game in a folder is found too, sorted by its own name.
+    REQUIRE(roms.size() == 6);
     CHECK(roms[0].fileName == "b.SMC");
     CHECK(roms[0].title == "b");
     CHECK(roms[2].fileName == "Pok\xC3\xA9mon d'Or.zip");
@@ -47,6 +48,8 @@ TEST_CASE("scanRoms filters and sorts") {
     CHECK(roms[1].fileName == "B2.ZIP");
     CHECK(roms[3].title == "Super Mario World v1.1");
     CHECK(roms[4].title == "Super Metroid (USA)");
+    CHECK(roms[5].fileName == "sub/x.sfc");
+    CHECK(roms[5].title == "x");
     CHECK(fs::exists(emu::fromUtf8(roms[2].path)));
 
     std::error_code ec;

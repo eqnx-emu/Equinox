@@ -128,7 +128,7 @@ DataOutcome fetchGameData(const GameDataRequest& req, DataTransport& transport,
     if (!ssConfigured(req.ss) || systemId == 0) {
         meta.synopsis = PartState::Skipped;
     } else {
-        const SsQuery query{systemId, meta.crc, req.rom.fileName, meta.size};
+        const SsQuery query{systemId, meta.crc, romBaseName(req.rom.fileName), meta.size};
         std::string body;
         long httpStatus = 0;
         const FetchResult result = transport.toString(ssUrl(req.ss, query), body, httpStatus);

@@ -15,10 +15,19 @@ std::string stringField(const json_t* object, const char* key) {
     return json_string_value(value);
 }
 
-// The ROM is opened as <roms>/<romFile>: only a plain file name is allowed.
+// The ROM is opened as <roms>/<romFile>: a name, or folders and a name joined
+// by '/', that cannot climb out of the console's folder.
 bool plainFileName(const std::string& name) {
-    return !name.empty() && name != "." && name != ".." &&
-           name.find_first_of("/\\") == std::string::npos;
+    if (name.empty() || name.find('\\') != std::string::npos) return false;
+    size_t start = 0;
+    while (true) {
+        const size_t slash = name.find('/', start);
+        const size_t len = slash == std::string::npos ? std::string::npos : slash - start;
+        const std::string part = name.substr(start, len);
+        if (part.empty() || part == "." || part == "..") return false;
+        if (slash == std::string::npos) return true;
+        start = slash + 1;
+    }
 }
 
 bool sameGame(const LocalFavorite& f, const std::string& console, const std::string& romFile) {
