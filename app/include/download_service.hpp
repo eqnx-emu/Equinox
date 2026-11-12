@@ -68,6 +68,11 @@ class DownloadService {
     void cancel(const std::string& id);
     // Covers get one event with an empty id, the other kinds one per task.
     void cancelGroup(const std::string& group, emu::DlKind kind);
+    // The user cancelled a console's covers: they stop and stay out of the
+    // queue, even when the shelf asks for them again, until releaseCovers
+    // (the user's rescan of that console).
+    void holdCovers(const std::string& group);
+    void releaseCovers(const std::string& group);
     // A whole group at once, under one lock. Game data and the other kinds
     // get one event per task; covers, however many changed, one event with an
     // empty id.
