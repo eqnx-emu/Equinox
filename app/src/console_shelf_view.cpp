@@ -526,6 +526,9 @@ void ConsoleShelfView::saveIndex(bool wait) {
 }
 
 void ConsoleShelfView::rescan(bool clearMisses) {
+    // The user's rescan asks for the covers again, even ones cancelled in Downloads.
+    if (clearMisses)
+        DownloadService::instance().releaseCovers(consoleRef.slug);
     if (scanning)
         return;
     scanning = true;

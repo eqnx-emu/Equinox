@@ -29,6 +29,7 @@ bool DownloadQueue::hasRunning() const {
 }
 
 bool DownloadQueue::submit(DlTask task) {
+    if (task.kind == DlKind::Cover && coversHeld(task.group)) return false;
     if (DlTask* existing = find(task.id)) {
         if (task.priority < existing->priority) existing->priority = task.priority;
         if (task.skipWait && task.priority == DlPriority::Interactive) existing->skipWait = true;
@@ -46,6 +47,7 @@ size_t DownloadQueue::submitAll(std::vector<DlTask> tasks) {
 
     size_t changed = 0;
     for (DlTask& task : tasks) {
+        if (task.kind == DlKind::Cover && coversHeld(task.group)) continue;
         auto found = known.find(task.id);
         if (found == known.end()) {
             known[task.id] = tasks_.size();
@@ -221,6 +223,13 @@ void DownloadQueue::cancelGroup(const std::string& group, DlKind kind) {
                  tasks_.end());
     finished_.erase({group, kind});
 }
+
+void DownloadQueue::holdCovers(const std::string& group) {
+    coverHolds_.insert(group);
+    cancelGroup(group, DlKind::Cover);
+}
+
+void DownloadQueue::releaseCovers(const std::string& group) { coverHolds_.erase(group); }
 
 void DownloadQueue::dropEmptyGroup(const GroupKey& key) {
     const bool left = std::any_of(tasks_.begin(), tasks_.end(), [&](const DlTask& t) {

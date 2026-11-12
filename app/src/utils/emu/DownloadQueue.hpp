@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -110,6 +111,13 @@ class DownloadQueue {
     void resume(const std::string& id);
     void cancel(const std::string& id);
     void cancelGroup(const std::string& group, DlKind kind);
+    // The user stopped a console's covers: they are dropped, and submit and
+    // submitAll refuse that console's covers until releaseCovers. Saved with
+    // the queue, so a restart does not bring them back either.
+    void holdCovers(const std::string& group);
+    void releaseCovers(const std::string& group);
+    bool coversHeld(const std::string& group) const { return coverHolds_.count(group) > 0; }
+    const std::set<std::string>& coverHolds() const { return coverHolds_; }
     // One pass each, for a whole group at once. Return the ids they changed.
     std::vector<std::string> pauseGroup(const std::string& group, DlKind kind);
     std::vector<std::string> resumeGroup(const std::string& group, DlKind kind);
@@ -147,6 +155,7 @@ class DownloadQueue {
     std::map<std::string, Backoff> backoff_;
     std::map<std::string, DlHostBlocks> blocks_;
     std::map<GroupKey, size_t> finished_;
+    std::set<std::string> coverHolds_;  // consoles whose covers the user stopped
 };
 
 }  // namespace emu

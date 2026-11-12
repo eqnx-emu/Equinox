@@ -138,6 +138,11 @@ bool saveDownloads(const std::string& path, const DownloadQueue& queue) {
     }
     json_object_set_new(root.get(), "blocks", blocks);
 
+    json_t* holds = json_array();
+    for (const std::string& group : queue.coverHolds())
+        json_array_append_new(holds, json_string(group.c_str()));
+    json_object_set_new(root.get(), "coverHolds", holds);
+
     const fs::path target = fromUtf8(path);
     const fs::path tmp = fromUtf8(path + ".tmp");
     const fs::path backup = fromUtf8(path + ".old");
@@ -189,6 +194,14 @@ bool loadDownloads(const std::string& path, DownloadQueue& queue) {
             b.quotaUntil = json_is_integer(until) ? json_integer_value(until) : 0;
             queue.setBlocks(host, b);
         }
+    }
+
+    const json_t* holds = json_object_get(root.get(), "coverHolds");
+    if (json_is_array(holds)) {
+        size_t h;
+        json_t* group;
+        json_array_foreach(holds, h, group)
+            if (json_is_string(group)) queue.holdCovers(json_string_value(group));
     }
     return true;
 }

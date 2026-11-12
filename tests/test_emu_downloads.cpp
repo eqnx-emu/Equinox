@@ -962,3 +962,43 @@ TEST_CASE("only no answer, a cut body, 5xx and 429 are worth retrying") {
     CHECK_FALSE(retryable(410));
     CHECK_FALSE(retryable(416));
 }
+
+TEST_CASE("covers the user stopped for a console are not queued again") {
+    DownloadQueue q;
+    q.submit(inGroup("a", "snes", DlKind::Cover));
+    q.holdCovers("snes");
+    CHECK(q.tasks().empty());
+    CHECK(q.coversHeld("snes"));
+
+    // What brings them back: the shelf asking again after another download.
+    CHECK_FALSE(q.submit(inGroup("b", "snes", DlKind::Cover)));
+    CHECK(q.submitAll({inGroup("c", "snes", DlKind::Cover)}) == 0);
+    CHECK(q.tasks().empty());
+
+    // Other consoles and other kinds are not held.
+    CHECK(q.submit(inGroup("d", "nes", DlKind::Cover)));
+    CHECK(q.submit(inGroup("e", "snes", DlKind::GameData)));
+    CHECK(q.tasks().size() == 2);
+}
+
+TEST_CASE("releasing a console's covers lets them be queued again") {
+    DownloadQueue q;
+    q.holdCovers("snes");
+    q.releaseCovers("snes");
+    CHECK_FALSE(q.coversHeld("snes"));
+    CHECK(q.submit(inGroup("a", "snes", DlKind::Cover)));
+}
+
+TEST_CASE("store keeps the consoles whose covers were stopped") {
+    const std::string path = tmpPath("holds.json");
+    DownloadQueue q;
+    q.holdCovers("snes");
+    q.holdCovers("gba");
+    REQUIRE(saveDownloads(path, q));
+
+    DownloadQueue loaded;
+    REQUIRE(loadDownloads(path, loaded));
+    CHECK(loaded.coversHeld("snes"));
+    CHECK(loaded.coversHeld("gba"));
+    CHECK_FALSE(loaded.coversHeld("nes"));
+}

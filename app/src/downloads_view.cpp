@@ -318,6 +318,11 @@ bool shownWithin(View* view, View* root) {
 
 void cancelGroup(const emu::DlGroup& group) {
     DownloadService& service = DownloadService::instance();
+    // Covers are asked for again whenever a shelf fills: a cancel holds them.
+    if (group.kind == emu::DlKind::Cover) {
+        service.holdCovers(group.group);
+        return;
+    }
     service.cancelGroup(group.group, group.kind);
     // A runner keeps its .part across pauses. While the worker still runs
     // it, the runner removes it itself; the app update does the same in its
