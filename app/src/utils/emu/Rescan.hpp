@@ -2,7 +2,8 @@
 
 namespace emu {
 
-// Who asked a console shelf to read its games again.
+// Who asked a console shelf to read its games again. The home card's own
+// rescan clears the misses but keeps the holds.
 enum class RescanFrom {
     Refresh,     // the shelf itself, after a missing or unusable game
     Shortcut,    // the hidden ZL shortcut
@@ -13,8 +14,8 @@ enum class RescanFrom {
 // Covers libretro lacked are tried again whenever the user asks.
 inline bool clearsCoverMisses(RescanFrom from) { return from != RescanFrom::Refresh; }
 
-// Covers the user stopped in Downloads come back only through a rescan they
-// picked on screen, never through a shortcut pressed by chance.
+// Covers the user stopped in Downloads come back only through a shelf rescan
+// they picked on screen, never through a shortcut pressed by chance.
 inline bool releasesCoverHolds(RescanFrom from) {
     return from == RescanFrom::Menu || from == RescanFrom::EmptyShelf;
 }
