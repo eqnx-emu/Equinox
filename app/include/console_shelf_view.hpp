@@ -20,6 +20,7 @@
 #include "emu/Library.hpp"
 #include "emu/LibraryIndex.hpp"
 #include "emu/LibraryLog.hpp"
+#include "emu/Rescan.hpp"
 #include "emu/RomScan.hpp"
 #include <borealis.hpp>
 
@@ -108,7 +109,7 @@ class ConsoleShelfView : public brls::Box {
     // The index on the card, when there is one, then a look at the folder.
     void openLibrary();
     // Every game on the card, read again.
-    void rescan(bool clearMisses);
+    void rescan(emu::RescanFrom from);
     void showLoading();
     // In the background: games put on or taken off the card since the index.
     void checkFolder();

@@ -130,6 +130,9 @@ class DownloadService {
     void requestStop(StopReason reason);
     // True when it wrote. Unlocks while writing.
     bool saveQueue(std::unique_lock<std::mutex>& lock, bool force);
+    // The worker writes the queue at its next turn, not kSaveEvery later; a
+    // download under way reaches it at its next progress report. Caller holds mutex_.
+    void saveNow();
     void post(std::vector<DlEvent> events);
     void post(DlEvent event);
     // After a group operation changed `ids` to `state`. Lock held.
