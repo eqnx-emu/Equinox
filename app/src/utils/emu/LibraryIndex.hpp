@@ -35,7 +35,8 @@ bool saveLibraryIndex(const ConsolePaths& paths, const std::string& appVersion,
                       const std::vector<LibraryGame>& games);
 
 // Covers keep downloading after the list closes, so the index can miss some
-// that are on the card. Marks every game without a cover whose file `onCard`
+// that are on the card. Marks every game without a cover, and not missed
+// (those are never asked again), whose file `onCard`
 // finds; returns how many changed.
 size_t markCoversOnCard(std::vector<LibraryGame>& games,
                         const std::function<bool(const LibraryGame&)>& onCard);

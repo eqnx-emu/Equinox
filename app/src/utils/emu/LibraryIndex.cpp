@@ -131,10 +131,9 @@ size_t markCoversOnCard(std::vector<LibraryGame>& games,
                         const std::function<bool(const LibraryGame&)>& onCard) {
     size_t changed = 0;
     for (LibraryGame& game : games) {
-        if (game.hasCover || !onCard(game))
+        if (game.hasCover || game.missed || !onCard(game))
             continue;
         game.hasCover = true;
-        game.missed = false;
         changed++;
     }
     return changed;

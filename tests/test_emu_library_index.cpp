@@ -186,21 +186,21 @@ TEST_CASE("covers that arrived while the list was closed are marked from the car
     games[2].rom.title = "Pokemon";
     games[2].hasCover = true;                         // already known
     games[3].rom.title = "Zelda";
-    games[3].missed = true;                           // libretro lacked it, then it came
+    games[3].missed = true;                           // libretro lacked it: never asked again
     const auto onCard = [](const emu::LibraryGame& g) {
         return g.rom.title == "Tetris" || g.rom.title == "Pokemon" || g.rom.title == "Zelda";
     };
-    CHECK(emu::markCoversOnCard(games, onCard) == 2);
+    CHECK(emu::markCoversOnCard(games, onCard) == 1);
     CHECK(games[0].hasCover);
     CHECK_FALSE(games[1].hasCover);
     CHECK(games[2].hasCover);
-    CHECK(games[3].hasCover);
-    CHECK_FALSE(games[3].missed);
+    CHECK_FALSE(games[3].hasCover);
 }
 
-TEST_CASE("a game the index already covers is not looked up on the card") {
-    std::vector<emu::LibraryGame> games(1);
+TEST_CASE("covered and missed games are not looked up on the card") {
+    std::vector<emu::LibraryGame> games(2);
     games[0].hasCover = true;
+    games[1].missed = true;
     int lookups = 0;
     CHECK(emu::markCoversOnCard(games, [&](const emu::LibraryGame&) { return ++lookups, true; }) == 0);
     CHECK(lookups == 0);
