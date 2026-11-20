@@ -153,6 +153,7 @@
         "edit_no_answer": "O PC não respondeu no endereço novo. Salvar assim mesmo?",
         "edit_save_anyway": "Salvar assim mesmo",
         "edit_no_address": "Informe pelo menos um endereço.",
+        "edit_gone": "Este PC não está mais salvo.",
         "status": "Status",
         "unable": "Impossível",
         "wake_up": "Despertar",

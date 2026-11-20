@@ -76,14 +76,14 @@ enum class AddressCheck { Same, OtherPc, NoAnswer };
 
 // Same when every probed address answered with the saved PC's MAC. A
 // different MAC anywhere is OtherPc; otherwise a silent address, or one
-// without a MAC to compare, is NoAnswer.
+// without a MAC to compare (the answer's or the saved PC's), is NoAnswer.
 inline AddressCheck address_check(const std::string& savedMac,
                                   const std::vector<AddressProbe>& probes) {
     AddressCheck result = AddressCheck::Same;
     for (const AddressProbe& p : probes) {
-        if (p.answered && !p.mac.empty() && p.mac != savedMac)
+        if (p.answered && !p.mac.empty() && !savedMac.empty() && p.mac != savedMac)
             return AddressCheck::OtherPc;
-        if (!p.answered || p.mac.empty())
+        if (!p.answered || p.mac.empty() || savedMac.empty())
             result = AddressCheck::NoAnswer;
     }
     return result;

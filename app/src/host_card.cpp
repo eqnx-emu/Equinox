@@ -598,10 +598,13 @@ std::string trimmed(const std::string& s) {
     return s.substr(first, s.find_last_not_of(" \t") - first + 1);
 }
 
-// Asks each address for its serverinfo, one after the other.
+// Asks each address for its serverinfo, one after the other, until cancelled.
 void probeAddresses(std::vector<std::string> left,
                     std::vector<AddressProbe> probes,
+                    std::shared_ptr<bool> cancelled,
                     std::function<void(std::vector<AddressProbe>)> done) {
+    if (*cancelled)
+        return;
     if (left.empty()) {
         done(std::move(probes));
         return;
@@ -609,11 +612,12 @@ void probeAddresses(std::vector<std::string> left,
     const std::string address = left.front();
     left.erase(left.begin());
     GameStreamClient::instance().connect(
-        address, [left, probes, done,
+        address, [left, probes, cancelled, done,
                   address](const GSResult<SERVER_DATA>& result) mutable {
             probes.push_back({address, result.isSuccess(),
                               result.isSuccess() ? result.value().mac : ""});
-            probeAddresses(std::move(left), std::move(probes), std::move(done));
+            probeAddresses(std::move(left), std::move(probes), std::move(cancelled),
+                           std::move(done));
         });
 }
 
@@ -621,7 +625,8 @@ void saveAddresses(const Host& host, const std::string& address,
                    const std::string& remoteAddress) {
     if (!Settings::instance().set_host_addresses(host, address,
                                                  remoteAddress)) {
-        showError("host/edit_no_address"_i18n);
+        // Both empty is refused before: here the PC was removed meanwhile.
+        showError("host/edit_gone"_i18n);
         return;
     }
     GameStreamClient::instance().forget_active_address(host);
@@ -651,7 +656,7 @@ void checkAndSave(const Host& host, const std::string& address,
                                          [cancelled] { *cancelled = true; });
     loader->open();
     probeAddresses(
-        fresh, {},
+        fresh, {}, cancelled,
         [host, address, remoteAddress, cancelled,
          loader](std::vector<AddressProbe> probes) {
             if (*cancelled || isDialogClosing(loader))

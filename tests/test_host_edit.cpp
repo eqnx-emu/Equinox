@@ -66,3 +66,8 @@ TEST_CASE("address_check: same MAC saves, another MAC or no answer asks") {
     CHECK(address_check("AA", {{"192.168.0.11", true, "AA"}, {"home.example.com", false, ""}}) ==
           AddressCheck::NoAnswer);
 }
+
+TEST_CASE("address_check: a PC saved without a MAC is asked about, not called another PC") {
+    CHECK(address_check("", {{"192.168.0.11", true, "AA"}}) == AddressCheck::NoAnswer);
+    CHECK(address_check("", {{"192.168.0.11", false, ""}}) == AddressCheck::NoAnswer);
+}

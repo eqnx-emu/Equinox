@@ -153,6 +153,7 @@
         "edit_no_answer": "The PC did not answer at the new address. Save it anyway?",
         "edit_save_anyway": "Save anyway",
         "edit_no_address": "Enter at least one address.",
+        "edit_gone": "This PC is no longer saved.",
         "status": "Status",
         "unable": "Unable",
         "wake_up": "Wake up",
