@@ -178,3 +178,30 @@ TEST_CASE("file names sort by the game's own name, whatever folder holds it") {
     CHECK(emu::romBaseName("a/b/Game.cue") == "Game.cue");
     CHECK(emu::romBaseName("Game.cue") == "Game.cue");
 }
+
+TEST_CASE("covers that arrived while the list was closed are marked from the card") {
+    std::vector<emu::LibraryGame> games(4);
+    games[0].rom.title = "Tetris";                    // cover came in the background
+    games[1].rom.title = "Wario Land";                // still missing
+    games[2].rom.title = "Pokemon";
+    games[2].hasCover = true;                         // already known
+    games[3].rom.title = "Zelda";
+    games[3].missed = true;                           // libretro lacked it, then it came
+    const auto onCard = [](const emu::LibraryGame& g) {
+        return g.rom.title == "Tetris" || g.rom.title == "Pokemon" || g.rom.title == "Zelda";
+    };
+    CHECK(emu::markCoversOnCard(games, onCard) == 2);
+    CHECK(games[0].hasCover);
+    CHECK_FALSE(games[1].hasCover);
+    CHECK(games[2].hasCover);
+    CHECK(games[3].hasCover);
+    CHECK_FALSE(games[3].missed);
+}
+
+TEST_CASE("a game the index already covers is not looked up on the card") {
+    std::vector<emu::LibraryGame> games(1);
+    games[0].hasCover = true;
+    int lookups = 0;
+    CHECK(emu::markCoversOnCard(games, [&](const emu::LibraryGame&) { return ++lookups, true; }) == 0);
+    CHECK(lookups == 0);
+}

@@ -388,6 +388,13 @@ void ConsoleShelfView::openLibrary() {
         auto scan = std::make_shared<Scan>();
         const bool usable = emu::loadLibraryIndex(where, DownloadService::instance().coverVersion(), scan->games);
         const int64_t indexDone = liblog::nowUs();
+        // Covers that finished while the list was closed are on the card already.
+        const size_t coversFound =
+            usable ? emu::markCoversOnCard(scan->games,
+                                           [&where](const Game& game) {
+                                               return fileExists(emu::coverPath(where, game.rom.title));
+                                           })
+                   : 0;
         if (usable) {
             scan->items.reserve(scan->games.size());
             for (const Game& game : scan->games)
@@ -400,7 +407,9 @@ void ConsoleShelfView::openLibrary() {
                      (dbDone - began) / 1000, (indexDone - dbDone) / 1000,
                      (liblog::nowUs() - indexDone) / 1000, usable);
         liblog::flushSoon();
-        brls::sync([this, token, scan, gameDb, usable] {
+        if (coversFound > 0)
+            liblog::note("index: {} covers found on the card", coversFound);
+        brls::sync([this, token, scan, gameDb, usable, coversFound] {
             if (!*token)
                 return;
             scanning = false;
@@ -413,6 +422,10 @@ void ConsoleShelfView::openLibrary() {
                 createDataQueue();
             }
             showGames(*scan);
+            if (coversFound > 0) {
+                indexDirty = true;
+                saveIndex();
+            }
             checkFolder();
         });
     });

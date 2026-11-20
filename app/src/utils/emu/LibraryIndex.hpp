@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -31,6 +33,12 @@ bool loadLibraryIndex(const ConsolePaths& paths, const std::string& appVersion,
 // Writes <path>.part, then swaps it in. Safe from any thread.
 bool saveLibraryIndex(const ConsolePaths& paths, const std::string& appVersion,
                       const std::vector<LibraryGame>& games);
+
+// Covers keep downloading after the list closes, so the index can miss some
+// that are on the card. Marks every game without a cover whose file `onCard`
+// finds; returns how many changed.
+size_t markCoversOnCard(std::vector<LibraryGame>& games,
+                        const std::function<bool(const LibraryGame&)>& onCard);
 
 struct LibraryDiff {
     std::vector<std::string> added, removed;  // file names
