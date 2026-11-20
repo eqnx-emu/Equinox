@@ -127,6 +127,18 @@ bool saveLibraryIndex(const ConsolePaths& paths, const std::string& appVersion,
     return true;
 }
 
+size_t markCoversOnCard(std::vector<LibraryGame>& games,
+                        const std::function<bool(const LibraryGame&)>& onCard) {
+    size_t changed = 0;
+    for (LibraryGame& game : games) {
+        if (game.hasCover || game.missed || !onCard(game))
+            continue;
+        game.hasCover = true;
+        changed++;
+    }
+    return changed;
+}
+
 LibraryDiff diffLibrary(std::vector<std::string> known, std::vector<std::string> onCard) {
     std::sort(known.begin(), known.end());
     std::sort(onCard.begin(), onCard.end());
