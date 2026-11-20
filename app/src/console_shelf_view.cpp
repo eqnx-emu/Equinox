@@ -308,7 +308,7 @@ ConsoleShelfView::ConsoleShelfView(const emu::Console& console,
 
     empty->registerAction("emu/rescan_short"_i18n, BUTTON_Y, [this](View*) {
         announceScan = true;
-        rescan(true);
+        rescan(emu::RescanFrom::EmptyShelf);
         return true;
     });
     empty->setVisibility(Visibility::GONE);
@@ -329,7 +329,7 @@ ConsoleShelfView::ConsoleShelfView(const emu::Console& console,
     });
     registerAction("emu/rescan"_i18n, BUTTON_LT, [this](View*) {
         announceScan = true;
-        rescan(true);
+        rescan(emu::RescanFrom::Shortcut);
         return true;
     }, true);
     applyActions();
@@ -405,7 +405,7 @@ void ConsoleShelfView::openLibrary() {
                 return;
             scanning = false;
             if (!usable) {
-                rescan(false);
+                rescan(emu::RescanFrom::Refresh);
                 return;
             }
             if (!db) {
@@ -525,9 +525,10 @@ void ConsoleShelfView::saveIndex(bool wait) {
     });
 }
 
-void ConsoleShelfView::rescan(bool clearMisses) {
-    // The user's rescan asks for the covers again, even ones cancelled in Downloads.
-    if (clearMisses)
+void ConsoleShelfView::rescan(emu::RescanFrom from) {
+    const bool clearMisses = emu::clearsCoverMisses(from);
+    // A rescan picked on screen asks for the covers again, even ones cancelled in Downloads.
+    if (emu::releasesCoverHolds(from))
         DownloadService::instance().releaseCovers(consoleRef.slug);
     if (scanning)
         return;
@@ -896,7 +897,7 @@ void ConsoleShelfView::openMore() {
                          [this] { listPanel->downloadAllOrCancel(); }});
     items.push_back({"emu/rescan"_i18n, [this] {
                          announceScan = true;
-                         rescan(true);
+                         rescan(emu::RescanFrom::Menu);
                      }});
     OptionsSheet::open("emu/more_options"_i18n, std::move(items));
 }
@@ -1153,7 +1154,7 @@ void ConsoleShelfView::launch(const LaunchTarget& target) {
 
     // The game may have been deleted since the shelf was filled.
     if (!fileExists(target.rom.path))
-        rescan(false);
+        rescan(emu::RescanFrom::Refresh);
     else
         fetchCovers(target.index);
 }

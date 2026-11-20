@@ -288,7 +288,7 @@ void DownloadService::holdCovers(const std::string& group) {
         if (runningId_ == task.id) requestStop(StopReason::Abandoned);
     }
     queue_.holdCovers(group);
-    dirty_ = true;  // the hold is saved with the queue
+    saveNow();  // a hold lost to a restart brings every cover back
     // Thousands of covers make one event, as in cancelGroup.
     if (had)
         post(DlEvent{std::string(), emu::DlState::Done, 0.0f, emu::DlResult::Cancelled, std::nullopt});
@@ -299,7 +299,7 @@ void DownloadService::releaseCovers(const std::string& group) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!queue_.coversHeld(group)) return;
     queue_.releaseCovers(group);
-    dirty_ = true;
+    saveNow();
 }
 
 void DownloadService::cancelGroup(const std::string& group, emu::DlKind kind) {
@@ -558,6 +558,12 @@ void DownloadService::requestStop(StopReason reason) {
     // A cancelled task is gone: nothing may bring it back.
     if (stopReason_ != StopReason::Abandoned) stopReason_ = reason;
     if (runningStop_) runningStop_->store(true);
+}
+
+void DownloadService::saveNow() {
+    dirty_ = true;
+    nextSave_ = Clock::time_point{};
+    wake_.notify_all();
 }
 
 bool DownloadService::saveQueue(std::unique_lock<std::mutex>& lock, bool force) {

@@ -198,6 +198,7 @@ target_compile_definitions(test_emu_video PRIVATE
 
 add_executable(test_emu_downloads
     test_emu_downloads.cpp
+    test_emu_rescan.cpp
     "${MOONLIGHT_ROOT}/app/src/utils/emu/DownloadQueue.cpp"
     "${MOONLIGHT_ROOT}/app/src/utils/emu/DownloadStore.cpp"
     "${MOONLIGHT_ROOT}/app/src/utils/emu/ResumeState.cpp"
