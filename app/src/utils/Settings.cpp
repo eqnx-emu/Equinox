@@ -144,6 +144,14 @@ void Settings::remove_host(const Host& host) {
     }
 }
 
+bool Settings::set_host_addresses(const Host& host, const std::string& address,
+                                  const std::string& remoteAddress) {
+    if (!::set_host_addresses(m_hosts, host, address, remoteAddress))
+        return false;
+    save();
+    return true;
+}
+
 void Settings::add_favorite(const Host& host, const App& app) {
     if (Host* existing = find_host(m_hosts, host)) {
         auto app_it = std::find_if(existing->favorites.begin(), existing->favorites.end(), [app](auto h){

@@ -531,6 +531,11 @@ std::string GameStreamClient::active_address(const Host& host) const {
     return host.preferred_address();
 }
 
+void GameStreamClient::forget_active_address(const Host& host) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_active_addresses.erase(host_key(host));
+}
+
 void GameStreamClient::connect(const Host& host,
                                ServerCallback<SERVER_DATA>& callback) {
     connect_to_addresses(host.connection_addresses(), host_key(host), callback);

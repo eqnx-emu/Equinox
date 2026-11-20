@@ -64,6 +64,9 @@ class GameStreamClient : public Singleton<GameStreamClient> {
     }
 
     [[nodiscard]] std::string active_address(const Host& host) const;
+    // After the host's addresses were edited: the one it last answered on
+    // may be gone.
+    void forget_active_address(const Host& host);
 
     GameStreamClient();
 
