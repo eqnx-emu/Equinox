@@ -23,6 +23,11 @@ target_include_directories(test_host_edit PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"
     "${MOONLIGHT_ROOT}/extern")
 
+add_executable(test_focus_rule test_focus_rule.cpp)
+target_include_directories(test_focus_rule PRIVATE
+    "${MOONLIGHT_ROOT}/app/src/utils"
+    "${MOONLIGHT_ROOT}/extern")
+
 add_executable(test_stage_retry test_stage_retry.cpp)
 target_include_directories(test_stage_retry PRIVATE
     "${MOONLIGHT_ROOT}/app/src/utils"

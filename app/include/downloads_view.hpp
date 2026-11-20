@@ -62,6 +62,8 @@ class DownloadsView : public brls::Box {
 
     void draw(NVGcontext* vg, float x, float y, float width, float height, brls::Style style,
               brls::FrameContext* ctx) override;
+    // The selected row, else the first shown, else the empty notice.
+    brls::View* getDefaultFocus() override;
 
   private:
     class Row;
@@ -112,7 +114,8 @@ class DownloadsView : public brls::Box {
     // Y: pauses everything, or resumes it when nothing runs and something
     // is paused.
     bool resumesAll() const;
-    // Focus left on something that just went away moves to what is shown.
+    // A focus outside the screen, or on something that just went away, moves
+    // to what is shown.
     void keepFocus();
 };
 

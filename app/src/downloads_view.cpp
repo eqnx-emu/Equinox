@@ -8,6 +8,7 @@
 #if defined(EQX_EMU_UI)
 
 #include "bold_label.hpp"
+#include "FocusRule.hpp"
 #include "download_service.hpp"
 #include "library_widgets.hpp"
 #include "pressable_box.hpp"
@@ -746,8 +747,14 @@ DownloadsView::DownloadsView() : refresher([this] { refresh(); }) {
     empty->addView(emptyBody);
     addView(empty);
 
-    // The list first, not the notices.
-    setDefaultFocusedIndex(1);
+    // B closes the screen wherever the focus is in it.
+    registerAction(
+        "hints/back"_i18n, BUTTON_B,
+        [this](View*) {
+            dismiss();
+            return true;
+        },
+        false, false, SOUND_BACK);
 
     yHint = "downloads/pause_all"_i18n;
     registerAction(yHint, BUTTON_Y, [this](View*) {
@@ -850,6 +857,7 @@ void DownloadsView::refresh() {
         setShown(rows[i], true);
     }
     setShown(panes, !groups.empty());
+    empty->setFocusable(groups.empty());
     setShown(empty, groups.empty());
 
     // A selected group that finished leaves its place to its neighbour.
@@ -946,22 +954,33 @@ void DownloadsView::fillPane() {
                                 : brls::getStr("downloads/action/retry_failed", group.failed));
 }
 
+View* DownloadsView::getDefaultFocus() {
+    if (getVisibility() != Visibility::VISIBLE)
+        return nullptr;
+    if (Row* row = selectedRow())
+        return row->item;
+    for (Row* row : rows)
+        if (row->getVisibility() == Visibility::VISIBLE)
+            return row->item;
+    if (empty->getVisibility() == Visibility::VISIBLE)
+        return empty;
+    return Box::getDefaultFocus();
+}
+
 void DownloadsView::keepFocus() {
     View* focus = Application::getCurrentFocus();
-    if (!focus || !isInside(focus, this))
-        return; // a dialog or another screen is on top
-    if (shownWithin(focus, this))
+    const auto activities = Application::getActivitiesStack();
+    const bool onTop = !activities.empty() && isInside(this, activities.back()->getContentView());
+    const bool inside = focus && isInside(focus, this);
+    if (screenFocusMove(onTop, inside, inside && shownWithin(focus, this)) == FocusMove::Keep)
         return;
-    if (isInside(focus, actions))
+    if (inside && isInside(focus, actions))
         if (View* action = firstAction()) {
             Application::giveFocus(action);
             return;
         }
-    if (Row* row = selectedRow()) {
-        Application::giveFocus(row->item);
-        return;
-    }
-    Application::giveFocus(this);
+    if (View* target = getDefaultFocus())
+        Application::giveFocus(target);
 }
 
 // MARK: - Full card
