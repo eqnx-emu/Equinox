@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "Host.hpp"
 #include "VideoCodec.hpp"
 #include "emu/LocalFavorites.hpp"
 
@@ -69,49 +70,6 @@ struct KeyComboOptions {
     std::vector<brls::ControllerButton> buttons;
 };
 
-struct App {
-    std::string name;
-    int app_id;
-};
-
-struct Host {
-    std::string address;
-    std::string remoteAddress;
-    std::string hostname;
-    std::string mac;
-    std::vector<App> favorites;
-
-    [[nodiscard]] std::vector<std::string> connection_addresses() const {
-        std::vector<std::string> addresses;
-        if (!address.empty())
-            addresses.push_back(address);
-        if (!remoteAddress.empty() && remoteAddress != address)
-            addresses.push_back(remoteAddress);
-        return addresses;
-    }
-
-    [[nodiscard]] std::string preferred_address() const {
-        return !address.empty() ? address : remoteAddress;
-    }
-
-    [[nodiscard]] bool has_address(const std::string& value) const {
-        return !value.empty() &&
-               (address == value || remoteAddress == value);
-    }
-};
-
-inline bool hosts_match(const Host& lhs, const Host& rhs) {
-    if (!lhs.mac.empty() && !rhs.mac.empty())
-        return lhs.mac == rhs.mac;
-
-    for (const auto& address : lhs.connection_addresses()) {
-        if (rhs.has_address(address))
-            return true;
-    }
-
-    return false;
-}
-
 class Settings : public Singleton<Settings> {
   public:
     [[nodiscard]] std::string working_dir() const { return m_working_dir; }
@@ -133,6 +91,10 @@ class Settings : public Singleton<Settings> {
 
     void add_host(const Host& host);
     void remove_host(const Host& host);
+    // Replaces both addresses of the saved PC, clearing an empty one, and
+    // saves. add_host can't do it: it keeps a field the update leaves empty.
+    bool set_host_addresses(const Host& host, const std::string& address,
+                            const std::string& remoteAddress);
 
     void add_favorite(const Host& host, const App& app);
     void remove_favorite(const Host& host, int app_id);

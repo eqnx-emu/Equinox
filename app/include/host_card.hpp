@@ -88,7 +88,11 @@ class HostCard : public PressableBox, public ShelfItem {
     // Asks Solstice to add the PC's installed Steam games to its library.
     void importSteamGames();
     void rename();
+    // Edits the local and the remote address, checking the new ones first.
+    void editConnection();
     void remove();
+    // The next card for this PC queries it instead of showing the last state.
+    static void forgetSnapshot(const Host& host);
 
   private:
     Host host;
@@ -118,7 +122,7 @@ class HostCard : public PressableBox, public ShelfItem {
         int64_t takenAt;
     };
     static std::map<std::string, Snapshot>& snapshots();
-    std::string snapshotKey() const;
+    static std::string snapshotKey(const Host& host);
     void saveSnapshot();
     bool restoreSnapshot();
 

@@ -1569,6 +1569,8 @@ std::vector<HomeOption> HomeView::hostOptions(HostCard* card) {
 
     options.push_back({"", "host/rename"_i18n, "",
                        [card] { card->rename(); }});
+    options.push_back({"", "host/edit_connection"_i18n, "",
+                       [card] { card->editConnection(); }});
     HomeOption remove{"", "home/host_remove"_i18n, "",
                       [card] { card->remove(); }};
     remove.danger = true;

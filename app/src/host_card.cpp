@@ -245,18 +245,20 @@ std::map<std::string, HostCard::Snapshot>& HostCard::snapshots() {
     return map;
 }
 
-std::string HostCard::snapshotKey() const {
+std::string HostCard::snapshotKey(const Host& host) {
     return !host.mac.empty() ? host.mac : host.address + "|" + host.hostname;
 }
 
+void HostCard::forgetSnapshot(const Host& host) { snapshots().erase(snapshotKey(host)); }
+
 void HostCard::saveSnapshot() {
-    snapshots()[snapshotKey()] = Snapshot{state,     runningApp,
+    snapshots()[snapshotKey(host)] =Snapshot{state,     runningApp,
                                           gameCount, appIds,
                                           supports4K, (int64_t)getCPUTimeUsec()};
 }
 
 bool HostCard::restoreSnapshot() {
-    auto it = snapshots().find(snapshotKey());
+    auto it = snapshots().find(snapshotKey(host));
     if (it == snapshots().end() ||
         (int64_t)getCPUTimeUsec() - it->second.takenAt > SNAPSHOT_TTL_US)
         return false;
@@ -586,6 +588,113 @@ void HostCard::rename() {
             HomeView::hostsChanged();
         },
         "host/rename_title"_i18n, "", 60, hostCopy.hostname, 0);
+}
+
+namespace {
+std::string trimmed(const std::string& s) {
+    const auto first = s.find_first_not_of(" \t");
+    if (first == std::string::npos)
+        return "";
+    return s.substr(first, s.find_last_not_of(" \t") - first + 1);
+}
+
+// Asks each address for its serverinfo, one after the other.
+void probeAddresses(std::vector<std::string> left,
+                    std::vector<AddressProbe> probes,
+                    std::function<void(std::vector<AddressProbe>)> done) {
+    if (left.empty()) {
+        done(std::move(probes));
+        return;
+    }
+    const std::string address = left.front();
+    left.erase(left.begin());
+    GameStreamClient::instance().connect(
+        address, [left, probes, done,
+                  address](const GSResult<SERVER_DATA>& result) mutable {
+            probes.push_back({address, result.isSuccess(),
+                              result.isSuccess() ? result.value().mac : ""});
+            probeAddresses(std::move(left), std::move(probes), std::move(done));
+        });
+}
+
+void saveAddresses(const Host& host, const std::string& address,
+                   const std::string& remoteAddress) {
+    if (!Settings::instance().set_host_addresses(host, address,
+                                                 remoteAddress)) {
+        showError("host/edit_no_address"_i18n);
+        return;
+    }
+    GameStreamClient::instance().forget_active_address(host);
+    HostCard::forgetSnapshot(host);
+    HomeView::hostsChanged();
+}
+
+// Saves addresses the PC answered on with its own MAC; for any other answer,
+// or none, the user decides.
+void checkAndSave(const Host& host, const std::string& address,
+                  const std::string& remoteAddress) {
+    if (address.empty() && remoteAddress.empty()) {
+        showError("host/edit_no_address"_i18n);
+        return;
+    }
+    std::vector<std::string> fresh;
+    for (const std::string& a : {address, remoteAddress})
+        if (!a.empty() && !host.has_address(a))
+            fresh.push_back(a);
+    if (fresh.empty()) {
+        saveAddresses(host, address, remoteAddress);
+        return;
+    }
+
+    auto cancelled = std::make_shared<bool>(false);
+    Dialog* loader = createLoadingDialog("host/edit_checking"_i18n,
+                                         [cancelled] { *cancelled = true; });
+    loader->open();
+    probeAddresses(
+        fresh, {},
+        [host, address, remoteAddress, cancelled,
+         loader](std::vector<AddressProbe> probes) {
+            if (*cancelled || isDialogClosing(loader))
+                return;
+            const AddressCheck check = address_check(host.mac, probes);
+            loader->close([host, address, remoteAddress, check] {
+                if (check == AddressCheck::Same) {
+                    saveAddresses(host, address, remoteAddress);
+                    return;
+                }
+                auto* ask = new Dialog(check == AddressCheck::OtherPc
+                                           ? "host/edit_other_pc"_i18n
+                                           : "host/edit_no_answer"_i18n);
+                ask->addButton("common/cancel"_i18n, [] {});
+                ask->addButton("host/edit_save_anyway"_i18n,
+                               [host, address, remoteAddress] {
+                                   saveAddresses(host, address,
+                                                 remoteAddress);
+                               });
+                ask->open();
+            });
+        });
+}
+}  // namespace
+
+void HostCard::editConnection() {
+    const Host hostCopy = host;
+    Application::getPlatform()->getImeManager()->openForText(
+        [hostCopy](const std::string& local) {
+            const std::string address = trimmed(local);
+            // The second keyboard opens after the first one has closed.
+            brls::sync([hostCopy, address] {
+                Application::getPlatform()->getImeManager()->openForText(
+                    [hostCopy, address](const std::string& remote) {
+                        checkAndSave(hostCopy, address, trimmed(remote));
+                    },
+                    "host/edit_remote_title"_i18n,
+                    "host/edit_remote_hint"_i18n, 253,
+                    hostCopy.remoteAddress, 0);
+            });
+        },
+        "host/edit_local_title"_i18n, "host/edit_local_hint"_i18n, 253,
+        hostCopy.address, 0);
 }
 
 void HostCard::remove() {
