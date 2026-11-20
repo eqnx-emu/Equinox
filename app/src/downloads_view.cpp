@@ -970,7 +970,10 @@ View* DownloadsView::getDefaultFocus() {
 void DownloadsView::keepFocus() {
     View* focus = Application::getCurrentFocus();
     const auto activities = Application::getActivitiesStack();
-    const bool onTop = !activities.empty() && isInside(this, activities.back()->getContentView());
+    // On top: no dialog over the screen, and nothing pushed over it in its frame.
+    AppletFrame* frame = getAppletFrame();
+    const bool onTop = !activities.empty() && isInside(this, activities.back()->getContentView()) &&
+                       (!frame || frame->getContentView() == this);
     const bool inside = focus && isInside(focus, this);
     if (screenFocusMove(onTop, inside, inside && shownWithin(focus, this)) == FocusMove::Keep)
         return;
